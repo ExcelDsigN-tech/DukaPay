@@ -12,6 +12,7 @@ const mockCreateNotification = jest.fn<(...args: unknown[]) => Promise<unknown>>
 jest.unstable_mockModule('../../db/connection.js', () => ({
   query: mockQuery,
   default: { query: mockQuery, connect: jest.fn(), end: jest.fn() },
+  pool: { query: mockQuery, connect: jest.fn(), end: jest.fn() },
   withTransaction: jest.fn(),
 }));
 jest.unstable_mockModule('../../db/transaction.js', () => ({

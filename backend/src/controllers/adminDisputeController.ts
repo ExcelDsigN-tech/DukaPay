@@ -3,16 +3,24 @@ import { AppError } from '../errors/AppError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { notificationService, type NotificationType } from '../services/notificationService.js';
 import { encodeCursor, decodeCursor, parseKeysetParams } from '../utils/pagination.js';
+import {
+  listLoanDisputesQuerySchema,
+  resolveLoanDisputeBodySchema,
+  rejectLoanDisputeBodySchema,
+  disputeParamsSchema,
+} from '../schemas/disputeSchemas.js';
 
 /**
  * List all loan disputes for admin review with cursor-based pagination.
  * Defaults to "open" status, orders newest-first by created_at.
  */
 export const listLoanDisputes = asyncHandler(async (req, res) => {
-  const snapshotSeq = typeof req.query.snapshot_seq === 'string' ? req.query.snapshot_seq : null;
-  const cursorStr = typeof req.query.cursor === 'string' ? req.query.cursor : null;
-  const limitParam = typeof req.query.limit === 'string' ? req.query.limit : null;
-  const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+  const validatedQuery = listLoanDisputesQuerySchema.parse(req.query);
+  const snapshotSeq =
+    typeof validatedQuery.snapshot_seq === 'string' ? validatedQuery.snapshot_seq : null;
+  const cursorStr = typeof validatedQuery.cursor === 'string' ? validatedQuery.cursor : null;
+  const limitParam = validatedQuery.limit !== undefined ? String(validatedQuery.limit) : null;
+  const status = validatedQuery.status;
 
   const {
     snapshotSeq: parsedSnapshotSeq,
@@ -20,16 +28,9 @@ export const listLoanDisputes = asyncHandler(async (req, res) => {
     limit,
   } = parseKeysetParams(snapshotSeq, cursorStr, limitParam);
 
-  const statusFilter = status ?? 'open';
-
-  if (
-    statusFilter !== 'open' &&
-    statusFilter !== 'resolved' &&
-    statusFilter !== 'rejected' &&
-    statusFilter !== 'all'
-  ) {
-    throw AppError.badRequest('Invalid status filter');
-  }
+  const rawStatus = status ?? 'open';
+  const statusFilter =
+    rawStatus === 'pending' ? 'open' : rawStatus === 'dismissed' ? 'rejected' : rawStatus;
 
   // Decode cursor if provided
   let decodedCursor = null;
@@ -126,7 +127,7 @@ export const listLoanDisputes = asyncHandler(async (req, res) => {
  * Get a single dispute with its associated loan
  */
 export const getLoanDispute = asyncHandler(async (req, res) => {
-  const { disputeId } = req.params;
+  const { disputeId } = disputeParamsSchema.parse(req.params);
   const disputeResult = await query(
     `SELECT d.*, l.* AS loan FROM loan_disputes d JOIN loans l ON l.id = d.loan_id WHERE d.id = $1`,
     [disputeId],
@@ -142,22 +143,11 @@ export const getLoanDispute = asyncHandler(async (req, res) => {
 /**
  * Admin resolves a dispute: confirm or reverse default
  * POST /admin/loan-disputes/:disputeId/resolve
- * Body: { action: 'confirm' | 'reverse', resolution: string, adminNote?: string }
+ * Body: { action: 'confirm' | 'reverse' | 'uphold' | 'overturn' | 'settle', resolution: string, adminNote?: string }
  */
 export const resolveLoanDispute = asyncHandler(async (req, res) => {
-  const { disputeId } = req.params;
-  const { action, resolution, adminNote } = req.body as {
-    action: string;
-    resolution: string;
-    adminNote?: string;
-  };
-
-  if (!['confirm', 'reverse'].includes(action)) {
-    throw AppError.badRequest('Action must be confirm or reverse');
-  }
-  if (!resolution || resolution.length < 5) {
-    throw AppError.badRequest('Resolution reason required');
-  }
+  const { disputeId } = disputeParamsSchema.parse(req.params);
+  const { action, resolution, adminNote } = resolveLoanDisputeBodySchema.parse(req.body);
 
   // Get dispute and loan
   const disputeResult = await query(
@@ -175,13 +165,13 @@ export const resolveLoanDispute = asyncHandler(async (req, res) => {
     [resolution, adminNote || null, disputeId],
   );
 
-  if (action === 'confirm') {
+  if (action === 'confirm' || action === 'uphold') {
     // Leave loan as defaulted, optionally log event
     await query(
       `INSERT INTO contract_events (loan_id, address, event_type, amount, ledger, ledger_closed_at) VALUES ($1, $2, 'DefaultConfirmed', NULL, NULL, NOW())`,
       [dispute.loan_id, dispute.borrower],
     );
-  } else if (action === 'reverse') {
+  } else if (action === 'reverse' || action === 'overturn' || action === 'settle') {
     // Insert event to mark loan as active again
     await query(
       `INSERT INTO contract_events (loan_id, address, event_type, amount, ledger, ledger_closed_at) VALUES ($1, $2, 'DefaultReversed', NULL, NULL, NOW())`,
@@ -192,7 +182,10 @@ export const resolveLoanDispute = asyncHandler(async (req, res) => {
   // Notify borrower via notifications + SSE (and external email if enabled)
   try {
     const msg = `Your dispute for loan ${dispute.loan_id} has been resolved: ${resolution}`;
-    const type = action === 'reverse' ? 'repayment_confirmed' : 'loan_defaulted';
+    const type =
+      action === 'reverse' || action === 'overturn' || action === 'settle'
+        ? 'repayment_confirmed'
+        : 'loan_defaulted';
     await notificationService.createNotification({
       userId: dispute.borrower,
       type: type as NotificationType,
@@ -213,8 +206,9 @@ export const resolveLoanDispute = asyncHandler(async (req, res) => {
  * POST /admin/loan-disputes/:disputeId/reject
  */
 export const rejectLoanDispute = asyncHandler(async (req, res) => {
-  const { disputeId } = req.params;
-  const { admin_note } = req.body as { admin_note?: string };
+  const { disputeId } = disputeParamsSchema.parse(req.params);
+  const validatedBody = rejectLoanDisputeBodySchema.parse(req.body ?? {});
+  const admin_note = validatedBody.admin_note ?? validatedBody.adminNote;
 
   const disputeResult = await query(
     `SELECT * FROM loan_disputes WHERE id = $1 AND status = 'open'`,
