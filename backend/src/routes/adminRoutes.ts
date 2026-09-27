@@ -8,7 +8,14 @@ import {
   adminDisputesRateLimiter,
   governancePendingRateLimiter,
 } from '../middleware/rateLimiter.js';
-import { validateBody } from '../middleware/validation.js';
+import { validate, validateBody } from '../middleware/validation.js';
+import {
+  listLoanDisputesSchema,
+  resolveLoanDisputeSchema,
+  getLoanDisputeSchema,
+  rejectLoanDisputeSchema,
+} from '../schemas/disputeSchemas.js';
+import { listAuditLogsSchema } from '../schemas/auditSchemas.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { auditLog } from '../middleware/auditLog.js';
 import { idempotencyMiddleware } from '../middleware/idempotency.js';
@@ -54,6 +61,7 @@ router.get(
   requireJwtAuth,
   auditLogsRateLimiter,
   requireRoles('admin'),
+  validate(listAuditLogsSchema),
   listAuditLogs,
 );
 
@@ -101,26 +109,35 @@ router.post(
  *             properties:
  *               action:
  *                 type: string
- *                 enum: [confirm, reverse]
+ *                 enum: [uphold, overturn, settle, confirm, reverse]
  *                 description: Action to take on the dispute
  *               resolution:
  *                 type: string
- *                 description: Detailed reason for resolution (minimum 5 characters)
+ *                 minLength: 5
+ *                 maxLength: 1000
+ *                 description: Detailed reason for resolution (minimum 5 characters, maximum 1000 characters)
  *               adminNote:
  *                 type: string
- *                 description: Optional admin note visible to borrower
+ *                 maxLength: 500
+ *                 description: Optional admin note visible to borrower (maximum 500 characters)
  *     responses:
  *       200:
  *         description: Dispute resolved and borrower notified
  *       400:
  *         description: Validation error
  */
-router.get('/loan-disputes', requireApiKey('admin:disputes'), listLoanDisputes);
+router.get(
+  '/loan-disputes',
+  requireApiKey('admin:disputes'),
+  validate(listLoanDisputesSchema),
+  listLoanDisputes,
+);
 router.post(
   '/loan-disputes/:disputeId/resolve',
   requireApiKey('admin:disputes'),
   auditLog,
   idempotencyMiddleware,
+  validate(resolveLoanDisputeSchema),
   resolveLoanDispute,
 );
 // New admin JWT-protected endpoints
@@ -141,7 +158,7 @@ router.post(
  *         name: status
  *         schema:
  *           type: string
- *           enum: [open, resolved, rejected, all]
+ *           enum: [open, resolved, rejected, all, pending, dismissed]
  *         description: Filter by dispute status (default `open`)
  *       - in: query
  *         name: snapshot_seq
@@ -204,6 +221,7 @@ router.get(
   requireJwtAuth,
   adminDisputesRateLimiter,
   requireRoles('admin'),
+  validate(listLoanDisputesSchema),
   listLoanDisputes,
 );
 
@@ -257,6 +275,7 @@ router.get(
   requireJwtAuth,
   adminDisputesRateLimiter,
   requireRoles('admin'),
+  validate(getLoanDisputeSchema),
   getLoanDispute,
 );
 /**
@@ -288,12 +307,14 @@ router.get(
  *             properties:
  *               action:
  *                 type: string
- *                 enum: [confirm, reverse]
+ *                 enum: [uphold, overturn, settle, confirm, reverse]
  *               resolution:
  *                 type: string
  *                 minLength: 5
+ *                 maxLength: 1000
  *               adminNote:
  *                 type: string
+ *                 maxLength: 500
  *     responses:
  *       200:
  *         description: Dispute resolved successfully.
@@ -316,6 +337,7 @@ router.post(
   requireRoles('admin'),
   auditLog,
   idempotencyMiddleware,
+  validate(resolveLoanDisputeSchema),
   resolveLoanDispute,
 );
 /**
@@ -345,6 +367,7 @@ router.post(
  *             properties:
  *               admin_note:
  *                 type: string
+ *                 maxLength: 500
  *                 description: Optional note written as the resolution reason
  *     responses:
  *       200:
@@ -368,6 +391,7 @@ router.post(
   requireRoles('admin'),
   auditLog,
   idempotencyMiddleware,
+  validate(rejectLoanDisputeSchema),
   rejectLoanDispute,
 );
 

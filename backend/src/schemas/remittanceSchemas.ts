@@ -39,6 +39,7 @@ export const getRemittancesSchema = z.object({
       .pipe(z.number())
       .default(20)
       .optional(),
+    offset: z.coerce.number().int().min(0).max(10000).default(0).optional(),
     cursor: z.string().optional(),
     status: z.enum(['pending', 'processing', 'completed', 'failed']).optional(),
     from: isoDateString.optional(),
@@ -54,7 +55,23 @@ export const getRemittanceSchema = z.object({
   }),
 });
 
+// Schema for POST /remittances/:id/submit
+export const submitRemittanceSchema = z.object({
+  params: z.object({
+    id: z.string().min(1, 'Remittance ID is required').describe('Remittance ID (UUID format)'),
+  }),
+  body: z.object({
+    signedXdr: z
+      .string()
+      .min(1, 'Signed XDR is required')
+      .describe('Signed XDR transaction from Freighter wallet'),
+  }),
+});
+
+export const submitRemittanceTransactionSchema = submitRemittanceSchema;
+
 // Export types for TypeScript
 export type CreateRemittanceInput = z.infer<typeof createRemittanceSchema>;
 export type GetRemittancesInput = z.infer<typeof getRemittancesSchema>;
 export type GetRemittanceInput = z.infer<typeof getRemittanceSchema>;
+export type SubmitRemittanceInput = z.infer<typeof submitRemittanceSchema>;

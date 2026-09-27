@@ -51,6 +51,7 @@ jest.unstable_mockModule('../services/cacheService.js', () => ({
 
 jest.unstable_mockModule('../db/connection.js', () => ({
   default: { query: jest.fn() },
+  pool: { query: jest.fn(), connect: jest.fn(), end: jest.fn() },
   query: jest.fn(),
   getClient: jest.fn(),
   closePool: jest.fn(),
