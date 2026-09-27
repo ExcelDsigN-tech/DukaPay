@@ -210,7 +210,10 @@ export default function Home() {
               ? t("activity.loanRepaid")
               : t("activity.loanRequest"),
         desc: t("activity.loanDesc", { id: l.id, amount: formatCurrency(l.amount, locale) }),
-        amount: l.status === "repaid" ? `+${formatCurrency(l.amount, locale)}` : formatCurrency(l.amount, locale),
+        amount:
+          l.status === "repaid"
+            ? `+${formatCurrency(l.amount, locale)}`
+            : formatCurrency(l.amount, locale),
         timestamp: new Date(l.createdAt).getTime(),
         time: new Date(l.createdAt).toLocaleDateString(locale),
         status: l.status === "repaid" ? "completed" : l.status,

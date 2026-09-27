@@ -49,7 +49,9 @@ describe('AgentFloatService', () => {
         weeklyLimit: 1000000,
       });
       expect(mockQuery).toHaveBeenCalledWith(
-        expect.stringContaining('SELECT daily_limit, weekly_limit FROM agent_float_transfer_limits'),
+        expect.stringContaining(
+          'SELECT daily_limit, weekly_limit FROM agent_float_transfer_limits',
+        ),
         [AGENT_A, AGENT_B],
       );
     });
@@ -643,7 +645,9 @@ describe('AgentFloatService', () => {
           transferId: 'ft_rej_4',
           rejector: THIRD_PARTY,
         }),
-      ).rejects.toThrow('Only the initiator, recipient, or an admin can reject this transfer request.');
+      ).rejects.toThrow(
+        'Only the initiator, recipient, or an admin can reject this transfer request.',
+      );
     });
   });
 

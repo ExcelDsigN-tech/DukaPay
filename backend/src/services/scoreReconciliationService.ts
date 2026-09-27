@@ -110,10 +110,7 @@ class ScoreReconciliationService {
       const val = record.score !== undefined ? record.score : record.current_score;
       return {
         address: String(record.address ?? ''),
-        dbScore:
-          val === null || val === undefined
-            ? null
-            : Number(val),
+        dbScore: val === null || val === undefined ? null : Number(val),
       };
     });
   }

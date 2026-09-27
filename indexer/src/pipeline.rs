@@ -294,6 +294,33 @@ async fn worker_loop(
     }
 }
 
+/// Decode an RPC event into the normalised sink shape. The heavy XDR→native
+/// decoding still lives in the TypeScript consumer; here we pass through the
+/// base64 topics/value and the event type symbol so the pipeline stays cheap.
+fn decode(raw: &RawEvent, shard: u32) -> Result<DecodedEvent> {
+    let event_type = raw
+        .topic
+        .first()
+        .cloned()
+        .unwrap_or_else(|| "unknown".to_string());
+    Ok(DecodedEvent {
+        id: raw.id.clone(),
+        paging_token: if raw.paging_token.is_empty() {
+            raw.id.clone()
+        } else {
+            raw.paging_token.clone()
+        },
+        contract_id: raw.contract_id.clone(),
+        event_type,
+        ledger: raw.ledger,
+        ledger_closed_at: raw.ledger_closed_at.clone(),
+        tx_hash: raw.tx_hash.clone(),
+        topics: raw.topic.clone(),
+        value: raw.value.clone(),
+        shard,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -394,31 +421,4 @@ mod tests {
             .unwrap());
         tokio::fs::remove_dir_all(root).await.unwrap();
     }
-}
-
-/// Decode an RPC event into the normalised sink shape. The heavy XDR→native
-/// decoding still lives in the TypeScript consumer; here we pass through the
-/// base64 topics/value and the event type symbol so the pipeline stays cheap.
-fn decode(raw: &RawEvent, shard: u32) -> Result<DecodedEvent> {
-    let event_type = raw
-        .topic
-        .first()
-        .cloned()
-        .unwrap_or_else(|| "unknown".to_string());
-    Ok(DecodedEvent {
-        id: raw.id.clone(),
-        paging_token: if raw.paging_token.is_empty() {
-            raw.id.clone()
-        } else {
-            raw.paging_token.clone()
-        },
-        contract_id: raw.contract_id.clone(),
-        event_type,
-        ledger: raw.ledger,
-        ledger_closed_at: raw.ledger_closed_at.clone(),
-        tx_hash: raw.tx_hash.clone(),
-        topics: raw.topic.clone(),
-        value: raw.value.clone(),
-        shard,
-    })
 }

@@ -285,8 +285,7 @@ export function FinancialPerformanceDashboard({
     }
   };
 
-  const fmt = (n: number) =>
-    formatCurrency(n, locale);
+  const fmt = (n: number) => formatCurrency(n, locale);
 
   return (
     <div className="space-y-6">

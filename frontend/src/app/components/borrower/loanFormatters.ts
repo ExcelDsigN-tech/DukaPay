@@ -5,7 +5,10 @@
  * Falls back to "en-US" when locale is omitted (e.g. in server-side/test
  * contexts where a React hook cannot be called).
  */
-import { formatCurrency as _formatCurrency, formatDate as _formatDate } from "../../utils/formatLocale";
+import {
+  formatCurrency as _formatCurrency,
+  formatDate as _formatDate,
+} from "../../utils/formatLocale";
 
 export function formatCurrency(amount: number, locale = "en-US"): string {
   return _formatCurrency(amount, locale);

@@ -34,11 +34,15 @@ export function RepaymentProgress({ totalRepaid, totalOwed, status }: RepaymentP
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
         <span>
           Paid:{" "}
-          <strong className="text-zinc-900 dark:text-zinc-50">{formatCurrency(totalRepaid, locale)}</strong>
+          <strong className="text-zinc-900 dark:text-zinc-50">
+            {formatCurrency(totalRepaid, locale)}
+          </strong>
         </span>
         <span>
           Remaining:{" "}
-          <strong className="text-zinc-900 dark:text-zinc-50">{formatCurrency(totalOwed, locale)}</strong>
+          <strong className="text-zinc-900 dark:text-zinc-50">
+            {formatCurrency(totalOwed, locale)}
+          </strong>
         </span>
         <LoanStatusBadge status={status} />
       </div>

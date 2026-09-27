@@ -20,10 +20,7 @@ const FALLBACK_LOCALE = "en-US";
  *   formatCurrency(1234.5, "tl")   // "US$1,234.50"
  *   formatCurrency(1234.5)         // "$1,234.50"  (en-US fallback)
  */
-export function formatCurrency(
-  amount: number,
-  locale: string = FALLBACK_LOCALE,
-): string {
+export function formatCurrency(amount: number, locale: string = FALLBACK_LOCALE): string {
   const resolvedLocale = resolveLocale(locale);
   return new Intl.NumberFormat(resolvedLocale, {
     style: "currency",
@@ -40,10 +37,7 @@ export function formatCurrency(
  *   formatDate("2024-03-15T00:00:00Z", "tl")  // "Mar 15, 2024"
  *   formatDate("2024-03-15T00:00:00Z")         // "Mar 15, 2024"  (en-US fallback)
  */
-export function formatDate(
-  iso: string,
-  locale: string = FALLBACK_LOCALE,
-): string {
+export function formatDate(iso: string, locale: string = FALLBACK_LOCALE): string {
   const resolvedLocale = resolveLocale(locale);
   return new Date(iso).toLocaleDateString(resolvedLocale, {
     month: "short",

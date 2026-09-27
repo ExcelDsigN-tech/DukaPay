@@ -24,7 +24,8 @@ export function isValidAmount(amount: unknown): boolean {
  * Validates if a value is a positive integer.
  */
 export function isPositiveInt(value: unknown): boolean {
-  const num = typeof value === 'string' ? parseInt(value, 10) : value;
+  const num =
+    typeof value === 'string' ? parseInt(value, 10) : typeof value === 'number' ? value : NaN;
   return Number.isInteger(num) && num > 0;
 }
 
