@@ -30,6 +30,7 @@ const serwist = new Serwist({
 serwist.addEventListeners();
 
 // Background sync: process queued repayments when connectivity is restored
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- SyncEvent not in standard TS lib
 self.addEventListener("sync", (event: any) => {
   if (event.tag !== "sync-repayments") return;
 
@@ -57,8 +58,9 @@ self.addEventListener("sync", (event: any) => {
         const tx = db.transaction(STORE, "readwrite");
         const store = tx.objectStore(STORE);
         const allReq = store.getAll();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- IndexedDB result
         const items: any[] = await new Promise((res, rej) => {
-          allReq.onsuccess = () => res(allReq.result as any[]);
+          allReq.onsuccess = () => res(allReq.result as any[]); // eslint-disable-line @typescript-eslint/no-explicit-any
           allReq.onerror = () => rej(allReq.error);
         });
 

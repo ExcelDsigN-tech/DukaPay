@@ -101,6 +101,7 @@ export function YieldEarningsChart({ data, className }: YieldEarningsChartProps)
               }}
             />
             <Tooltip
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Recharts Tooltip callback type
               content={({ active, payload }: any) => {
                 if (active && payload && payload.length) {
                   const item = (payload[0] as unknown as { payload: YieldDataPoint }).payload;

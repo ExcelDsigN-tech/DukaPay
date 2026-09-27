@@ -53,9 +53,7 @@ test.describe("Dispute Filing Flow", () => {
     });
   });
 
-  test.skip("File dispute for incorrect loan terms — skipped: dispute filing form not built, see #578", async ({
-    page,
-  }) => {
+  test("File dispute for incorrect loan terms", async ({ page }) => {
     // Mock dispute creation
     await page.route("**/api/disputes", async (route: Route) => {
       if (route.request().method() === "POST") {
@@ -88,9 +86,7 @@ test.describe("Dispute Filing Flow", () => {
     await expect(page.locator(`text=${disputeId}`)).toBeVisible();
   });
 
-  test.skip("File dispute with evidence documents — skipped: dispute filing form not built, see #578", async ({
-    page,
-  }) => {
+  test("File dispute with evidence documents", async ({ page }) => {
     await page.goto(`/en/loans/${loanId}/dispute`);
 
     // Select dispute reason

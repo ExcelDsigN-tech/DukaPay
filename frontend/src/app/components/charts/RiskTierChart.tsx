@@ -51,6 +51,7 @@ export function RiskTierChart({ data, className }: RiskTierChartProps) {
               className="text-xs text-gray-600 dark:text-zinc-400"
             />
             <Tooltip
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Recharts Tooltip callback type
               content={({ active, payload }: any) => {
                 if (active && payload && payload.length) {
                   const d = (payload[0] as unknown as { payload: RiskTierDataPoint }).payload;
