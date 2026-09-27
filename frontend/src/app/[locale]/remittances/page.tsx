@@ -28,7 +28,6 @@ import Link from "next/link";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { formatCurrency, formatDate } from "../../utils/formatLocale";
 
-
 const STATUS_CONFIG: Record<
   Remittance["status"],
   { label: string; icon: React.ElementType; className: string }

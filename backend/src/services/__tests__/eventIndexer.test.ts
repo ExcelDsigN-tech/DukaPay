@@ -186,9 +186,7 @@ function makeRawLoanLiquidatedEvent(id = 'liq-001'): Record<string, unknown> {
 
 /** Run the withTransaction callback immediately using the provided mock client. */
 function stubWithTransaction(mockClient: MockClient): void {
-  (mockWithTransaction as jest.Mock).mockImplementation(async (fn: TxCallback) =>
-    fn(mockClient),
-  );
+  (mockWithTransaction as jest.Mock).mockImplementation(async (fn: TxCallback) => fn(mockClient));
 }
 
 // --------------------------------------------------------------------------

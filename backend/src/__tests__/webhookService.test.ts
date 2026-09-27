@@ -760,7 +760,10 @@ describe('WebhookService', () => {
       expect(mockDecryptField).toHaveBeenCalled();
 
       expect(fetchMock).toHaveBeenCalledTimes(1);
-      const callHeaders = (fetchMock.mock.calls[0]![1] as RequestInit).headers as Record<string, string>;
+      const callHeaders = (fetchMock.mock.calls[0]![1] as RequestInit).headers as Record<
+        string,
+        string
+      >;
       expect(callHeaders['x-webhook-signature']).toMatch(/^[0-9a-f]{64}$/);
     });
   });

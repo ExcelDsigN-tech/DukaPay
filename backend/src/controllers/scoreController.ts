@@ -63,7 +63,8 @@ export const getScore = asyncHandler(async (req: Request, res: Response) => {
 
   const result = await query('SELECT score FROM scores WHERE borrower = $1', [userId]);
 
-  const score = result.rows.length > 0 ? (result.rows[0].score ?? result.rows[0].current_score) : 500;
+  const score =
+    result.rows.length > 0 ? (result.rows[0].score ?? result.rows[0].current_score) : 500;
   const band = getCreditBand(score);
 
   await cacheService.set(cacheKey, { score, band }, 300); // 5 minutes TTL
@@ -99,7 +100,8 @@ export const updateScore = asyncHandler(async (req: Request, res: Response) => {
 
   // Get old score first for the response
   const oldResult = await query('SELECT score FROM scores WHERE borrower = $1', [userId]);
-  const oldScore = oldResult.rows.length > 0 ? (oldResult.rows[0].score ?? oldResult.rows[0].current_score) : 500;
+  const oldScore =
+    oldResult.rows.length > 0 ? (oldResult.rows[0].score ?? oldResult.rows[0].current_score) : 500;
 
   const delta = onTime ? ON_TIME_DELTA : LATE_DELTA;
 

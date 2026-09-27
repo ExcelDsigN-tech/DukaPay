@@ -640,10 +640,10 @@ export class WebhookService {
   async rotateWebhookSecret(id: number, newSecret: string): Promise<void> {
     const encrypted = await encryptField(newSecret);
     const token = serializeEncryptedField(encrypted);
-    await query(
-      `UPDATE webhook_subscriptions SET secret = $1, updated_at = NOW() WHERE id = $2`,
-      [token, id],
-    );
+    await query(`UPDATE webhook_subscriptions SET secret = $1, updated_at = NOW() WHERE id = $2`, [
+      token,
+      id,
+    ]);
   }
 
   async listSubscriptions(): Promise<WebhookSubscription[]> {
@@ -705,7 +705,9 @@ export class WebhookService {
       await Promise.all(
         webhooksResult.rows.map(async (hook) => {
           const rawSecret = (hook as { secret?: string | null }).secret ?? undefined;
-          const plainSecret = rawSecret ? await decryptWebhookSecret(rawSecret, String((hook as { id: number }).id)) : undefined;
+          const plainSecret = rawSecret
+            ? await decryptWebhookSecret(rawSecret, String((hook as { id: number }).id))
+            : undefined;
           return this.sendToWebhook(
             Number((hook as { id: number }).id),
             String((hook as { callback_url: string }).callback_url),

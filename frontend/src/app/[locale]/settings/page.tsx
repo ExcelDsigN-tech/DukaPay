@@ -2,17 +2,7 @@
 
 import { useEffect, useState, type KeyboardEvent } from "react";
 import { useTranslations } from "next-intl";
-import {
-  User,
-  Wallet,
-  Bell,
-  Shield,
-  Monitor,
-  Crown,
-  LogOut,
-  CheckCheck,
-  Copy,
-} from "lucide-react";
+import { User, Wallet, Bell, Shield, Monitor, Crown, LogOut, CheckCheck, Copy } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "../../components/ui/Card";
 import { Button } from "../../components/ui/Button";
 import { ConnectWalletButton } from "../../components/ui/ConnectWalletButton";

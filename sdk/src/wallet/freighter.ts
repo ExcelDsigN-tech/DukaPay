@@ -4,6 +4,16 @@ import { withTimeoutAndRetry } from './utils.js';
 
 type FreighterApi = typeof import('@stellar/freighter-api');
 
+type FreighterSignMessageResult =
+  | string
+  | {
+      signedMessage?: string | Uint8Array | null;
+      signature?: string | Uint8Array | null;
+      signerAddress?: string;
+    }
+  | null
+  | undefined;
+
 /**
  * Freighter browser-extension adapter. The `@stellar/freighter-api` package is
  * loaded lazily so the SDK stays usable in non-browser contexts.
@@ -79,7 +89,7 @@ export class FreighterAdapter implements WalletAdapter {
     const api = await this.lib();
     const signer = (api as unknown as { signMessage?: Function }).signMessage;
     if (!signer) throw new WalletError('This Freighter version does not support signMessage');
-    const res = await withTimeoutAndRetry(
+    const res = await withTimeoutAndRetry<FreighterSignMessageResult>(
       () => signer(message),
       { timeout: 10000, retryable: false }
     );
@@ -87,7 +97,8 @@ export class FreighterAdapter implements WalletAdapter {
       typeof res === 'string'
         ? res
         : (res?.signedMessage ?? res?.signature);
-    const address = res?.signerAddress ?? (await this.getAddress());
+    const signerAddress = typeof res === 'string' ? undefined : res?.signerAddress;
+    const address = signerAddress ?? (await this.getAddress());
     if (!signature || !address) throw new WalletError('Freighter signMessage returned no signature');
     return {
       signature: signature instanceof Uint8Array ? toBase64(signature) : String(signature),
