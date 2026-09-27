@@ -7,7 +7,7 @@ import { TEST_USERS, createWalletState, createMockRemittance } from "../utils/fi
 import { SettlementPage } from "../utils/page-objects/SettlementPage.js";
 import { AgentPage } from "../utils/page-objects/AgentPage.js";
 
-test.describe.skip("Settlement Flow — skipped: settlement/agent UI not built, see #578", () => {
+test.describe("Settlement Flow", () => {
   let settlementPage: SettlementPage;
   let agentPage: AgentPage;
 

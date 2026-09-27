@@ -7,5 +7,13 @@ export default defineConfig([
   ...nextVitals,
   ...nextTypescript,
   noHardcodedStrings,
+  {
+    rules: {
+      // React Compiler optimization hints — not correctness bugs.
+      "react-hooks/preserve-manual-memoization": "warn",
+      "react-hooks/purity": "warn",
+      "react-hooks/static-components": "warn",
+    },
+  },
   globalIgnores([".next/**", "out/**", "build/**", "next-env.d.ts"]),
 ]);

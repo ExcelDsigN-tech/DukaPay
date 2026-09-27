@@ -72,6 +72,7 @@ export function useRepaymentOperation(options?: {
             if ("serviceWorker" in navigator && "SyncManager" in window) {
               const reg = await navigator.serviceWorker.ready;
               // register background sync to process queued repayments
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any -- SyncManager not in standard TS types
               await (reg as any).sync.register("sync-repayments");
             }
           } catch (swErr) {

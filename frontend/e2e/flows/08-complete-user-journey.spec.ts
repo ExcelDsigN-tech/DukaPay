@@ -188,9 +188,7 @@ test.describe("Complete User Journey", () => {
     await expect(page.locator("text=580")).toBeVisible(); // Remaining loan balance
   });
 
-  test.skip("Agent workflow: review loan → process settlement — skipped: agent/settlement UI not built, see #578", async ({
-    page,
-  }) => {
+  test("Agent workflow: review loan → process settlement", async ({ page }) => {
     const loanId = 2;
     const remittanceId = "rem_agent_flow";
 
