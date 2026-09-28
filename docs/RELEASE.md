@@ -60,6 +60,12 @@ Soft rollback triggers pertain to the production deployment pipeline (`infra/scr
 ./infra/scripts/rollback-blue-green.sh --environment production --target previous-stable
 ```
 
+### 3.3 Pre-Traffic-Cutover Smoke Test Failure Path
+Prior to traffic switching in `scripts/deploy-blue-green.sh`, `scripts/smoke-tests.sh` executes automated HTTP readiness checks against the newly-deployed inactive container:
+- **Pass (`exit 0`)**: Traffic is cut over to the new environment via ALB listener weight modification.
+- **Fail (`exit 1`)**: Deployment aborts immediately prior to listener cutover. Active production traffic remains 100% routed to the current healthy environment with zero downtime or user disruption. The failed inactive ECS task set remains running in isolation to allow on-call engineers to inspect container logs and debug the failure.
+
+
 ---
 
 ## 4. Governance & Operational Authority
