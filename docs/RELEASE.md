@@ -45,7 +45,7 @@ Hard pause triggers are non-negotiable security and financial safety conditions.
 
 ## 3. Soft Rollback Criteria (Deploy Pipeline)
 
-Soft rollback triggers pertain to the production deployment pipeline (`infra/scripts/rollback-blue-green.sh`). If post-deployment canary checks or initial traffic routing violate quality gates, an automated or manual blue-green rollback is executed.
+Soft rollback triggers pertain to the production deployment pipeline (`scripts/rollback-blue-green.sh`). If post-deployment canary checks or initial traffic routing violate quality gates, an automated or manual blue-green rollback is executed.
 
 ### 3.1 Pipeline Rollback Thresholds
 - **HTTP 5xx Error Rate**: `> 1.0%` of total requests over a rolling 5-minute window post-deploy.
@@ -57,7 +57,7 @@ Soft rollback triggers pertain to the production deployment pipeline (`infra/scr
 ### 3.2 Rollback Execution Command
 ```bash
 # Execute automated blue-green rollback to previous stable deployment version
-./infra/scripts/rollback-blue-green.sh --environment production --target previous-stable
+bash scripts/rollback-blue-green.sh production
 ```
 
 ### 3.3 Pre-Traffic-Cutover Smoke Test Failure Path
@@ -108,3 +108,47 @@ Explicit authority is assigned to named operational roles to prevent ambiguity d
   - [ ] Real-time alerts active for solvency invariant monitors.
   - [ ] Grafana / Prometheus dashboards operational for API latency and error rates.
   - [ ] On-call rotation active with clear escalation path to Emergency Response Lead.
+
+---
+
+## 6. Production Blue-Green Release Process
+
+Production releases use `.github/workflows/deploy-production.yml` and the existing `scripts/deploy-blue-green.sh` script.
+
+### 6.1 Trigger and Approval
+
+The workflow runs when a Git tag matching `v*` is pushed, or when it is started manually with `workflow_dispatch`.
+
+Production deployment jobs use the GitHub `production` Environment. Required reviewers must be configured on that Environment so deployment requires manual approval.
+
+### 6.2 Production Environment Configuration
+
+Configure these values on the `production` GitHub Environment:
+
+- `AWS_REGION` — AWS region containing the production ECS resources.
+- `LISTENER_ARN` — production ALB listener ARN.
+- `BLUE_TG_ARN` — blue target group ARN.
+- `GREEN_TG_ARN` — green target group ARN.
+- `AWS_DEPLOY_ROLE_ARN` — secret containing the IAM role assumed by the production workflow.
+
+GitHub Actions uses OIDC to assume the deployment role instead of storing long-lived AWS access keys.
+
+### 6.3 Deployment and Rollback
+
+After the production checks pass, the workflow resolves the latest registered `dukapay-backend` ECS task-definition revision and invokes the existing deployment script:
+
+`bash scripts/deploy-blue-green.sh production "<task-definition-revision>" 600`
+
+The script deploys to the inactive ECS service, checks service and target health, runs `scripts/smoke-tests.sh`, switches ALB traffic, and keeps the previous color available during the rollback window.
+
+Rollback can be invoked with:
+
+`bash scripts/rollback-blue-green.sh production`
+
+### 6.4 Mocked Rollback Verification
+
+Because there is currently no live non-production ECS environment, rollback verification for #622 uses a mocked AWS CLI:
+
+`bash scripts/test-rollback-blue-green.sh`
+
+The test verifies both blue-to-green and green-to-blue rollback paths and their expected ALB traffic weights without contacting AWS. An end-to-end rollback test against a real non-production ECS environment remains follow-up work.

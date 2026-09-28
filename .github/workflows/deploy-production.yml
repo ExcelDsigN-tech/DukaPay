@@ -6,14 +6,15 @@ name: Deploy Production (Mainnet)
 # Blocked by #561/#562 correctness gaps + external audit (see docs/deployed-contracts.md).
 
 on:
+  push:
+    tags:
+      - 'v*'
   workflow_dispatch:
     inputs:
       confirm_mainnet:
         description: 'Type "deploy-mainnet" to confirm you are deploying real contracts to Stellar mainnet'
         required: true
         type: string
-  # No push trigger — mainnet deploys are manual only via workflow_dispatch.
-  # Push-to-main would auto-build production images on every merge, which is not intended for real-money deploys.
 
 permissions:
   contents: read
@@ -207,3 +208,54 @@ jobs:
           echo "Before mainnet contracts are deployed, verify-contracts reports SKIPPED (placeholders)."
           echo "After 'npm run deploy -- mainnet' and registry population, re-run: npm run verify:contracts -- --network mainnet"
           echo "Every contract's admin must be migrated to multisig_governance before mainnet is accepted (see CONTRACTS.md)."
+
+  # ── 4. Deploy backend to ECS using the existing blue-green script ───────────
+  deploy-production:
+    needs: [build-and-push, verify-mainnet]
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      LISTENER_ARN: ${{ vars.LISTENER_ARN }}
+      BLUE_TG_ARN: ${{ vars.BLUE_TG_ARN }}
+      GREEN_TG_ARN: ${{ vars.GREEN_TG_ARN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Validate blue-green deployment configuration
+        run: |
+          set -euo pipefail
+          for name in AWS_REGION LISTENER_ARN BLUE_TG_ARN GREEN_TG_ARN; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::$name must be configured in the production GitHub Environment"
+              exit 1
+            fi
+          done
+
+      - name: Resolve latest backend task definition revision
+        id: task-definition
+        run: |
+          set -euo pipefail
+          TASK_DEFINITION_ARN=$(aws ecs describe-task-definition \
+            --task-definition dukapay-backend \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)
+          TASK_DEFINITION_REVISION="${TASK_DEFINITION_ARN##*:}"
+
+          if ! [[ "$TASK_DEFINITION_REVISION" =~ ^[0-9]+$ ]]; then
+            echo "::error::Unable to resolve a valid dukapay-backend task definition revision"
+            exit 1
+          fi
+
+          echo "revision=$TASK_DEFINITION_REVISION" >> "$GITHUB_OUTPUT"
+          echo "Resolved dukapay-backend task definition revision: $TASK_DEFINITION_REVISION"
+
+      - name: Deploy production backend with blue-green ECS
+        run: bash scripts/deploy-blue-green.sh production "${{ steps.task-definition.outputs.revision }}" 600
