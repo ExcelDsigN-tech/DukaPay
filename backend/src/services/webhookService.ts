@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import dns from 'node:dns/promises';
 import { query } from '../db/connection.js';
 import logger from '../utils/logger.js';
 import {
@@ -7,6 +8,81 @@ import {
   deserializeEncryptedField,
   decryptField,
 } from './piiCrypto.js';
+
+/**
+ * Returns true for IPs that must never be fetched at dispatch time.
+ * Mirrors the hostname check in indexerController's isPrivateHost(), but
+ * operates on resolved IP addresses to close the DNS-rebinding window.
+ * (Registration-time hostname check is kept as defense-in-depth; this
+ * runs at every dispatch to catch rebinding after registration.)
+ */
+function isPrivateIp(ip: string): boolean {
+  // Strip IPv6 brackets
+  const addr = ip.replace(/^\[|\]$/g, '');
+
+  // Loopback
+  if (addr === '::1' || addr === '127.0.0.1') return true;
+  if (/^127\./.test(addr)) return true;
+
+  // Link-local
+  if (/^169\.254\./.test(addr)) return true;
+  if (/^fe80:/i.test(addr)) return true;
+
+  // RFC 1918
+  if (/^10\./.test(addr)) return true;
+  if (/^172\.(1[6-9]|2\d|3[01])\./.test(addr)) return true;
+  if (/^192\.168\./.test(addr)) return true;
+
+  // Cloud metadata
+  if (addr === '169.254.169.254') return true;
+
+  return false;
+}
+
+/**
+ * Resolves the hostname in callbackUrl and throws if any resolved address
+ * is a private/loopback/link-local IP, preventing SSRF via DNS rebinding.
+ * Logs the rejected attempt without including the full URL to avoid leaking
+ * potentially sensitive path or query components.
+ */
+async function assertCallbackUrlSafe(callbackUrl: string): Promise<void> {
+  let hostname: string;
+  try {
+    hostname = new URL(callbackUrl).hostname;
+  } catch {
+    throw new Error('Invalid webhook callback URL');
+  }
+
+  // Skip resolution for IP literals — validate directly.
+  if (/^\[?[\da-fA-F:]+\]?$/.test(hostname) || /^[\d.]+$/.test(hostname)) {
+    const bare = hostname.replace(/^\[|\]$/g, '');
+    if (isPrivateIp(bare)) {
+      logger.withContext().warn('Webhook dispatch blocked: callback URL resolves to private IP', {
+        hostname,
+      });
+      throw new Error(`Webhook callback URL resolves to a disallowed address: ${hostname}`);
+    }
+    return;
+  }
+
+  let addresses: string[];
+  try {
+    const records = await dns.resolve4(hostname).catch(() => [] as string[]);
+    const records6 = await dns.resolve6(hostname).catch(() => [] as string[]);
+    addresses = [...records, ...records6];
+  } catch {
+    addresses = [];
+  }
+
+  for (const addr of addresses) {
+    if (isPrivateIp(addr)) {
+      logger.withContext().warn('Webhook dispatch blocked: callback URL resolves to private IP', {
+        hostname,
+      });
+      throw new Error(`Webhook callback URL resolves to a disallowed address`);
+    }
+  }
+}
 
 // #1520 — this array is the single source of truth for which event types
 // external webhook subscribers can register for. docs/webhooks.md's
@@ -378,6 +454,10 @@ async function postWebhook(
   timestamp: string,
   nonce: string,
 ): Promise<Response> {
+  // Re-validate the resolved IP at dispatch time to close the DNS-rebinding
+  // window (registration-time hostname check alone is insufficient — see #641).
+  await assertCallbackUrlSafe(callbackUrl);
+
   const timeoutMs = getWebhookRequestTimeoutMs();
   const controller = new AbortController();
   const timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);

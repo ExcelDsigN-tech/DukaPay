@@ -24,6 +24,7 @@ import { requireTenantAccess } from '../middleware/rbac.js';
 import { requireLoanBorrowerAccess, requireLoanOwner } from '../middleware/loanAccess.js';
 import { validate, validateBody, validateParams, validateQuery } from '../middleware/validation.js';
 import { idempotencyMiddleware } from '../middleware/idempotency.js';
+import { strictRateLimiter } from '../middleware/rateLimiter.js';
 import { borrowerParamSchema } from '../schemas/stellarSchemas.js';
 import {
   previewAmortizationSchema,
@@ -146,6 +147,7 @@ router.get('/config', getLoanConfigEndpoint);
 
 router.post(
   '/:loanId/build-cancel',
+  strictRateLimiter,
   requireJwtAuth,
   requireScopes('write:loans'),
   requireLoanOwner,
@@ -277,6 +279,7 @@ router.post(
  */
 router.post(
   '/:loanId/contest-default',
+  strictRateLimiter,
   requireJwtAuth,
   requireScopes('write:loans'),
   requireLoanOwner,
@@ -636,6 +639,7 @@ router.get(
  */
 router.post(
   '/request',
+  strictRateLimiter,
   requireJwtAuth,
   requireScopes('write:loans'),
   validateBody(requestLoanSchema),
@@ -689,6 +693,7 @@ router.post(
  */
 router.post(
   '/:loanId/build-deposit-collateral',
+  strictRateLimiter,
   requireJwtAuth,
   requireScopes('write:loans'),
   requireLoanOwner,
@@ -740,6 +745,7 @@ router.post(
  */
 router.post(
   '/:loanId/build-release-collateral',
+  strictRateLimiter,
   requireJwtAuth,
   requireScopes('write:loans'),
   requireLoanOwner,
@@ -799,6 +805,7 @@ router.post(
  */
 router.post(
   '/:loanId/build-refinance',
+  strictRateLimiter,
   requireJwtAuth,
   requireScopes('write:loans'),
   requireLoanOwner,
@@ -854,6 +861,7 @@ router.post(
  */
 router.post(
   '/:loanId/build-extend',
+  strictRateLimiter,
   requireJwtAuth,
   requireScopes('write:loans'),
   requireLoanOwner,
@@ -905,6 +913,7 @@ router.post(
  */
 router.post(
   '/:loanId/liquidate/build',
+  strictRateLimiter,
   requireJwtAuth,
   requireScopes('write:loans'),
   validateParams(repayLoanParamsSchema),
@@ -949,6 +958,7 @@ router.post(
  */
 router.post(
   '/submit',
+  strictRateLimiter,
   requireJwtAuth,
   requireScopes('write:loans'),
   validateBody(submitTxSchema),
@@ -1010,6 +1020,7 @@ router.post(
  */
 router.post(
   '/:loanId/repay',
+  strictRateLimiter,
   requireJwtAuth,
   requireScopes('write:loans'),
   requireLoanOwner,
@@ -1066,6 +1077,7 @@ router.post(
  */
 router.post(
   '/:loanId/submit',
+  strictRateLimiter,
   requireJwtAuth,
   requireScopes('write:loans'),
   requireLoanOwner,

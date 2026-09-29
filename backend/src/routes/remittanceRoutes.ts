@@ -7,6 +7,7 @@ import {
 } from '../controllers/remittanceController.js';
 import { requireJwtAuth, requireScopes } from '../middleware/jwtAuth.js';
 import { idempotencyMiddleware } from '../middleware/idempotency.js';
+import { strictRateLimiter } from '../middleware/rateLimiter.js';
 import { validate } from '../middleware/validation.js';
 import {
   createRemittanceSchema,
@@ -78,6 +79,7 @@ const router = Router();
  */
 router.post(
   '/',
+  strictRateLimiter,
   requireJwtAuth,
   requireScopes('write:remittances'),
   validate(createRemittanceSchema),
@@ -261,6 +263,7 @@ router.get(
  */
 router.post(
   '/:id/submit',
+  strictRateLimiter,
   requireJwtAuth,
   requireScopes('write:remittances'),
   validate(submitRemittanceSchema),
