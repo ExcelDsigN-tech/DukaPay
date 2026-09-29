@@ -44,6 +44,21 @@ afterAll(() => {
 
 describe('Agent Float Transfer API (/api/agents/float-transfer)', () => {
   describe('POST /api/agents/float-transfer (Initiate Transfer)', () => {
+    it('rejects a non-agent initiator before writing a transfer or approval', async () => {
+      const response = await request(app)
+        .post('/api/agents/float-transfer')
+        .set(bearer('GUNAUTHORIZED123456789'))
+        .send({
+          fromAgent: AGENT_A,
+          toAgent: AGENT_B,
+          amount: 5000,
+        });
+
+      expect(response.status).toBe(403);
+      expect(response.body.error.message).toMatch(/source agent or an administrator/i);
+      expect(mockQuery).not.toHaveBeenCalled();
+    });
+
     it('successfully initiates a float transfer request with 1st approval', async () => {
       // Pair limits lookup
       mockQuery.mockResolvedValueOnce({ rows: [] });
