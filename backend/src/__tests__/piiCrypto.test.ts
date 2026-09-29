@@ -4,7 +4,7 @@ import type { KeyRotationAlert } from '../services/piiCrypto.js';
 const mockPoolQuery = jest.fn();
 
 jest.unstable_mockModule('../db/connection.js', () => ({
-  pool: { query: mockPoolQuery },
+  default: { query: mockPoolQuery },
   query: jest.fn(),
 }));
 

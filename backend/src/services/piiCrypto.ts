@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { pool } from '../db/connection.js';
+import pool from '../db/connection.js';
 import logger from '../utils/logger.js';
 
 const ALGORITHM = 'aes-256-gcm';
@@ -380,13 +380,11 @@ async function logPiiAccess(
   requestId: string,
 ): Promise<void> {
   try {
-    if (pool && typeof pool.query === 'function') {
-      await pool.query(
-        `INSERT INTO pii_access_log (id, actor, record_id, field, reason, request_id, created_at)
-         VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, NOW())`,
-        [actor, recordId, field, reason, requestId],
-      );
-    }
+    await pool.query(
+      `INSERT INTO pii_access_log (id, actor, record_id, field, reason, request_id, created_at)
+       VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, NOW())`,
+      [actor, recordId, field, reason, requestId],
+    );
   } catch (err) {
     // Audit logging failure should not leak PII in error messages
     logger.withContext().warn('Failed to insert PII access audit log', {
