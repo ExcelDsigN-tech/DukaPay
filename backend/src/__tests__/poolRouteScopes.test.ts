@@ -1,26 +1,35 @@
-/**
- * Issue #1179: Integration tests that exercise pool write route authorization
- * at the route layer (through app.use) so the requireScopes middleware is
- * actually exercised.
- *
- * The lender role in rbac.ts only grants read:pool, NOT write:pool, so all
- * pool write routes (build-deposit, build-withdraw, build-emergency-withdraw,
- * submit) must return 403 for a lender JWT.  A borrower JWT must also be
- * rejected because borrowers lack even read:pool.
- */
+/** Exercises pool write route authorization through the mounted app. */
 
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, expect, jest } from '@jest/globals';
+import type { Request, Response } from 'express';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
+import { Keypair } from '@stellar/stellar-sdk';
 
-const LENDER_KEY = 'GLENDER000000000000000000000000000000000000000000000000001';
-const BORROWER_KEY = 'GBORROWER0000000000000000000000000000000000000000000000001';
+const LENDER_KEY = Keypair.random().publicKey();
+const AGENT_KEY = Keypair.random().publicKey();
+const BORROWER_KEY = Keypair.random().publicKey();
+const TOKEN_KEY = Keypair.random().publicKey();
 
-// requireJwtAuth re-resolves the role from publicKey via LENDER_WALLETS /
-// ADMIN_WALLETS, so a token signed with role='lender' would still be capped
-// to 'borrower' unless this wallet is allow-listed before app.ts imports
-// the rbac config. Set the env vars before the app import.
+const mockPoolHandler = (_req: Request, res: Response) => res.status(200).json({ success: true });
+
+jest.unstable_mockModule('../controllers/poolController.js', () => ({
+  getPoolStats: mockPoolHandler,
+  getDepositorPortfolio: mockPoolHandler,
+  getDepositorYieldHistory: mockPoolHandler,
+  depositToPool: mockPoolHandler,
+  withdrawFromPool: mockPoolHandler,
+  emergencyWithdrawFromPool: mockPoolHandler,
+  getPoolSharePrice: mockPoolHandler,
+  submitPoolTransaction: mockPoolHandler,
+  getAnalytics: mockPoolHandler,
+  getAgentDashboard: mockPoolHandler,
+}));
+
+// requireJwtAuth re-resolves the role from publicKey, so test wallets must be
+// allow-listed before app.ts imports the RBAC configuration.
 process.env.LENDER_WALLETS = LENDER_KEY;
+process.env.AGENT_WALLETS = AGENT_KEY;
 
 const app = (await import('../app.js')).default;
 
@@ -31,7 +40,7 @@ const JWT_SECRET = process.env.JWT_SECRET ?? 'test-jwt-secret-poolscopes';
 
 function mintToken(
   publicKey: string,
-  role: 'lender' | 'borrower' | 'admin',
+  role: 'lender' | 'agent' | 'borrower' | 'admin',
   scopes: string[],
 ): string {
   return jwt.sign({ publicKey, role, scopes }, JWT_SECRET, {
@@ -40,32 +49,50 @@ function mintToken(
   });
 }
 
-// lender has read:pool but NOT write:pool — as per ROLE_SCOPES in rbac.ts
-const lenderToken = mintToken(LENDER_KEY, 'lender', ['read:loans', 'read:pool']);
-// borrower has no pool scopes at all
-const borrowerToken = mintToken(BORROWER_KEY, 'borrower', [
+const lenderToken = mintToken(LENDER_KEY, 'lender', [
   'read:loans',
-  'write:repayment',
+  'read:pool',
+  'write:loans',
+  'write:pool',
+]);
+const agentToken = mintToken(AGENT_KEY, 'agent', [
+  'read:loans',
+  'write:loans',
+  'read:pool',
+  'write:pool',
   'read:score',
   'read:notifications',
   'write:notifications',
+  'read:remittances',
+  'write:remittances',
+  'agents:view-assigned',
+]);
+// borrower has no pool scopes at all
+const borrowerToken = mintToken(BORROWER_KEY, 'borrower', [
+  'read:loans',
+  'write:loans',
+  'read:score',
+  'read:notifications',
+  'write:notifications',
+  'read:remittances',
+  'write:remittances',
 ]);
 
 const POOL_WRITE_ROUTES: Array<{ method: 'post'; path: string; body: Record<string, unknown> }> = [
   {
     method: 'post',
     path: '/api/pool/build-deposit',
-    body: { depositorPublicKey: LENDER_KEY, token: 'GTOKEN', amount: 100 },
+    body: { depositorPublicKey: LENDER_KEY, token: TOKEN_KEY, amount: 100 },
   },
   {
     method: 'post',
     path: '/api/pool/build-withdraw',
-    body: { depositorPublicKey: LENDER_KEY, token: 'GTOKEN', amount: 100 },
+    body: { depositorPublicKey: LENDER_KEY, token: TOKEN_KEY, amount: 100 },
   },
   {
     method: 'post',
     path: '/api/pool/build-emergency-withdraw',
-    body: { depositorPublicKey: LENDER_KEY, token: 'GTOKEN', shares: 100 },
+    body: { depositorPublicKey: LENDER_KEY, token: TOKEN_KEY, shares: 100 },
   },
   {
     method: 'post',
@@ -78,16 +105,34 @@ beforeAll(() => {
   process.env.JWT_SECRET = JWT_SECRET;
 });
 
-describe('Pool write route authorization (#1179)', () => {
-  describe('lender JWT (has read:pool, missing write:pool)', () => {
+describe('Pool write route authorization', () => {
+  describe('lender JWT (has write:pool)', () => {
     for (const route of POOL_WRITE_ROUTES) {
-      it(`${route.method.toUpperCase()} ${route.path} → 403`, async () => {
+      it(`${route.method.toUpperCase()} ${route.path} passes authorization`, async () => {
         const res = await request(app)
           [route.method](route.path)
           .set('Authorization', `Bearer ${lenderToken}`)
           .send(route.body);
 
-        expect(res.status).toBe(403);
+        expect(res.status).toBe(200);
+      });
+    }
+  });
+
+  describe('agent JWT (has write:pool)', () => {
+    for (const route of POOL_WRITE_ROUTES) {
+      it(`${route.method.toUpperCase()} ${route.path} passes authorization`, async () => {
+        const body = { ...route.body };
+        if ('depositorPublicKey' in body) {
+          body.depositorPublicKey = AGENT_KEY;
+        }
+
+        const res = await request(app)
+          [route.method](route.path)
+          .set('Authorization', `Bearer ${agentToken}`)
+          .send(body);
+
+        expect(res.status).toBe(200);
       });
     }
   });
