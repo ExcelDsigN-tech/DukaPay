@@ -18,11 +18,11 @@ jest.mock("next/link", () => {
   return MockLink;
 });
 
-jest.mock("../../../hooks/useApi", () => ({
+jest.mock("../../hooks/useApi", () => ({
   useRemittancesPage: () => ({ data: null, isLoading: false, isError: false }),
 }));
 
-jest.mock("../../../stores/useWalletStore", () => ({
+jest.mock("../../stores/useWalletStore", () => ({
   useWalletStore: (selector: (s: { isConnected: boolean; address: string | null }) => unknown) =>
     selector({ isConnected: true, address: "GABCD1234" }),
   selectIsWalletConnected: (s: { isConnected: boolean }) => s.isConnected,
@@ -32,7 +32,7 @@ jest.mock("../../../stores/useWalletStore", () => ({
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 // Lazy import to allow mocks to settle
-const getPage = () => import("../page").then((m) => m.default);
+const getPage = () => import("./page").then((m) => m.default);
 
 const FILTER_LABELS = ["From Date", "To Date", "Min Amount", "Max Amount"] as const;
 const FILTER_IDS = [
