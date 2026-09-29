@@ -60,6 +60,10 @@ jest.unstable_mockModule('../services/eventStreamService.js', () => ({
   eventStreamService: { broadcast: jest.fn() },
 }));
 
+jest.unstable_mockModule('../services/pubsubService.js', () => ({
+  pubsubService: { publish: jest.fn<() => Promise<void>>().mockResolvedValue(undefined) },
+}));
+
 jest.unstable_mockModule('../services/cacheService.js', () => ({
   cacheService: {
     get: jest.fn<() => Promise<null>>().mockResolvedValue(null),
@@ -110,10 +114,10 @@ describe('SorobanService.getScoreConfig()', () => {
 // ── EventIndexer uses getScoreConfig, not hardcoded values ───────────────
 describe('EventIndexer score delta wiring', () => {
   // Parsed event shape that storeEvents expects (post-parseEvent)
-  const makeEvent = (eventId: string, eventType: string, borrower: string) => ({
+  const makeEvent = (eventId: string, eventType: string, address: string) => ({
     eventId,
     eventType,
-    borrower,
+    address,
     ledger: 100,
     ledgerClosedAt: new Date(),
     txHash: 'abc',
@@ -150,7 +154,13 @@ describe('EventIndexer score delta wiring', () => {
     mockQuery.mockReset().mockResolvedValue({ rows: [], rowCount: 0 });
   });
 
-  it.skip('calls sorobanService.getScoreConfig for LoanRepaid events', async () => {
+  afterEach(() => {
+    delete process.env.SCORE_REPAYMENT_DELTA;
+    delete process.env.SCORE_DEFAULT_PENALTY;
+  });
+
+  it('calls sorobanService.getScoreConfig for LoanRepaid events', async () => {
+    process.env.SCORE_REPAYMENT_DELTA = '23';
     mockQuery
       .mockResolvedValueOnce({ rows: [{ event_id: 'evt-1' }], rowCount: 1 }) // INSERT
       .mockResolvedValueOnce({ rows: [], rowCount: 1 }); // score upsert
@@ -158,10 +168,15 @@ describe('EventIndexer score delta wiring', () => {
     const { storeEvents } = await buildIndexer();
     await storeEvents([makeEvent('evt-1', 'LoanRepaid', 'GABC')]);
 
-    expect(mockGetScoreConfig).toHaveBeenCalled();
-  }, 20000);
+    expect(mockGetScoreConfig).toHaveBeenCalledTimes(1);
+    expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO scores'), [
+      'GABC',
+      23,
+    ]);
+  });
 
-  it.skip('calls sorobanService.getScoreConfig for LoanDefaulted events', async () => {
+  it('calls sorobanService.getScoreConfig for LoanDefaulted events', async () => {
+    process.env.SCORE_DEFAULT_PENALTY = '71';
     mockQuery
       .mockResolvedValueOnce({ rows: [{ event_id: 'evt-2' }], rowCount: 1 }) // INSERT
       .mockResolvedValueOnce({ rows: [], rowCount: 1 }); // score upsert
@@ -169,6 +184,10 @@ describe('EventIndexer score delta wiring', () => {
     const { storeEvents } = await buildIndexer();
     await storeEvents([makeEvent('evt-2', 'LoanDefaulted', 'GDEF')]);
 
-    expect(mockGetScoreConfig).toHaveBeenCalled();
+    expect(mockGetScoreConfig).toHaveBeenCalledTimes(1);
+    expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO scores'), [
+      'GDEF',
+      -71,
+    ]);
   });
 });
