@@ -572,6 +572,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
         working-directory: sdk
+      - name: Lint
+        run: npm run lint
+        working-directory: sdk
       - name: Type check
         run: npm run typecheck
         working-directory: sdk

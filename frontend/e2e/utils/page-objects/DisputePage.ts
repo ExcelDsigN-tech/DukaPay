@@ -10,12 +10,10 @@ export class DisputePage extends BasePage {
   }
 
   /**
-   * Navigate to dispute filing page
+   * Navigate to dispute filing / detail page
    */
-  async navigateToFileDispute(loanId: number): Promise<void> {
-    // No /en/loans/${loanId}/dispute route exists in src/app/[locale]/ — filing UI not yet built.
-    // See tracking issue #578: dispute filing form not present; tests using this are skipped.
-    await this.goto(`/en/loans/${loanId}/dispute`);
+  async navigateToFileDispute(loanId: number | string): Promise<void> {
+    await this.goto(`/en/admin/disputes/${loanId}`);
   }
 
   /**

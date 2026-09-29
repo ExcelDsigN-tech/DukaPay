@@ -84,6 +84,7 @@ stricter rate limit (10 requests/minute/IP) to prevent abuse.
 | `SCORE_RECONCILIATION_AUTOCORRECT_THRESHOLD` | ✓ | ✓ | ✓ | `50` | Max points auto-corrected per run | `backend/src/config/scores.ts` |
 | `JWT_SECRET` | ✓ | ✓ | ✓ | `your-super-secret-jwt-key-change-in-production` | JWT signing/verification secret | `backend/src/middleware/jwtAuth.ts` |
 | `INTERNAL_API_KEY` | ✓ | ✓ | ✓ | `change-me` | API key for internal endpoints | `backend/src/middleware/auth.ts` |
+| `PII_KEK_KEY` | ✓ | ✓ | ✓ | — | PII field-level encryption Key-Encryption-Key (64-character hex string; generate with `openssl rand -hex 32`). **Required in all environments — hard boot requirement** (enforced by `validateEnvVars`). | `backend/src/config/env.ts`, `backend/src/services/piiCrypto.ts` |
 | `ADMIN_WALLETS` | ✓ | ✓ | ✓ | — | Comma-separated Stellar public keys granted the `admin` role (`admin:all` scope). **Security-critical**: any wallet listed here receives full admin privileges. Unlisted wallets default to `borrower`. | `backend/src/auth/rbac.ts` |
 | `LENDER_WALLETS` | ✓ | ✓ | ✓ | — | Comma-separated Stellar public keys granted the `lender` role (`read:loans`, `read:pool` scopes). Unlisted wallets default to `borrower`. | `backend/src/auth/rbac.ts` |
 | `AGENT_WALLETS` | ✓ | ✓ | ✓ | — | Comma-separated Stellar public keys granted the `agent` role (own data + assigned borrowers). Unlisted wallets default to `borrower`. | `backend/src/auth/rbac.ts` |

@@ -36,7 +36,7 @@ const isDev = process.env.NODE_ENV !== "production";
 // nonce-based CSP via Next.js middleware (see
 // https://nextjs.org/docs/app/guides/content-security-policy#nonces),
 // but that disables static/CDN caching on every route and is a larger
-// call than this patch. Tracked for a follow-up. See issue #535.
+// call than this patch. Tracked for a follow-up. See issue #648.
 
 const nextConfig: NextConfig = {
   reactCompiler: true,
