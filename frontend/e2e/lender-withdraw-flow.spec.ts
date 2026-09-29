@@ -3,7 +3,7 @@ import { test, expect, type Page, type Route } from "@playwright/test";
 
 /**
  * E2E Test Suite for Lender Withdraw Flow
- * Issue #867: highest-value happy path not yet covered — a lender withdrawing
+ * highest-value happy path not yet covered — a lender withdrawing
  * their deposited liquidity from the pool.
  *
  * Mocks a connected lender with a pool position, walks the withdraw modal,
@@ -74,7 +74,7 @@ test.describe.skip("Lender Withdraw Flow", () => {
   });
 
   test("withdraws from the pool and reflects the new balance", async ({ page }: { page: Page }) => {
-    await page.goto("/en/lender");
+    await page.goto("/en/lend");
 
     // Open the withdraw modal.
     const withdrawBtn = page.getByRole("button", { name: /Withdraw/i }).first();
@@ -123,7 +123,7 @@ test.describe.skip("Lender Withdraw Flow", () => {
   });
 
   test("blocks withdrawing more than the available position", async ({ page }: { page: Page }) => {
-    await page.goto("/en/lender");
+    await page.goto("/en/lend");
 
     const withdrawBtn = page.getByRole("button", { name: /Withdraw/i }).first();
     await withdrawBtn.waitFor({ timeout: 10000 });

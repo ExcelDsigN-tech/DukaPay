@@ -1,4 +1,4 @@
-// e2e coverage for issue #1378: the "Pay Full Amount" button must fill in the
+// e2e coverage: the "Pay Full Amount" button must fill in the
 // exact same amount the UI displays as "Total Owed" — no half-up vs
 // half-even mismatch, and no residual dust left after a full repayment.
 //
@@ -19,7 +19,7 @@ const MOCK_LOAN_ID = 77;
 
 // 500.125 has a fractional cent that a half-up `.toFixed(2)` display would
 // round differently (500.13) than a half-even settlement (500.12) —
-// this is the exact drift issue #1378 describes for the frontend layer.
+// this is the exact drift described for the frontend layer.
 const TOTAL_OWED = 500.125;
 
 function connectedWalletState(usdc: string) {
@@ -38,7 +38,7 @@ function connectedWalletState(usdc: string) {
   };
 }
 
-test.describe.skip("Money display/settlement agreement (issue #1378)", () => {
+test.describe.skip("Money display/settlement agreement", () => {
   test.beforeEach(async ({ page }: { page: Page }) => {
     const walletStateJson = JSON.stringify(connectedWalletState("5000.00"));
     await page.addInitScript((stateJson: string) => {

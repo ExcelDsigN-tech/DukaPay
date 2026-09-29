@@ -17,6 +17,12 @@ export interface JwtPayload {
   tokenType?: 'access' | 'refresh' | undefined;
   familyId?: string | undefined;
   deviceFingerprint?: string | undefined;
+  /**
+   * Wallets the caller is authorised to operate on under tenant isolation
+   * (agents only). Minted from `agent_assignments` at login and re-verified by
+   * `middleware/rbac.ts` against the current table state at request time.
+   */
+  assignedBorrowers?: string[] | undefined;
 }
 
 export interface ChallengeMessage {
@@ -45,11 +51,39 @@ export interface StoredRefreshTokenMetadata {
   expiresAt: number;
 }
 
-export const ACCESS_TOKEN_TTL_SECONDS = 15 * 60; // 15 minutes
-export const REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days
-export const ACCESS_TOKEN_EXPIRES_IN = '15m';
-export const REFRESH_TOKEN_EXPIRES_IN = '7d';
-const CHALLENGE_EXPIRES_IN_MS = 5 * 60 * 1000;
+function getTokenTTLConfig() {
+  const accessTtl = process.env.ACCESS_TOKEN_TTL_SECONDS
+    ? Number.parseInt(process.env.ACCESS_TOKEN_TTL_SECONDS, 10)
+    : 15 * 60;
+  const refreshTtl = process.env.REFRESH_TOKEN_TTL_SECONDS
+    ? Number.parseInt(process.env.REFRESH_TOKEN_TTL_SECONDS, 10)
+    : 7 * 24 * 60 * 60;
+  const challengeTtl = process.env.CHALLENGE_EXPIRES_IN_MS
+    ? Number.parseInt(process.env.CHALLENGE_EXPIRES_IN_MS, 10)
+    : 5 * 60 * 1000;
+
+  if (!Number.isFinite(accessTtl) || accessTtl <= 0) {
+    throw new Error('ACCESS_TOKEN_TTL_SECONDS must be a positive number');
+  }
+  if (!Number.isFinite(refreshTtl) || refreshTtl <= 0) {
+    throw new Error('REFRESH_TOKEN_TTL_SECONDS must be a positive number');
+  }
+  if (!Number.isFinite(challengeTtl) || challengeTtl <= 0) {
+    throw new Error('CHALLENGE_EXPIRES_IN_MS must be a positive number');
+  }
+  if (accessTtl >= refreshTtl) {
+    throw new Error('ACCESS_TOKEN_TTL_SECONDS must be less than REFRESH_TOKEN_TTL_SECONDS');
+  }
+
+  return { accessTtl, refreshTtl, challengeTtl };
+}
+
+const tokenTTLConfig = getTokenTTLConfig();
+
+export const ACCESS_TOKEN_TTL_SECONDS = tokenTTLConfig.accessTtl;
+export const REFRESH_TOKEN_TTL_SECONDS = tokenTTLConfig.refreshTtl;
+const CHALLENGE_EXPIRES_IN_MS = tokenTTLConfig.challengeTtl;
+
 const CLOCK_SKEW_TOLERANCE_MS = 5 * 1000;
 
 const REFRESH_TOKEN_PREFIX = 'refresh_token:';
@@ -139,11 +173,29 @@ export function generateDeviceFingerprint(req: {
 }
 
 /**
+ * Resolves the borrower wallets assigned to an agent from `agent_assignments`
+ * (see `tenantService.ts`). Any other role gets an empty list. DB failures
+ * degrade to an empty list so authentication never hard-fails on a transient
+ * read.
+ */
+export async function resolveAssignedBorrowers(
+  publicKey: string,
+  role?: UserRole,
+): Promise<string[]> {
+  const { resolveAssignedBorrowers } = await import('./tenantService.js');
+  return resolveAssignedBorrowers(publicKey, role);
+}
+
+/**
  * Generates an Access Token (15m) for API authentication.
  */
 export function generateJwtToken(
   publicKey: string,
-  options?: { familyId?: string | undefined; deviceFingerprint?: string | undefined },
+  options?: {
+    familyId?: string | undefined;
+    deviceFingerprint?: string | undefined;
+    assignedBorrowers?: string[] | undefined;
+  },
 ): string {
   const secret = getJwtSecret();
   const role = resolveRoleForWallet(publicKey);
@@ -159,8 +211,12 @@ export function generateJwtToken(
     deviceFingerprint: options?.deviceFingerprint,
   };
 
+  if (options?.assignedBorrowers?.length) {
+    payload.assignedBorrowers = options.assignedBorrowers;
+  }
+
   return jwt.sign(payload, secret, {
-    expiresIn: ACCESS_TOKEN_EXPIRES_IN,
+    expiresIn: ACCESS_TOKEN_TTL_SECONDS,
     algorithm: 'HS256',
   });
 }
@@ -172,6 +228,7 @@ export function generateRefreshToken(
   publicKey: string,
   familyId: string,
   deviceFingerprint?: string,
+  assignedBorrowers?: string[],
 ): { refreshToken: string; jti: string } {
   const secret = getJwtSecret();
   const role = resolveRoleForWallet(publicKey);
@@ -188,8 +245,12 @@ export function generateRefreshToken(
     deviceFingerprint,
   };
 
+  if (assignedBorrowers?.length) {
+    payload.assignedBorrowers = assignedBorrowers;
+  }
+
   const refreshToken = jwt.sign(payload, secret, {
-    expiresIn: REFRESH_TOKEN_EXPIRES_IN,
+    expiresIn: REFRESH_TOKEN_TTL_SECONDS,
     algorithm: 'HS256',
   });
 
@@ -205,8 +266,20 @@ export async function generateTokenPair(
   existingFamilyId?: string,
 ): Promise<TokenPair> {
   const familyId = existingFamilyId ?? crypto.randomUUID();
-  const accessToken = generateJwtToken(publicKey, { familyId, deviceFingerprint });
-  const { refreshToken, jti } = generateRefreshToken(publicKey, familyId, deviceFingerprint);
+  const role = resolveRoleForWallet(publicKey);
+  const assignedBorrowers = await resolveAssignedBorrowers(publicKey, role);
+
+  const accessToken = generateJwtToken(publicKey, {
+    familyId,
+    deviceFingerprint,
+    assignedBorrowers,
+  });
+  const { refreshToken, jti } = generateRefreshToken(
+    publicKey,
+    familyId,
+    deviceFingerprint,
+    assignedBorrowers,
+  );
 
   const now = Date.now();
   const meta: StoredRefreshTokenMetadata = {
@@ -291,6 +364,50 @@ export async function revokeTokenFamily(
 
   logger.withContext().warn('Token family revoked', {
     familyId,
+    reason,
+    revokedAt: new Date(now).toISOString(),
+  });
+}
+
+/**
+ * Invalidates all token families for a given public key (logout all sessions).
+ * Used when credentials are compromised or user explicitly logs out all devices.
+ */
+export async function invalidateAllFamilies(
+  publicKey: string,
+  reason = 'user_initiated',
+): Promise<void> {
+  const now = Date.now();
+
+  logger.withContext().info('Bulk token family revocation initiated', {
+    publicKey,
+    reason,
+    timestamp: new Date(now).toISOString(),
+  });
+
+  for (const meta of inMemoryRefreshTokens.values()) {
+    if (meta.publicKey === publicKey && !meta.isRevoked) {
+      meta.isRevoked = true;
+      inMemoryRevokedFamilies.set(meta.familyId, { revokedAt: now, reason: `bulk_${reason}` });
+      try {
+        await Promise.race([
+          cacheService.set(
+            `${TOKEN_FAMILY_PREFIX}${meta.familyId}`,
+            { isRevoked: true, revokedAt: now, reason: `bulk_${reason}` },
+            REFRESH_TOKEN_TTL_SECONDS,
+          ),
+          new Promise<void>((_, reject) =>
+            setTimeout(() => reject(new Error('cache_timeout')), CACHE_TIMEOUT_MS),
+          ),
+        ]);
+      } catch {
+        // in-memory fallback already recorded
+      }
+    }
+  }
+
+  logger.withContext().warn('All token families revoked for user', {
+    publicKey,
     reason,
     revokedAt: new Date(now).toISOString(),
   });

@@ -14,7 +14,8 @@
 
 use soroban_sdk::token::Client as TokenClient;
 use soroban_sdk::{
-    contract, contractclient, contracterror, contractimpl, contracttype, Address, Env, Symbol, Vec,
+    contract, contractclient, contracterror, contractimpl, contracttype, Address, BytesN, Env,
+    Symbol, Vec,
 };
 
 mod events;
@@ -75,6 +76,8 @@ pub enum DataKey {
     CircuitBreaker,
     Vault(Address),
     ReentrancyLock,
+    /// Contract code version, bumped by every `upgrade`.
+    Version,
 }
 
 #[contract]
@@ -88,6 +91,9 @@ impl AgentVault {
     const PERSISTENT_TTL_THRESHOLD: u32 = 17_280;
     const PERSISTENT_TTL_BUMP: u32 = 518_400;
     const BATCH_MAX: u32 = 100;
+    /// Version of the code a freshly initialised vault runs. Vaults deployed
+    /// before versioning existed have no stored version and read as this too.
+    const INITIAL_VERSION: u32 = 1;
 
     // ── TTL helpers ───────────────────────────────────────────────────────
 
@@ -160,16 +166,24 @@ impl AgentVault {
     }
 
     fn acquire_lock(env: &Env) -> Result<(), VaultError> {
-        let locked: bool = env.storage().instance().get(&DataKey::ReentrancyLock).unwrap_or(false);
+        let locked: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::ReentrancyLock)
+            .unwrap_or(false);
         if locked {
             panic!("reentrancy guard triggered");
         }
-        env.storage().instance().set(&DataKey::ReentrancyLock, &true);
+        env.storage()
+            .instance()
+            .set(&DataKey::ReentrancyLock, &true);
         Ok(())
     }
 
     fn release_lock(env: &Env) {
-        env.storage().instance().set(&DataKey::ReentrancyLock, &false);
+        env.storage()
+            .instance()
+            .set(&DataKey::ReentrancyLock, &false);
     }
 
     fn read_vault(env: &Env, agent: &Address) -> Vault {
@@ -234,8 +248,46 @@ impl AgentVault {
                 min_collateral,
             },
         );
+        env.storage()
+            .instance()
+            .set(&DataKey::Version, &Self::INITIAL_VERSION);
         Self::bump_instance_ttl(&env);
         Ok(())
+    }
+
+    // ── Upgrades ──────────────────────────────────────────────────────────
+
+    /// Contract code version: starts at 1 and increases by one on every
+    /// `upgrade`. Lets operators and indexers tell which code a vault runs.
+    pub fn version(env: Env) -> u32 {
+        Self::bump_instance_ttl(&env);
+        env.storage()
+            .instance()
+            .get(&DataKey::Version)
+            .unwrap_or(Self::INITIAL_VERSION)
+    }
+
+    /// Replace the vault's code with the uploaded WASM `new_wasm_hash`,
+    /// keeping all storage (collateral, float, params) in place. Owner only.
+    ///
+    /// Emits `ContractUpgraded (old_version, new_version)`, the same event the
+    /// other DukaPay contracts emit, so the upgrade is auditable on-chain.
+    pub fn upgrade(env: Env, new_wasm_hash: BytesN<32>) -> Result<(), VaultError> {
+        Self::owner(&env)?.require_auth();
+        Self::record_upgrade(&env);
+        env.deployer().update_current_contract_wasm(new_wasm_hash);
+        Ok(())
+    }
+
+    /// Bump the stored version and announce it. Returns `(old, new)`.
+    fn record_upgrade(env: &Env) -> (u32, u32) {
+        let old_version = Self::version(env.clone());
+        let new_version = old_version.saturating_add(1);
+        env.storage()
+            .instance()
+            .set(&DataKey::Version, &new_version);
+        events::contract_upgraded(env, old_version, new_version);
+        (old_version, new_version)
     }
 
     // ── Collateral ────────────────────────────────────────────────────────
@@ -283,11 +335,19 @@ impl AgentVault {
         let token = Self::token(&env)?;
         let params = Self::params(&env)?;
         let mut vault = Self::read_vault(&env, &agent);
-        if amount > vault.collateral {
-            Self::release_lock(&env);
-            return Err(VaultError::InsufficientCollateral);
-        }
-        let remaining = vault.collateral - amount;
+        // Checked arithmetic (issue #513): the debit is its own underflow
+        // guard — `checked_sub` returns `None` on underflow, and the remainder
+        // is additionally required to stay non-negative, because a vault
+        // balance below zero is never a valid state regardless of how the
+        // subtraction behaved. The reentrancy lock still has to be released on
+        // this path, which is why it cannot use a bare `.ok_or(...)?`.
+        let remaining = match vault.collateral.checked_sub(amount) {
+            Some(remaining) if remaining >= 0 => remaining,
+            _ => {
+                Self::release_lock(&env);
+                return Err(VaultError::InsufficientCollateral);
+            }
+        };
         if vault.float > 0 {
             if remaining < params.min_collateral {
                 Self::release_lock(&env);
@@ -338,10 +398,12 @@ impl AgentVault {
             return Err(VaultError::InvalidAmount);
         }
         let mut vault = Self::read_vault(&env, &agent);
-        if amount > vault.float {
-            return Err(VaultError::InsufficientFloat);
-        }
-        vault.float -= amount;
+        // Checked arithmetic (issue #513): underflow is rejected by the debit
+        // itself, and the stored float is never allowed to go negative.
+        vault.float = match vault.float.checked_sub(amount) {
+            Some(remaining) if remaining >= 0 => remaining,
+            _ => return Err(VaultError::InsufficientFloat),
+        };
         Self::write_vault(&env, &agent, &vault);
         events::float_burned(&env, &agent, amount, vault.float);
         Ok(())
@@ -373,9 +435,13 @@ impl AgentVault {
         }
         let mut from_vault = Self::read_vault(&env, &from);
         let mut to_vault = Self::read_vault(&env, &to);
-        if amount > from_vault.float {
-            return Err(VaultError::InsufficientFloat);
-        }
+        // Checked arithmetic (issue #513): the sender's debit is the underflow
+        // guard, and the sender's float is never allowed to go negative — so a
+        // rejected transfer cannot leave the pair half-applied.
+        let from_float = match from_vault.float.checked_sub(amount) {
+            Some(remaining) if remaining >= 0 => remaining,
+            _ => return Err(VaultError::InsufficientFloat),
+        };
         let to_float = to_vault
             .float
             .checked_add(amount)
@@ -383,12 +449,23 @@ impl AgentVault {
         if to_float > Self::max_float_of(to_vault.collateral, to_vault.haircut_bps) {
             return Err(VaultError::SolvencyViolated);
         }
-        from_vault.float -= amount;
+        from_vault.float = from_float;
         to_vault.float = to_float;
         Self::write_vault(&env, &from, &from_vault);
         Self::write_vault(&env, &to, &to_vault);
         events::float_transferred(&env, &from, &to, amount);
         Ok(())
+    }
+
+    /// Agent-to-agent float transfer entrypoint (Soroban cross-agent liquidity).
+    /// Atomic float transfer between agents. Both initiator and recipient must authorise.
+    pub fn transfer_to_agent(
+        env: Env,
+        from: Address,
+        to: Address,
+        amount: i128,
+    ) -> Result<(), VaultError> {
+        Self::transfer_float(env, from, to, amount)
     }
 
     /// Operator nets end-of-day positions. `entries` is a list of

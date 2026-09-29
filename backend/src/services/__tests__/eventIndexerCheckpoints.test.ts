@@ -1,6 +1,6 @@
 /**
  * Tests for the contiguous-cursor invariant / gap detection added for
- * issue #1376: EventIndexer.recordCheckpoint (called from pollOnce) and
+ * EventIndexer.recordCheckpoint (called from pollOnce) and
  * EventIndexer.getSuspectRanges.
  *
  * Mocking pattern mirrors eventIndexer.test.ts's ESM module mocks — this
@@ -114,12 +114,12 @@ function makeIndexer() {
   });
 }
 
-describe('EventIndexer gap detection (contiguous-cursor invariant, #1376)', () => {
+describe('EventIndexer gap detection (contiguous-cursor invariant)', () => {
   it('records a verified checkpoint on the very first poll (nothing prior to compare against)', async () => {
     const inserted: Array<{ sql: string; params: unknown[] }> = [];
 
     mockQuery.mockImplementation(async (sql: string, params: unknown[] = []) => {
-      if (sql.includes('SELECT last_ledger')) return { rows: [{ last_ledger: 0 }], rowCount: 1 };
+      if (sql.includes('FROM indexer_state')) return { rows: [], rowCount: 0 };
       if (sql.includes('FROM ledger_checkpoints')) {
         return { rows: [], rowCount: 0 };
       }
@@ -144,14 +144,16 @@ describe('EventIndexer gap detection (contiguous-cursor invariant, #1376)', () =
 
     expect(inserted).toHaveLength(1);
     expect(inserted[0]?.sql).toContain("'verified'");
-    expect(inserted[0]?.params).toEqual(['CONTRACT001', 1, 10]);
+    expect(inserted[0]?.params?.[0]).toBe('CONTRACT001');
+    expect(inserted[0]?.params?.[1]).toBe(1);
+    expect(inserted[0]?.params?.[2]).toBe(10);
   });
 
   it('records a contiguous verified checkpoint with no gap when the new range immediately follows the previous one', async () => {
     const inserted: Array<{ sql: string; params: unknown[] }> = [];
 
     mockQuery.mockImplementation(async (sql: string, params: unknown[] = []) => {
-      if (sql.includes('SELECT last_ledger')) return { rows: [{ last_ledger: 10 }], rowCount: 1 };
+      if (sql.includes('FROM indexer_state')) return { rows: [{ last_ledger: 10 }], rowCount: 1 };
       if (sql.includes('FROM ledger_checkpoints')) {
         return { rows: [{ range_end: 10 }], rowCount: 1 };
       }
@@ -174,7 +176,9 @@ describe('EventIndexer gap detection (contiguous-cursor invariant, #1376)', () =
     // Contiguous — exactly one insert (the new verified range), no suspect gap row.
     expect(inserted).toHaveLength(1);
     expect(inserted[0]?.sql).toContain("'verified'");
-    expect(inserted[0]?.params).toEqual(['CONTRACT001', 11, 20]);
+    expect(inserted[0]?.params?.[0]).toBe('CONTRACT001');
+    expect(inserted[0]?.params?.[1]).toBe(11);
+    expect(inserted[0]?.params?.[2]).toBe(20);
   });
 
   it('flags a suspect gap when the new range does not immediately follow the previous checkpoint', async () => {
@@ -187,7 +191,7 @@ describe('EventIndexer gap detection (contiguous-cursor invariant, #1376)', () =
       // up to ledger 999... no — model it as: indexer_state (last_ledger)
       // has jumped ahead to 1039 (simulating a clamp to RPC retention
       // floor) while the checkpoint history only confirms up to 1000.
-      if (sql.includes('SELECT last_ledger')) return { rows: [{ last_ledger: 1039 }], rowCount: 1 };
+      if (sql.includes('FROM indexer_state')) return { rows: [{ last_ledger: 1039 }], rowCount: 1 };
       if (sql.includes('FROM ledger_checkpoints')) {
         return { rows: [{ range_end: 1000 }], rowCount: 1 };
       }
@@ -210,9 +214,13 @@ describe('EventIndexer gap detection (contiguous-cursor invariant, #1376)', () =
     // Two inserts: the suspect gap [1001, 1039], then the verified new range.
     expect(inserted).toHaveLength(2);
     expect(inserted[0]?.sql).toContain("'suspect'");
-    expect(inserted[0]?.params).toEqual(['CONTRACT001', 1001, 1039]);
+    expect(inserted[0]?.params?.[0]).toBe('CONTRACT001');
+    expect(inserted[0]?.params?.[1]).toBe(1001);
+    expect(inserted[0]?.params?.[2]).toBe(1039);
     expect(inserted[1]?.sql).toContain("'verified'");
-    expect(inserted[1]?.params).toEqual(['CONTRACT001', 1040, 1060]);
+    expect(inserted[1]?.params?.[0]).toBe('CONTRACT001');
+    expect(inserted[1]?.params?.[1]).toBe(1040);
+    expect(inserted[1]?.params?.[2]).toBe(1060);
   });
 
   it('getSuspectRanges returns only suspect ranges for this contract, oldest first', async () => {
@@ -239,7 +247,7 @@ describe('EventIndexer gap detection (contiguous-cursor invariant, #1376)', () =
   });
 });
 
-describe('hasUnresolvedLedgerGaps (consumer-side gate, #1376)', () => {
+describe('hasUnresolvedLedgerGaps (consumer-side gate)', () => {
   it('returns true when the contract has a suspect ledger range', async () => {
     mockQuery.mockImplementation(async (sql: string) => {
       if (sql.includes('has_suspect')) {

@@ -7,11 +7,12 @@ export interface AuditLogFilters {
   to?: string;
   cursor?: string;
   limit?: number;
+  offset?: number;
   withTotal?: boolean;
 }
 
 export async function getAuditLogs(filters: AuditLogFilters) {
-  const { actor, action, from, to, cursor, limit = 25, withTotal } = filters;
+  const { actor, action, from, to, cursor, limit = 25, offset = 0, withTotal } = filters;
 
   const conditions: string[] = [];
   const values: unknown[] = [];
@@ -44,8 +45,14 @@ export async function getAuditLogs(filters: AuditLogFilters) {
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
   values.push(limit + 1);
+  let paginationClause = `LIMIT $${values.length}`;
+  if (offset > 0) {
+    values.push(offset);
+    paginationClause += ` OFFSET $${values.length}`;
+  }
+
   const result = await query(
-    `SELECT * FROM audit_logs ${whereClause} ORDER BY created_at DESC LIMIT $${values.length}`,
+    `SELECT * FROM audit_logs ${whereClause} ORDER BY created_at DESC ${paginationClause}`,
     values,
   );
 

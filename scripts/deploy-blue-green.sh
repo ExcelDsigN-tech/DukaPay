@@ -75,6 +75,11 @@ if [ "$HEALTH_STATUS" != "healthy" ]; then
   exit 1
 fi
 
+# Failure Path:
+# If smoke-tests.sh fails (exits non-zero), the deployment aborts immediately
+# before listener traffic switching (lines 84-100).
+# Production traffic remains 100% routed to $ACTIVE_COLOR, ensuring uninterrupted service.
+# The inactive service ($INACTIVE_SERVICE) remains running for troubleshooting and log inspection.
 echo "Running smoke tests..."
 if ! bash scripts/smoke-tests.sh "$INACTIVE_COLOR"; then
   echo "Smoke tests failed. Aborting deployment."

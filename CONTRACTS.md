@@ -13,6 +13,9 @@ their responsibilities, and the invariants that must hold at all times.
 | `lending_pool` | Pool deposits, withdrawals, yield |
 | `remittance_nft` | Remittance NFT issuance & credit scores |
 | `multisig_governance` | Multi-signature governance |
+| `audit_anchor` | Tamper-evident Merkle-anchored audit epochs |
+| `oracle` | Price feeds for collateral valuation |
+| `circuit_breaker` | Emergency kill-switch: global / contract / function pause with 72h auto-expiry and 3-of-5 governance override (wired into `lending_pool`, `loan_manager`, `agent_vault` via `set_circuit_breaker` / `is_blocked`) |
 | `money` | Shared monetary policy/constants |
 
 ---
@@ -107,6 +110,14 @@ For this to work, **every managed contract must set its `admin` to the
 `multisig_governance` contract address** (via each contract's existing
 `set_admin` / admin-transfer flow). Until migrated, a contract's upgrades are
 still gated only by its raw admin key.
+
+`agent_vault` exposes the same `upgrade(new_wasm_hash)` entry point, gated by
+its **owner** (the vault's admin role; the operator cannot upgrade). It keeps
+all storage in place, bumps `version()` (1 for a new or pre-versioning vault,
++1 per upgrade), and emits `ContractUpgraded (old_version, new_version)` like the
+other contracts. The vault has no owner-transfer function, so to put it under
+the timelock, initialise it (`init`) with the `multisig_governance` contract
+address as `owner`; an already-initialised vault keeps its current owner.
 
 ---
 

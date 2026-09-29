@@ -79,6 +79,7 @@ pub enum LoanError {
     LoanNotPurgable = 28,
     /// A global, contract, or function-level circuit-breaker pause is active.
     CircuitBreakerTripped = 29,
+    ReentrancyGuardTriggered = 30,
 }
 
 #[contracttype]
@@ -156,6 +157,8 @@ pub enum DataKey {
     PriceOracle,
     CollateralToken,
     ReentrancyLock,
+    /// Address of the multisig governance contract authorized to call set_admin.
+    GovernanceContract,
 }
 
 #[contract]
@@ -371,16 +374,24 @@ impl LoanManager {
     }
 
     fn acquire_lock(env: &Env) -> Result<(), LoanError> {
-        let locked: bool = env.storage().instance().get(&DataKey::ReentrancyLock).unwrap_or(false);
+        let locked: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::ReentrancyLock)
+            .unwrap_or(false);
         if locked {
-            panic!("reentrancy guard triggered");
+            return Err(LoanError::ReentrancyGuardTriggered);
         }
-        env.storage().instance().set(&DataKey::ReentrancyLock, &true);
+        env.storage()
+            .instance()
+            .set(&DataKey::ReentrancyLock, &true);
         Ok(())
     }
 
     fn release_lock(env: &Env) {
-        env.storage().instance().set(&DataKey::ReentrancyLock, &false);
+        env.storage()
+            .instance()
+            .set(&DataKey::ReentrancyLock, &false);
     }
 
     fn remaining_principal(loan: &Loan) -> i128 {
@@ -945,6 +956,7 @@ impl LoanManager {
         lending_pool: Address,
         token: Address,
         admin: Address,
+        governance_contract: Address,
     ) -> Result<(), LoanError> {
         if env.storage().instance().has(&DataKey::Admin) {
             return Err(LoanError::AlreadyInitialized);
@@ -960,6 +972,9 @@ impl LoanManager {
             .set(&DataKey::LendingPool, &lending_pool);
         env.storage().instance().set(&DataKey::Token, &token);
         env.storage().instance().set(&DataKey::Admin, &admin);
+        env.storage()
+            .instance()
+            .set(&DataKey::GovernanceContract, &governance_contract);
         env.storage().instance().set(&DataKey::LoanCounter, &0u32);
         env.storage().instance().set(&DataKey::Paused, &false);
         env.storage()
@@ -1184,6 +1199,13 @@ impl LoanManager {
             return Err(LoanError::MaxLoansReached);
         }
 
+        let borrower_loans_key = DataKey::BorrowerLoans(borrower.clone());
+        let mut borrower_loans: Vec<u32> = env
+            .storage()
+            .instance()
+            .get(&borrower_loans_key)
+            .unwrap_or(Vec::new(&env));
+
         let mut loan_counter: u32 = env
             .storage()
             .instance()
@@ -1225,12 +1247,6 @@ impl LoanManager {
         Self::bump_persistent_ttl(&env, &DataKey::Loan(loan_counter));
 
         // Add loan ID to borrower's loan list
-        let borrower_loans_key = DataKey::BorrowerLoans(borrower.clone());
-        let mut borrower_loans: Vec<u32> = env
-            .storage()
-            .instance()
-            .get(&borrower_loans_key)
-            .unwrap_or(Vec::new(&env));
         borrower_loans.push_back(loan_counter);
         env.storage()
             .instance()
@@ -1574,7 +1590,7 @@ impl LoanManager {
         }
 
         let loan_key = DataKey::Loan(loan_id);
-        let loan: Loan = env
+        let mut loan: Loan = env
             .storage()
             .persistent()
             .get(&loan_key)
@@ -1602,25 +1618,20 @@ impl LoanManager {
             .instance()
             .get(&DataKey::Token)
             .expect("token not set");
-        let token_client = TokenClient::new(&env, &token);
-        token_client.transfer(&loan.borrower, &env.current_contract_address(), &amount);
-
-        let loan_key = DataKey::Loan(loan_id);
-        let mut loan: Loan = env
-            .storage()
-            .persistent()
-            .get(&loan_key)
-            .expect("loan not found");
 
         let updated_collateral = loan
             .collateral_amount
             .checked_add(amount)
             .expect("collateral overflow");
+        let borrower = loan.borrower.clone();
         loan.collateral_amount = updated_collateral;
         env.storage().persistent().set(&loan_key, &loan);
         Self::bump_persistent_ttl(&env, &loan_key);
 
-        events::collateral_deposited(&env, loan.borrower.clone(), loan_id, updated_collateral);
+        let token_client = TokenClient::new(&env, &token);
+        token_client.transfer(&borrower, &env.current_contract_address(), &amount);
+
+        events::collateral_deposited(&env, borrower, loan_id, updated_collateral);
 
         Ok(())
     }
@@ -1665,8 +1676,7 @@ impl LoanManager {
 
         let (total_debt, _) = Self::current_total_debt(&env, &mut loan)?;
         let threshold_bps = Self::liquidation_threshold_bps(&env);
-        let collateral_value =
-            Self::collateral_value_units(&env, loan.collateral_amount);
+        let collateral_value = Self::collateral_value_units(&env, loan.collateral_amount);
         Ok(Self::is_collateral_ratio_below_threshold(
             collateral_value,
             total_debt,
@@ -1690,8 +1700,7 @@ impl LoanManager {
         }
 
         let (total_debt, _) = Self::current_total_debt(&env, &mut loan)?;
-        let collateral_value =
-            Self::collateral_value_units(&env, loan.collateral_amount);
+        let collateral_value = Self::collateral_value_units(&env, loan.collateral_amount);
         let ratio_bps = Self::current_ratio_bps(collateral_value, total_debt);
         Ok((loan.collateral_amount, total_debt, ratio_bps))
     }
@@ -1735,13 +1744,8 @@ impl LoanManager {
             current_total_debt
         };
         let threshold_bps = Self::liquidation_threshold_bps(&env);
-        let collateral_value =
-            Self::collateral_value_units(&env, loan.collateral_amount);
-        if !Self::is_collateral_ratio_below_threshold(
-            collateral_value,
-            total_debt,
-            threshold_bps,
-        ) {
+        let collateral_value = Self::collateral_value_units(&env, loan.collateral_amount);
+        if !Self::is_collateral_ratio_below_threshold(collateral_value, total_debt, threshold_bps) {
             return Err(LoanError::LoanNotLiquidatable);
         }
 
@@ -2194,10 +2198,12 @@ impl LoanManager {
     pub fn set_liquidation_threshold(env: Env, ratio_bps: u32) -> Result<(), LoanError> {
         Self::validate_liquidation_threshold(ratio_bps)?;
         Self::admin(&env).require_auth();
+        let old_threshold = Self::liquidation_threshold_bps(&env);
         env.storage()
             .instance()
             .set(&DataKey::LiquidationThresholdBps, &ratio_bps);
         Self::bump_instance_ttl(&env);
+        events::liquidation_threshold_updated(&env, old_threshold, ratio_bps);
         Ok(())
     }
 
@@ -2208,10 +2214,12 @@ impl LoanManager {
     pub fn set_liquidation_bonus_bps(env: Env, bonus_bps: u32) -> Result<(), LoanError> {
         Self::validate_liquidation_bonus_bps(bonus_bps)?;
         Self::admin(&env).require_auth();
+        let old_bonus = Self::liquidation_bonus_bps(&env);
         env.storage()
             .instance()
             .set(&DataKey::LiquidationBonusBps, &bonus_bps);
         Self::bump_instance_ttl(&env);
+        events::liquidation_bonus_bps_updated(&env, old_bonus, bonus_bps);
         Ok(())
     }
 
@@ -2323,9 +2331,9 @@ impl LoanManager {
         Self::max_loan_amount(&env)
     }
 
-    pub fn set_min_repayment_amount(env: Env, amount: i128) {
+    pub fn set_min_repayment_amount(env: Env, amount: i128) -> Result<(), LoanError> {
         if amount < 0 {
-            panic!("min repayment amount cannot be negative");
+            return Err(LoanError::InvalidAmount);
         }
 
         let admin: Address = env
@@ -2341,6 +2349,7 @@ impl LoanManager {
             .set(&DataKey::MinRepaymentAmount, &amount);
         Self::bump_instance_ttl(&env);
         events::min_repayment_updated(&env, admin, old_amount, amount);
+        Ok(())
     }
 
     pub fn get_min_repayment_amount(env: Env) -> i128 {
@@ -2379,6 +2388,28 @@ impl LoanManager {
 
     pub fn get_admin(env: Env) -> Address {
         Self::admin(&env)
+    }
+
+    /// Set a new admin address. Only callable by the multisig governance contract.
+    /// This is the exclusive admin transfer path — direct propose/accept is not supported.
+    pub fn set_admin(env: Env, new_admin: Address) {
+        let current_admin = Self::admin(&env);
+        // Only the governance contract can call this function
+        let governance_contract: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::GovernanceContract)
+            .expect("governance contract not set");
+        governance_contract.require_auth();
+
+        env.storage().instance().set(&DataKey::Admin, &new_admin);
+        env.storage().instance().remove(&DataKey::ProposedAdmin);
+        Self::bump_instance_ttl(&env);
+
+        env.events().publish(
+            (Symbol::new(&env, "AdminTransferred"), current_admin.clone()),
+            new_admin.clone(),
+        );
     }
 
     pub fn get_proposed_admin(env: Env) -> Option<Address> {
@@ -2479,10 +2510,12 @@ impl LoanManager {
     /// for. Without an oracle, liquidation uses raw on-chain amounts (legacy).
     pub fn set_collateral_token(env: Env, collateral_token: Address) {
         Self::admin(&env).require_auth();
+        let old_token: Option<Address> = env.storage().instance().get(&DataKey::CollateralToken);
         env.storage()
             .instance()
             .set(&DataKey::CollateralToken, &collateral_token);
         Self::bump_instance_ttl(&env);
+        events::collateral_token_updated(&env, old_token, collateral_token);
     }
 
     pub fn get_collateral_token(env: Env) -> Option<Address> {
@@ -2498,8 +2531,12 @@ impl LoanManager {
             return collateral_amount;
         }
         let (Some(oracle_addr), Some(collateral_token)) = (
-            env.storage().instance().get::<_, Address>(&DataKey::PriceOracle),
-            env.storage().instance().get::<_, Address>(&DataKey::CollateralToken),
+            env.storage()
+                .instance()
+                .get::<_, Address>(&DataKey::PriceOracle),
+            env.storage()
+                .instance()
+                .get::<_, Address>(&DataKey::CollateralToken),
         ) else {
             return collateral_amount;
         };
@@ -2648,37 +2685,8 @@ impl LoanManager {
             .unwrap_or(Self::DEFAULT_TERM_LEDGERS)
     }
 
-    pub fn propose_admin(env: Env, new_admin: Address) {
-        let current_admin = Self::admin(&env);
-        current_admin.require_auth();
-
-        env.storage()
-            .instance()
-            .set(&DataKey::ProposedAdmin, &new_admin);
-        Self::bump_instance_ttl(&env);
-        env.events().publish(
-            (Symbol::new(&env, "AdminProposed"), current_admin),
-            new_admin,
-        );
-    }
-
-    pub fn accept_admin(env: Env) -> Result<(), LoanError> {
-        let proposed_admin: Address = env
-            .storage()
-            .instance()
-            .get(&DataKey::ProposedAdmin)
-            .ok_or(LoanError::NotInitialized)?;
-        proposed_admin.require_auth();
-
-        env.storage()
-            .instance()
-            .set(&DataKey::Admin, &proposed_admin);
-        env.storage().instance().remove(&DataKey::ProposedAdmin);
-        Self::bump_instance_ttl(&env);
-        env.events()
-            .publish((Symbol::new(&env, "AdminTransferred"),), proposed_admin);
-        Ok(())
-    }
+    // Admin transfer is exclusively through the governance contract via set_admin().
+    // Direct propose/accept admin transfer is not supported to enforce timelock + multisig.
 
     pub fn pause(env: Env) {
         Self::admin(&env).require_auth();

@@ -141,6 +141,14 @@ class SorobanService {
     return contractId;
   }
 
+  private getAgentVaultContractId(): string {
+    const contractId = process.env.AGENT_VAULT_CONTRACT_ID;
+    if (!contractId) {
+      throw AppError.internal('AGENT_VAULT_CONTRACT_ID is not configured');
+    }
+    return contractId;
+  }
+
   private getScoreReadSourceKeypair(): Keypair {
     const secret =
       process.env.SCORE_RECONCILIATION_SOURCE_SECRET ?? process.env.LOAN_MANAGER_ADMIN_SECRET;
@@ -724,6 +732,51 @@ class SorobanService {
   }
 
   /**
+   * Builds an unsigned Soroban `transfer_to_agent(from, to, amount)` transaction.
+   * Transfers float directly between agent vaults without borrower involvement.
+   */
+  async buildTransferToAgentTx(
+    fromAgent: string,
+    toAgent: string,
+    amount: number | bigint,
+  ): Promise<{ unsignedTxXdr: string; networkPassphrase: string }> {
+    const server = this.getRpcServer();
+    const contractId = this.getAgentVaultContractId();
+    const passphrase = this.getNetworkPassphrase();
+
+    const account = await server.getAccount(fromAgent);
+
+    const fromScVal = nativeToScVal(Address.fromString(fromAgent), { type: 'address' });
+    const toScVal = nativeToScVal(Address.fromString(toAgent), { type: 'address' });
+    const amountScVal = nativeToScVal(BigInt(amount), { type: 'i128' });
+
+    const tx = new TransactionBuilder(account, {
+      fee: BASE_FEE,
+      networkPassphrase: passphrase,
+    })
+      .addOperation(
+        Operation.invokeContractFunction({
+          contract: contractId,
+          function: 'transfer_to_agent',
+          args: [fromScVal, toScVal, amountScVal],
+        }),
+      )
+      .setTimeout(30)
+      .build();
+
+    const prepared = await server.prepareTransaction(tx);
+    const unsignedTxXdr = prepared.toXDR();
+
+    logger.withContext().info('Built transfer_to_agent transaction', {
+      fromAgent,
+      toAgent,
+      amount,
+    });
+
+    return { unsignedTxXdr, networkPassphrase: passphrase };
+  }
+
+  /**
    * Validates all required Soroban configuration on startup.
    * Checks that each contract ID is present and is a valid Stellar contract
    * address, then confirms RPC connectivity with a lightweight health call.
@@ -735,6 +788,7 @@ class SorobanService {
       ['LOAN_MANAGER_CONTRACT_ID', process.env.LOAN_MANAGER_CONTRACT_ID ?? ''],
       ['LENDING_POOL_CONTRACT_ID', process.env.LENDING_POOL_CONTRACT_ID ?? ''],
       ['REMITTANCE_NFT_CONTRACT_ID', process.env.REMITTANCE_NFT_CONTRACT_ID ?? ''],
+      ['MULTISIG_GOVERNANCE_CONTRACT_ID', process.env.MULTISIG_GOVERNANCE_CONTRACT_ID ?? ''],
       ['POOL_TOKEN_ADDRESS', process.env.POOL_TOKEN_ADDRESS ?? ''],
     ];
 

@@ -3,7 +3,7 @@ import { test, expect, type Page, type Route } from "@playwright/test";
 
 /**
  * E2E Test Suite for Borrower Loan Request Flow
- * Issue #770: Add Playwright E2E tests for borrower loan request flow
+ * E2E tests for borrower loan request flow
  *
  * Test Cases:
  * 1. Connect Freighter wallet (mock in CI)
@@ -19,7 +19,7 @@ const MOCK_BORROWER_ADDRESS = "GCJPBXSE6WCQDCEYZW6C3YVZCSSCHC4AE72L5KWKCYL2CLLL7
 const MOCK_CREDIT_SCORE = 715;
 const MOCK_LOAN_ID = 42;
 
-test.describe.skip("Borrower Loan Request Flow", () => {
+test.describe("Borrower Loan Request Flow", () => {
   test.beforeEach(async ({ page }: { page: Page }) => {
     // Mock wallet connection state via localStorage (Zustand persist)
     const walletState = {

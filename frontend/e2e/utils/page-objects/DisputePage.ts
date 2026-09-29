@@ -1,8 +1,8 @@
 /**
  * Dispute Management Page Object
  */
-import { type Page, expect } from '@playwright/test';
-import { BasePage } from './BasePage.js';
+import { type Page, expect } from "@playwright/test";
+import { BasePage } from "./BasePage.js";
 
 export class DisputePage extends BasePage {
   constructor(page: Page) {
@@ -10,10 +10,10 @@ export class DisputePage extends BasePage {
   }
 
   /**
-   * Navigate to dispute filing page
+   * Navigate to dispute filing / detail page
    */
-  async navigateToFileDispute(loanId: number): Promise<void> {
-    await this.goto(`/en/loans/${loanId}/dispute`);
+  async navigateToFileDispute(loanId: number | string): Promise<void> {
+    await this.goto(`/en/admin/disputes/${loanId}`);
   }
 
   /**
@@ -57,11 +57,11 @@ export class DisputePage extends BasePage {
     await this.navigateToFileDispute(data.loanId);
     await this.selectDisputeReason(data.reason);
     await this.fillDisputeDescription(data.description);
-    
+
     if (data.evidencePaths && data.evidencePaths.length > 0) {
       await this.uploadEvidence(data.evidencePaths);
     }
-    
+
     await this.submitDispute();
     await this.expectTextVisible(/dispute.*submitted|under review/i, 10000);
   }
@@ -70,7 +70,7 @@ export class DisputePage extends BasePage {
    * View dispute details
    */
   async viewDisputeDetails(disputeId: string): Promise<void> {
-    await this.goto(`/en/disputes/${disputeId}`);
+    await this.goto(`/en/admin/disputes/${disputeId}`);
   }
 
   /**

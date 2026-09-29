@@ -7,6 +7,7 @@ import { notificationService } from '../services/notificationService.js';
 import { AppError } from '../errors/AppError.js';
 import { encodeCursor, decodeCursor, parseKeysetParams } from '../utils/pagination.js';
 import logger from '../utils/logger.js';
+import { submitRemittanceSchema } from '../schemas/remittanceSchemas.js';
 
 /**
  * POST /api/remittances - Create a new remittance
@@ -218,20 +219,16 @@ export const getRemittance = asyncHandler(async (req: Request, res: Response) =>
  * Accepts a signed XDR from Freighter wallet and submits it to Stellar
  */
 export const submitRemittanceTransaction = asyncHandler(async (req: Request, res: Response) => {
-  const { id } = req.params as { id: string };
-  const { signedXdr } = req.body as { signedXdr: string };
+  const validated = submitRemittanceSchema.parse({
+    params: req.params,
+    body: req.body,
+  });
+  const { id } = validated.params;
+  const { signedXdr } = validated.body;
   const senderAddress = req.user?.publicKey as string;
 
   if (!senderAddress) {
     throw AppError.unauthorized('Wallet address not found in request');
-  }
-
-  if (!signedXdr) {
-    throw AppError.badRequest('Signed XDR is required');
-  }
-
-  if (!id) {
-    throw AppError.badRequest('Remittance ID is required');
   }
 
   logger.withContext().info('Submitting remittance transaction', { remittanceId: id });

@@ -90,8 +90,34 @@ for (const { path, label, section } of envFiles) {
   }
 }
 
+// Cross-check REQUIRED_ENV_VARS from backend/src/config/env.ts
+const envTsPath = join(root, "backend", "src", "config", "env.ts");
+const envTsContent = readFileSync(envTsPath, "utf-8");
+const reqVarsMatch = envTsContent.match(/const REQUIRED_ENV_VARS = \[([\s\S]*?)\];/);
+if (reqVarsMatch) {
+  const reqVars = reqVarsMatch[1]
+    .split("\n")
+    .map((l) => l.trim().replace(/['",]/g, ""))
+    .filter((l) => l.length > 0 && !l.startsWith("//"));
+
+  const backendEnvKeys = new Set(parseEnvKeys(join(root, "backend", ".env.example")));
+  const backendDocKeys = new Set(parseDocKeysInSection(docContent, "## Backend (") ?? []);
+
+  for (const v of reqVars) {
+    if (!backendEnvKeys.has(v)) {
+      console.error(`\n❌ [backend/src/config/env.ts] REQUIRED_ENV_VAR '${v}' is missing from backend/.env.example`);
+      exitCode = 1;
+    }
+    if (!backendDocKeys.has(v)) {
+      console.error(`\n❌ [backend/src/config/env.ts] REQUIRED_ENV_VAR '${v}' is missing from docs/ENVIRONMENT.md`);
+      exitCode = 1;
+    }
+  }
+}
+
 if (exitCode === 0) {
   console.log("✅ docs/ENVIRONMENT.md is in sync with all .env.example files.");
 }
 
 process.exit(exitCode);
+

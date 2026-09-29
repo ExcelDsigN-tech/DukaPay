@@ -1,4 +1,13 @@
 // Minimal IndexedDB queue for pending repayments
+
+export interface QueuedRepayment {
+  id: number;
+  loanId: number;
+  amount: number;
+  borrowerAddress: string;
+  createdAt: number;
+}
+
 const DB_NAME = "dukapay-offline-queue";
 const STORE = "repayments";
 
@@ -16,7 +25,11 @@ function openDb() {
   });
 }
 
-export async function enqueueRepayment(item: { loanId: number; amount: number; borrowerAddress: string }) {
+export async function enqueueRepayment(item: {
+  loanId: number;
+  amount: number;
+  borrowerAddress: string;
+}) {
   const db = await openDb();
   return new Promise<number>((resolve, reject) => {
     const tx = db.transaction(STORE, "readwrite");
@@ -27,13 +40,13 @@ export async function enqueueRepayment(item: { loanId: number; amount: number; b
   });
 }
 
-export async function getAllQueuedRepayments() {
+export async function getAllQueuedRepayments(): Promise<QueuedRepayment[]> {
   const db = await openDb();
-  return new Promise<any[]>((resolve, reject) => {
+  return new Promise<QueuedRepayment[]>((resolve, reject) => {
     const tx = db.transaction(STORE, "readonly");
     const store = tx.objectStore(STORE);
     const req = store.getAll();
-    req.onsuccess = () => resolve(req.result as any[]);
+    req.onsuccess = () => resolve(req.result as QueuedRepayment[]);
     req.onerror = () => reject(req.error);
   });
 }

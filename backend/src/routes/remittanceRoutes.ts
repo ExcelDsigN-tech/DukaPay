@@ -13,6 +13,7 @@ import {
   createRemittanceSchema,
   getRemittancesSchema,
   getRemittanceSchema,
+  submitRemittanceSchema,
 } from '../schemas/remittanceSchemas.js';
 
 const router = Router();
@@ -265,6 +266,7 @@ router.post(
   strictRateLimiter,
   requireJwtAuth,
   requireScopes('write:remittances'),
+  validate(submitRemittanceSchema),
   idempotencyMiddleware,
   submitRemittanceTransaction,
 );

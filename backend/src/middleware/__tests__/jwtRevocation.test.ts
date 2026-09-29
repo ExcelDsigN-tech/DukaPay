@@ -1,7 +1,9 @@
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 import request from 'supertest';
 import express from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import { Keypair } from '@stellar/stellar-sdk';
+import { AppError } from '../../errors/AppError.js';
 
 process.env.JWT_SECRET = 'test-jwt-secret-min-32-chars-long!!';
 
@@ -20,9 +22,9 @@ jest.unstable_mockModule('../../services/cacheService.js', () => ({
   },
 }));
 
-const { generateJwtToken, revokeToken, decodeJwtToken } =
+const { generateJwtToken, revokeToken, revokeTokenFamily, decodeJwtToken } =
   await import('../../services/authService.js');
-const { requireJwtAuth, requireScopes } = await import('../jwtAuth.js');
+const { requireJwtAuth, optionalJwtAuth, requireScopes } = await import('../jwtAuth.js');
 
 const buildApp = () => {
   const app = express();
@@ -34,8 +36,12 @@ const buildApp = () => {
       publicKey: (req as { user?: { publicKey: string } }).user?.publicKey,
     }),
   );
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  app.use((err: any, _req: any, res: any, _next: any) => {
+  app.get('/public', optionalJwtAuth, (req, res) =>
+    res.status(200).json({
+      publicKey: (req as { user?: { publicKey: string } }).user?.publicKey ?? null,
+    }),
+  );
+  app.use((err: AppError, _req: Request, res: Response, _next: NextFunction) => {
     res.status(err.statusCode ?? 500).json({ success: false });
   });
   return app;
@@ -85,5 +91,79 @@ describe('JWT revocation and role-change propagation', () => {
 
     const afterLogout = await request(app).post('/echo').set('Authorization', `Bearer ${token}`);
     expect(afterLogout.status).toBe(401);
+  });
+
+  describe('token family revocation (replay detection)', () => {
+    it('stops a revoked family on required-auth endpoints', async () => {
+      const wallet = Keypair.random().publicKey();
+      const token = generateJwtToken(wallet, { familyId: 'family-required' });
+      const app = buildApp();
+
+      await request(app).post('/echo').set('Authorization', `Bearer ${token}`).expect(200);
+
+      await revokeTokenFamily('family-required', 'token_replay_detected');
+
+      await request(app).post('/echo').set('Authorization', `Bearer ${token}`).expect(401);
+    });
+
+    it('stops a revoked family on optional-auth endpoints instead of authenticating it', async () => {
+      const wallet = Keypair.random().publicKey();
+      const token = generateJwtToken(wallet, { familyId: 'family-optional' });
+      const app = buildApp();
+
+      const before = await request(app).get('/public').set('Authorization', `Bearer ${token}`);
+      expect(before.status).toBe(200);
+      expect(before.body.publicKey).toBe(wallet);
+
+      await revokeTokenFamily('family-optional', 'token_replay_detected');
+
+      // Optional auth never rejects, but the revoked token must not authenticate.
+      const after = await request(app).get('/public').set('Authorization', `Bearer ${token}`);
+      expect(after.status).toBe(200);
+      expect(after.body.publicKey).toBeNull();
+    });
+
+    it('only affects tokens in the revoked family', async () => {
+      const wallet = Keypair.random().publicKey();
+      const revoked = generateJwtToken(wallet, { familyId: 'family-a' });
+      const sibling = generateJwtToken(wallet, { familyId: 'family-b' });
+      const familyless = generateJwtToken(wallet);
+      const app = buildApp();
+
+      await revokeTokenFamily('family-a', 'token_replay_detected');
+
+      const identity = async (token: string) =>
+        (await request(app).get('/public').set('Authorization', `Bearer ${token}`)).body
+          .publicKey as string | null;
+      expect(await identity(revoked)).toBeNull();
+      expect(await identity(sibling)).toBe(wallet);
+      expect(await identity(familyless)).toBe(wallet);
+    });
+
+    it('treats required and optional auth the same for every revocation kind', async () => {
+      const wallet = Keypair.random().publicKey();
+      const byFamily = generateJwtToken(wallet, { familyId: 'family-same' });
+      const byJti = generateJwtToken(wallet);
+      await revokeTokenFamily('family-same', 'token_replay_detected');
+      await revokeToken(decodeJwtToken(byJti)!.jti, decodeJwtToken(byJti)!.exp);
+      const app = buildApp();
+
+      for (const token of [byFamily, byJti]) {
+        const required = await request(app).post('/echo').set('Authorization', `Bearer ${token}`);
+        const optional = await request(app).get('/public').set('Authorization', `Bearer ${token}`);
+        expect(required.status).toBe(401);
+        expect(optional.body.publicKey).toBeNull();
+      }
+    });
+
+    it('still authenticates an unrevoked token that carries a family', async () => {
+      const wallet = Keypair.random().publicKey();
+      const token = generateJwtToken(wallet, { familyId: 'family-healthy' });
+      const app = buildApp();
+
+      await request(app).post('/echo').set('Authorization', `Bearer ${token}`).expect(200);
+      const res = await request(app).get('/public').set('Authorization', `Bearer ${token}`);
+      expect(res.body.publicKey).toBe(wallet);
+    });
   });
 });

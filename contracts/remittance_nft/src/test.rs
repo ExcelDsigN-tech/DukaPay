@@ -1840,7 +1840,7 @@ fn test_admin_remint_clears_seized_flag() {
     assert!(!client.is_seized(&user));
 }
 
-// ── Additional test coverage for issue #738 ──────────────────────────────────
+// ── Additional test coverage for mint flow ───────────────────────────────────
 
 #[test]
 fn test_mint_nft_success() {
@@ -2282,4 +2282,70 @@ fn test_admin_remint_rejects_bad_commitment() {
     // Verify new commitment is stored
     let stored = client.get_recipient_commitment(&user);
     assert_eq!(stored, new_commitment);
+}
+
+#[test]
+fn test_configuration_functions_emit_events() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+
+    let contract_id = env.register(RemittanceNFT, ());
+    let client = RemittanceNFTClient::new(&env, &contract_id);
+
+    client.initialize(&admin);
+
+    // 1. set_min_repayment_amount
+    client.set_min_repayment_amount(&500);
+    assert_eq!(client.get_min_repayment_amount(), 500);
+
+    // 2. set_default_burn_threshold
+    client.set_default_burn_threshold(&5);
+    assert_eq!(client.get_default_burn_threshold(), 5);
+
+    // 3. approve_remint
+    client.approve_remint(&user);
+
+    // Verify events are emitted
+    let events = env.events().all();
+    assert!(!events.is_empty());
+}
+
+#[test]
+fn test_set_min_repayment_amount_rejects_negative_amount() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let contract_id = env.register(RemittanceNFT, ());
+    let client = RemittanceNFTClient::new(&env, &contract_id);
+    client.initialize(&admin);
+
+    let res = client.try_set_min_repayment_amount(&-500);
+    assert_eq!(res, Err(Ok(NftError::InvalidAmount)));
+}
+
+#[test]
+fn test_decrease_score_rejects_unauthorized_minter() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let contract_id = env.register(RemittanceNFT, ());
+    let client = RemittanceNFTClient::new(&env, &contract_id);
+    client.initialize(&admin);
+
+    let user = Address::generate(&env);
+    client.mint(
+        &user,
+        &500,
+        &create_test_hash(&env, 1),
+        &create_test_uri(&env),
+        &create_test_commitment(&env, 1),
+        &None,
+    );
+
+    let unauthorized = Address::generate(&env);
+    let res = client.try_decrease_score(&user, &50, &Some(unauthorized));
+    assert_eq!(res, Err(Ok(NftError::UnauthorizedMinter)));
 }

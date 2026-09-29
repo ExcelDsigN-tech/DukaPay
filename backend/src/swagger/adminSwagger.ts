@@ -12,10 +12,12 @@
  *         name: actor
  *         schema:
  *           type: string
+ *           maxLength: 255
  *       - in: query
  *         name: action
  *         schema:
  *           type: string
+ *           maxLength: 255
  *       - in: query
  *         name: from
  *         schema:
@@ -34,6 +36,16 @@
  *         name: limit
  *         schema:
  *           type: integer
+ *           minimum: 1
+ *           maximum: 100
+ *           default: 25
+ *       - in: query
+ *         name: offset
+ *         schema:
+ *           type: integer
+ *           minimum: 0
+ *           maximum: 10000
+ *           default: 0
  *       - in: query
  *         name: withTotal
  *         schema:

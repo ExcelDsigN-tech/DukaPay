@@ -19,7 +19,8 @@ import {
   submitTransaction,
 } from '../controllers/loanController.js';
 import { getLoanEvents } from '../controllers/indexerController.js';
-import { requireJwtAuth, requireScopes, requireWalletOwnership } from '../middleware/jwtAuth.js';
+import { requireJwtAuth, requireScopes } from '../middleware/jwtAuth.js';
+import { requireTenantAccess } from '../middleware/rbac.js';
 import { requireLoanBorrowerAccess, requireLoanOwner } from '../middleware/loanAccess.js';
 import { validate, validateBody, validateParams, validateQuery } from '../middleware/validation.js';
 import { idempotencyMiddleware } from '../middleware/idempotency.js';
@@ -144,7 +145,14 @@ router.get('/config', getLoanConfigEndpoint);
  *         description: Reject transaction built
  */
 
-router.post('/:loanId/build-cancel', strictRateLimiter, requireJwtAuth, requireLoanOwner, buildCancelLoanTx);
+router.post(
+  '/:loanId/build-cancel',
+  strictRateLimiter,
+  requireJwtAuth,
+  requireScopes('write:loans'),
+  requireLoanOwner,
+  buildCancelLoanTx,
+);
 
 /**
  * @swagger
@@ -269,7 +277,14 @@ router.post(
  *       404:
  *         description: Loan not found
  */
-router.post('/:loanId/contest-default', strictRateLimiter, requireJwtAuth, requireLoanOwner, contestDefault);
+router.post(
+  '/:loanId/contest-default',
+  strictRateLimiter,
+  requireJwtAuth,
+  requireScopes('write:loans'),
+  requireLoanOwner,
+  contestDefault,
+);
 
 /**
  * @swagger
@@ -339,7 +354,7 @@ router.get(
   '/borrower/:borrower',
   requireJwtAuth,
   requireScopes('read:loans'),
-  requireWalletOwnership,
+  requireTenantAccess,
   validate(borrowerParamSchema),
   validateQuery(borrowerLoansQuerySchema),
   getBorrowerLoans,

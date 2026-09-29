@@ -68,6 +68,16 @@ export interface UnsignedTransaction {
   network: 'testnet' | 'mainnet';
 }
 
+/** Simulation result from transaction simulation before signing. */
+export interface SimulationResult {
+  /** Estimated fees in stroops. */
+  estimatedFee: Stroops;
+  /** Whether the transaction would succeed on-chain. */
+  success: boolean;
+  /** Error message if simulation failed. */
+  error?: string;
+}
+
 // ── Pool / float ──────────────────────────────────────────────────────────────
 
 export interface PoolStats {
@@ -79,6 +89,31 @@ export interface PoolStats {
   supplyApyBps: number;
   borrowApyBps: number;
   sharePrice: Stroops;
+}
+
+/** Aggregate protocol analytics from `GET /pool/analytics`. Amounts are numbers, not stroops. */
+export interface PoolAnalytics {
+  totalDeposits: number;
+  totalWithdrawals: number;
+  totalYieldDistributed: number;
+  totalLoansIssued: number;
+  totalVolume: number;
+  activeAgents: number;
+  /** ISO-8601 timestamp of when the snapshot was computed. */
+  updatedAt: string;
+}
+
+/**
+ * Envelope returned by `GET /pool/analytics`.
+ *
+ * The endpoint wraps the snapshot, so callers must read `analytics` off the
+ * response rather than treating the body as the payload itself. `source`
+ * reports whether the snapshot was served from the 300s server-side cache.
+ */
+export interface PoolAnalyticsResponse {
+  success: boolean;
+  analytics: PoolAnalytics;
+  source: 'cache' | 'database';
 }
 
 export interface DepositorPortfolio {

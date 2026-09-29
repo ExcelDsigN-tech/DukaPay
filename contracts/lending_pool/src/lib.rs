@@ -184,7 +184,7 @@ impl LendingPool {
     /// Deliberately never derived from `token::Client::balance`: reading the
     /// live balance would let anyone move the share price within a single
     /// ledger by transferring tokens directly to the pool's address,
-    /// without going through `deposit`/`redeem` (see #1380). It is mutated
+    /// without going through `deposit`/`redeem`. It is mutated
     /// only by `deposit` (+amount), `redeem`/`withdraw` (-assets_to_return),
     /// and `distribute_yield` (+amount) — never by `adjust_outstanding`,
     /// since moving principal between "idle" and "outstanding" does not
@@ -295,28 +295,51 @@ impl LendingPool {
     // ── Reentrancy Guard (CEI + nonReentrant) ───────────────────────────────
 
     fn acquire_lock(env: &Env) -> Result<(), PoolError> {
-        let locked: bool = env.storage().instance().get(&DataKey::ReentrancyLock).unwrap_or(false);
+        let locked: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::ReentrancyLock)
+            .unwrap_or(false);
         if locked {
             return Err(PoolError::ReentrancyGuardTriggered);
         }
-        env.storage().instance().set(&DataKey::ReentrancyLock, &true);
+        env.storage()
+            .instance()
+            .set(&DataKey::ReentrancyLock, &true);
         // Also bump call depth
-        let depth: u32 = env.storage().instance().get(&DataKey::CallDepth).unwrap_or(0);
+        let depth: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::CallDepth)
+            .unwrap_or(0);
         if depth >= 3 {
-            env.storage().instance().set(&DataKey::ReentrancyLock, &false);
+            env.storage()
+                .instance()
+                .set(&DataKey::ReentrancyLock, &false);
             return Err(PoolError::CallDepthExceeded);
         }
-        env.storage().instance().set(&DataKey::CallDepth, &(depth + 1));
+        env.storage()
+            .instance()
+            .set(&DataKey::CallDepth, &(depth + 1));
         Ok(())
     }
 
-    fn release_lock(env: &Env) {
-        let depth: u32 = env.storage().instance().get(&DataKey::CallDepth).unwrap_or(1);
-        let next = depth.saturating_sub(1);
+    fn release_lock(env: &Env) -> Result<(), PoolError> {
+        let depth: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::CallDepth)
+            .unwrap_or(0);
+        let next = depth
+            .checked_sub(1)
+            .ok_or(PoolError::ReentrancyGuardTriggered)?;
         env.storage().instance().set(&DataKey::CallDepth, &next);
         if next == 0 {
-            env.storage().instance().set(&DataKey::ReentrancyLock, &false);
+            env.storage()
+                .instance()
+                .set(&DataKey::ReentrancyLock, &false);
         }
+        Ok(())
     }
 
     // ── Share / asset math ────────────────────────────────────────────────
@@ -328,7 +351,7 @@ impl LendingPool {
     /// gives a 1-for-1 allocation) even when the pool is empty, without a
     /// special-cased first-depositor branch. The offset also means a
     /// donation-inflated `total_managed_assets_before` can no longer round a
-    /// victim's minted shares down to zero — see #1380. Rounds down, in the
+    /// victim's minted shares down to zero. Rounds down, in the
     /// pool's favor.
     fn calc_shares_to_mint(
         amount: i128,
@@ -620,7 +643,7 @@ impl LendingPool {
     /// `min_shares_out` is the caller's slippage bound: if the computed
     /// `shares_to_mint` would be less than `min_shares_out`, the call
     /// reverts with `PoolError::MinSharesNotMet` instead of settling at a
-    /// worse price than the caller expected (#1380).
+    /// worse price than the caller expected.
     pub fn deposit(
         env: Env,
         provider: Address,
@@ -634,11 +657,11 @@ impl LendingPool {
         Self::acquire_lock(&env)?;
 
         if amount <= 0 {
-            Self::release_lock(&env);
+            let _ = Self::release_lock(&env);
             return Err(PoolError::InvalidAmount);
         }
         if min_shares_out < 0 {
-            Self::release_lock(&env);
+            let _ = Self::release_lock(&env);
             return Err(PoolError::InvalidAmount);
         }
 
@@ -651,7 +674,7 @@ impl LendingPool {
         if max > 0 {
             let total = Self::total_deposits(&env, &token);
             if total.checked_add(amount).expect("overflow") > max {
-                Self::release_lock(&env);
+                let _ = Self::release_lock(&env);
                 return Err(PoolError::PoolSizeExceeded);
             }
         }
@@ -665,11 +688,11 @@ impl LendingPool {
         let shares_to_mint =
             Self::calc_shares_to_mint(amount, total_managed_before, cur_total_shares);
         if shares_to_mint <= 0 {
-            Self::release_lock(&env);
+            let _ = Self::release_lock(&env);
             return Err(PoolError::ZeroShares);
         }
         if shares_to_mint < min_shares_out {
-            Self::release_lock(&env);
+            let _ = Self::release_lock(&env);
             return Err(PoolError::MinSharesNotMet);
         }
 
@@ -737,7 +760,7 @@ impl LendingPool {
             amount,
             shares_to_mint,
         );
-        Self::release_lock(&env);
+        let _ = Self::release_lock(&env);
         Ok(())
     }
 
@@ -776,7 +799,7 @@ impl LendingPool {
     /// minting shares. Unlike a bare token transfer to the pool's address,
     /// which is deliberately ignored for pricing, this performs the real
     /// transfer itself and requires `from`'s authorization, so it cannot be
-    /// used to move the price at someone else's expense (#1380).
+    /// used to move the price at someone else's expense.
     pub fn distribute_yield(
         env: Env,
         from: Address,
@@ -789,7 +812,7 @@ impl LendingPool {
         Self::acquire_lock(&env)?;
 
         if amount <= 0 {
-            Self::release_lock(&env);
+            let _ = Self::release_lock(&env);
             return Err(PoolError::InvalidAmount);
         }
 
@@ -812,7 +835,7 @@ impl LendingPool {
             updated,
             Self::total_shares(&env, &token),
         );
-        Self::release_lock(&env);
+        let _ = Self::release_lock(&env);
         Ok(())
     }
 
@@ -896,7 +919,7 @@ impl LendingPool {
     /// `min_assets_out` is the caller's slippage bound: if the computed
     /// `assets_to_return` would be less than `min_assets_out`, the call
     /// reverts with `PoolError::MinAssetsNotMet` instead of settling at a
-    /// worse price than the caller expected (#1380).
+    /// worse price than the caller expected.
     pub fn withdraw(
         env: Env,
         provider: Address,
@@ -910,7 +933,7 @@ impl LendingPool {
         Self::assert_withdrawal_cooldown_elapsed(&env, &provider, &token);
         Self::acquire_lock(&env)?;
         let res = Self::redeem_shares(&env, &provider, &token, shares, min_assets_out);
-        Self::release_lock(&env);
+        let _ = Self::release_lock(&env);
         res
     }
 
@@ -924,9 +947,10 @@ impl LendingPool {
         min_assets_out: i128,
     ) -> Result<(), PoolError> {
         provider.require_auth();
+        Self::assert_circuit_ok(&env, symbol_short!("withdraw"))?;
         Self::acquire_lock(&env)?;
         let res = Self::redeem_shares(&env, &provider, &token, shares, min_assets_out);
-        Self::release_lock(&env);
+        let _ = Self::release_lock(&env);
         res
     }
 
@@ -1099,12 +1123,13 @@ impl LendingPool {
         Self::read_total_outstanding(&env, &token)
     }
 
-    pub fn adjust_outstanding(env: Env, token: Address, delta: i128) {
+    pub fn adjust_outstanding(env: Env, token: Address, delta: i128) -> Result<(), PoolError> {
         let lending_pool = Self::admin(&env);
         lending_pool.require_auth();
+        Self::assert_circuit_ok(&env, Symbol::new(&env, "adjust_outstanding"))?;
 
         if delta == 0 {
-            return;
+            return Ok(());
         }
 
         // #1356: delta must be added, not subtracted — a positive delta means
@@ -1122,6 +1147,7 @@ impl LendingPool {
 
         env.storage().instance().set(&key, &updated);
         Self::bump_instance_ttl(&env);
+        Ok(())
     }
 
     pub fn pool_balance(env: Env, token: Address) -> i128 {
@@ -1198,23 +1224,42 @@ impl LendingPool {
 
     /// Enter cross-contract execution with Reentrancy Guard & Call Depth checks (max 3).
     pub fn enter_cross_contract_call(env: &Env) -> Result<(), PoolError> {
-        let current_depth: u32 = env.storage().instance().get(&DataKey::CallDepth).unwrap_or(0);
+        let current_depth: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::CallDepth)
+            .unwrap_or(0);
         if current_depth >= 3 {
             return Err(PoolError::CallDepthExceeded);
         }
-        env.storage().instance().set(&DataKey::ReentrancyLock, &true);
-        env.storage().instance().set(&DataKey::CallDepth, &(current_depth + 1));
+        env.storage()
+            .instance()
+            .set(&DataKey::ReentrancyLock, &true);
+        env.storage()
+            .instance()
+            .set(&DataKey::CallDepth, &(current_depth + 1));
         Ok(())
     }
 
     /// Exit cross-contract execution and reset call depth counter.
-    pub fn exit_cross_contract_call(env: &Env) {
-        let current_depth: u32 = env.storage().instance().get(&DataKey::CallDepth).unwrap_or(1);
-        let next_depth = if current_depth > 0 { current_depth - 1 } else { 0 };
-        env.storage().instance().set(&DataKey::CallDepth, &next_depth);
+    pub fn exit_cross_contract_call(env: &Env) -> Result<(), PoolError> {
+        let current_depth: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::CallDepth)
+            .unwrap_or(0);
+        let next_depth = current_depth
+            .checked_sub(1)
+            .ok_or(PoolError::ReentrancyGuardTriggered)?;
+        env.storage()
+            .instance()
+            .set(&DataKey::CallDepth, &next_depth);
         if next_depth == 0 {
-            env.storage().instance().set(&DataKey::ReentrancyLock, &false);
+            env.storage()
+                .instance()
+                .set(&DataKey::ReentrancyLock, &false);
         }
+        Ok(())
     }
 }
 

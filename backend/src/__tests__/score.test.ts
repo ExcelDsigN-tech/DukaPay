@@ -41,7 +41,19 @@ jest.unstable_mockModule('../services/rateLimitService.js', () => ({
         currentCount: 0,
       }),
   },
+  RateLimitTier: {
+    PUBLIC: 'public',
+    AUTHENTICATED: 'authenticated',
+    PREMIUM: 'premium',
+    INTERNAL: 'internal',
+  },
+  EXPENSIVE_OPERATION_LIMITS: {
+    SCORE_UPDATE: { maxRequests: 100, windowSeconds: 60 },
+    INDEXER_POLL: { maxRequests: 50, windowSeconds: 60 },
+    BATCH_PROCESS: { maxRequests: 20, windowSeconds: 60 },
+  },
   SCORE_UPDATE_RATE_LIMIT: { maxRequests: 100, windowSeconds: 60 },
+  TIER_LIMITS: {},
 }));
 
 // Dynamic imports to ensure mocks are applied
@@ -78,7 +90,7 @@ describe('GET /api/score/:userId', () => {
 
   it('should return a score for a valid userId', async () => {
     mockedQuery.mockResolvedValueOnce({
-      rows: [{ current_score: 750 }],
+      rows: [{ score: 750 }],
       command: 'SELECT',
       rowCount: 1,
       oid: 0,
@@ -95,7 +107,7 @@ describe('GET /api/score/:userId', () => {
 
   it('should return the same score for the same userId', async () => {
     mockedQuery.mockResolvedValue({
-      rows: [{ current_score: 600 }],
+      rows: [{ score: 600 }],
       command: 'SELECT',
       rowCount: 1,
       oid: 0,
@@ -127,14 +139,14 @@ describe('GET /api/score/:userId', () => {
 describe('POST /api/score/update', () => {
   it('should increase score by 15 for on-time repayment', async () => {
     mockedQuery.mockResolvedValueOnce({
-      rows: [{ current_score: 500 }],
+      rows: [{ score: 500 }],
       command: 'SELECT',
       rowCount: 1,
       oid: 0,
       fields: [],
     });
     mockedQuery.mockResolvedValueOnce({
-      rows: [{ current_score: 515 }],
+      rows: [{ score: 515 }],
       command: 'SELECT',
       rowCount: 1,
       oid: 0,

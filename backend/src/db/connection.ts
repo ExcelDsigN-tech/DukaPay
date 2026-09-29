@@ -28,6 +28,7 @@ const pool = new Pool({
   max: maxPoolSize,
   idleTimeoutMillis,
   connectionTimeoutMillis,
+  statement_timeout: statementTimeoutMillis,
 });
 
 let isShuttingDown = false;
@@ -45,9 +46,11 @@ const metricsInterval = setInterval(() => {
 // Unref the interval so it doesn't keep the process alive
 metricsInterval.unref();
 
-// Set statement_timeout on every newly acquired connection (parameterized — issue #406)
+// Set statement_timeout on every newly acquired connection (with catch handler to avoid unhandled rejections)
 pool.on('connect', (client) => {
-  client.query('SET statement_timeout = $1', [statementTimeoutMillis]);
+  client.query(`SET statement_timeout = ${statementTimeoutMillis}`).catch((err: Error) => {
+    logger.warn('Failed to set statement_timeout on client connect', { error: err.message });
+  });
 });
 
 // Log idle client errors
@@ -208,9 +211,15 @@ export const closePool = async (options?: { timeoutMs?: number }) => {
 
 export { pool, pool as default };
 
-// Add drain method for graceful shutdown
-if (!(pool as any).drain) {
-  (pool as any).drain = async () => {
+// `pg.Pool` exposes no `drain()`, so attach one for graceful-shutdown callers
+// that expect it. Typed via an intersection instead of `any` so the optional
+// member stays checked.
+type DrainablePool = typeof pool & { drain?: () => Promise<void> };
+
+const drainablePool = pool as DrainablePool;
+
+if (!drainablePool.drain) {
+  drainablePool.drain = async () => {
     await pool.end();
   };
 }

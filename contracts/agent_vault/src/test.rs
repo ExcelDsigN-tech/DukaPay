@@ -291,6 +291,20 @@ fn test_transfer_float_respects_recipient_bound() {
     assert_eq!(s.client.get_vault(&b).float, 400);
 }
 
+#[test]
+fn test_transfer_to_agent_atomic() {
+    let s = setup();
+    let a = agent(&s.env);
+    let b = agent(&s.env);
+    fund(&s, &a, 1_000);
+    fund(&s, &b, 1_000);
+    s.client.mint_float(&a, &500);
+    s.client.transfer_to_agent(&a, &b, &300);
+
+    assert_eq!(s.client.get_vault(&a).float, 200);
+    assert_eq!(s.client.get_vault(&b).float, 300);
+}
+
 // ── Settlement ───────────────────────────────────────────────────────────────
 
 #[test]
@@ -526,5 +540,216 @@ proptest! {
         let low = AgentVault::max_float_of(collateral, haircut);
         let high = AgentVault::max_float_of(collateral + delta, haircut);
         prop_assert!(high >= low, "adding collateral shrank the float cap");
+    }
+}
+
+// ── Issue #513: checked arithmetic on the three debits ────────────────────
+// Each of the three functions below previously guarded its debit with an
+// explicit `amount > balance` comparison and then subtracted unchecked. The
+// guard is now the arithmetic itself (`checked_sub`), so these tests pin the
+// rejected-underflow behaviour *and* that a rejection leaves no partial state
+// behind. `withdraw_collateral` additionally has to release its reentrancy
+// lock on that path: `acquire_lock` panics when the lock is still held, so the
+// follow-up call in the first test fails loudly if the release is dropped.
+
+#[test]
+fn test_withdraw_collateral_underflow_rejected_and_state_unchanged() {
+    let s = setup();
+    let a = agent(&s.env);
+    fund(&s, &a, 1_000);
+    s.client.mint_float(&a, &100);
+
+    assert_eq!(
+        s.client.try_withdraw_collateral(&a, &1_001),
+        Err(Ok(VaultError::InsufficientCollateral))
+    );
+
+    let vault: Vault = s.client.get_vault(&a);
+    assert_eq!(vault.collateral, 1_000);
+    assert_eq!(vault.float, 100);
+    assert_eq!(s.token_client.balance(&s.vault), 1_000);
+
+    // The rejected call must have released the reentrancy lock, otherwise
+    // this second withdrawal panics inside `acquire_lock`.
+    s.client.withdraw_collateral(&a, &500);
+    assert_eq!(s.client.get_vault(&a).collateral, 500);
+    assert_eq!(s.token_client.balance(&a), 500);
+}
+
+#[test]
+fn test_burn_float_underflow_rejected_and_state_unchanged() {
+    let s = setup();
+    let a = agent(&s.env);
+    fund(&s, &a, 1_000);
+    s.client.mint_float(&a, &500);
+
+    assert_eq!(
+        s.client.try_burn_float(&a, &501),
+        Err(Ok(VaultError::InsufficientFloat))
+    );
+    assert_eq!(s.client.get_vault(&a).float, 500);
+
+    // Burning exactly the remaining balance still works after the rejection.
+    s.client.burn_float(&a, &500);
+    assert_eq!(s.client.get_vault(&a).float, 0);
+}
+
+#[test]
+fn test_transfer_float_underflow_rejected_and_both_sides_unchanged() {
+    let s = setup();
+    let a = agent(&s.env);
+    let b = agent(&s.env);
+    fund(&s, &a, 1_000);
+    fund(&s, &b, 1_000);
+    s.client.mint_float(&a, &500);
+    s.client.mint_float(&b, &200);
+
+    assert_eq!(
+        s.client.try_transfer_float(&a, &b, &501),
+        Err(Ok(VaultError::InsufficientFloat))
+    );
+
+    assert_eq!(s.client.get_vault(&a).float, 500);
+    assert_eq!(s.client.get_vault(&b).float, 200);
+
+    // The rejected debit must not have been credited to the recipient.
+    s.client.transfer_float(&a, &b, &500);
+    assert_eq!(s.client.get_vault(&a).float, 0);
+    assert_eq!(s.client.get_vault(&b).float, 700);
+}
+
+// ── Upgrade path (#500) ───────────────────────────────────────────────────────
+
+mod upgrade {
+    use super::*;
+    use soroban_sdk::testutils::{MockAuth, MockAuthInvoke};
+    use soroban_sdk::{BytesN, IntoVal};
+
+    fn hash(env: &Env) -> BytesN<32> {
+        BytesN::from_array(env, &[7u8; 32])
+    }
+
+    #[test]
+    fn version_starts_at_one() {
+        let s = setup();
+        assert_eq!(s.client.version(), 1);
+    }
+
+    #[test]
+    fn version_reads_as_one_for_a_vault_deployed_before_versioning() {
+        let s = setup();
+        s.env.as_contract(&s.vault, || {
+            s.env.storage().instance().remove(&crate::DataKey::Version);
+        });
+        assert_eq!(s.client.version(), 1);
+    }
+
+    #[test]
+    fn upgrade_fails_without_owner_auth() {
+        let s = setup();
+        s.env.mock_auths(&[]);
+
+        assert!(s.client.try_upgrade(&hash(&s.env)).is_err());
+        assert_eq!(s.client.version(), 1);
+    }
+
+    #[test]
+    fn the_operator_cannot_upgrade() {
+        let s = setup();
+        let new_hash = hash(&s.env);
+        s.env.mock_auths(&[MockAuth {
+            address: &s.operator,
+            invoke: &MockAuthInvoke {
+                contract: &s.vault,
+                fn_name: "upgrade",
+                args: (new_hash.clone(),).into_val(&s.env),
+                sub_invokes: &[],
+            },
+        }]);
+
+        assert!(s.client.try_upgrade(&new_hash).is_err());
+        assert_eq!(s.client.version(), 1);
+    }
+
+    #[test]
+    fn an_arbitrary_address_cannot_upgrade() {
+        let s = setup();
+        let stranger = agent(&s.env);
+        let new_hash = hash(&s.env);
+        s.env.mock_auths(&[MockAuth {
+            address: &stranger,
+            invoke: &MockAuthInvoke {
+                contract: &s.vault,
+                fn_name: "upgrade",
+                args: (new_hash.clone(),).into_val(&s.env),
+                sub_invokes: &[],
+            },
+        }]);
+
+        assert!(s.client.try_upgrade(&new_hash).is_err());
+    }
+
+    #[test]
+    fn upgrade_before_init_reports_not_initialized() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let id = env.register(AgentVault, ());
+        let client = AgentVaultClient::new(&env, &id);
+
+        assert_eq!(
+            client.try_upgrade(&hash(&env)),
+            Err(Ok(VaultError::NotInitialized))
+        );
+    }
+
+    #[test]
+    fn recording_an_upgrade_bumps_the_version_and_emits_the_audit_event() {
+        let s = setup();
+
+        let (old, new) = s
+            .env
+            .as_contract(&s.vault, || AgentVault::record_upgrade(&s.env));
+
+        // Events are only visible from the invocation that emitted them, so read
+        // them before making any other call.
+        let events = s.env.events().all();
+        let event = events.get(events.len() - 1).unwrap();
+        assert_eq!(event.0, s.vault);
+        assert_eq!(
+            Symbol::from_val(&s.env, &event.1.get(0).unwrap()),
+            Symbol::new(&s.env, "ContractUpgraded")
+        );
+        let (old_v, new_v): (u32, u32) = FromVal::from_val(&s.env, &event.2);
+        assert_eq!((old_v, new_v), (1, 2));
+
+        assert_eq!((old, new), (1, 2));
+        assert_eq!(s.client.version(), 2);
+    }
+
+    #[test]
+    fn each_recorded_upgrade_increments_the_version_by_one() {
+        let s = setup();
+        for expected in 2..=5u32 {
+            let (_, new) = s
+                .env
+                .as_contract(&s.vault, || AgentVault::record_upgrade(&s.env));
+            assert_eq!(new, expected);
+        }
+        assert_eq!(s.client.version(), 5);
+    }
+
+    #[test]
+    fn a_failed_upgrade_leaves_version_and_balances_untouched() {
+        let s = setup();
+        let a = agent(&s.env);
+        fund(&s, &a, 1_000);
+        s.client.mint_float(&a, &100);
+
+        // Un-uploaded wasm: the code swap fails and the whole call rolls back.
+        assert!(s.client.try_upgrade(&hash(&s.env)).is_err());
+
+        assert_eq!(s.client.version(), 1);
+        let vault = s.client.get_vault(&a);
+        assert_eq!((vault.collateral, vault.float), (1_000, 100));
     }
 }

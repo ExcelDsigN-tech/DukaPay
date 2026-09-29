@@ -22,7 +22,7 @@ jobs:
   supply-chain-audit:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Block compromised packages
         run: |
           echo "Scanning lockfiles for known malicious packages..."
@@ -50,9 +50,9 @@ jobs:
     needs: supply-chain-audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Use Node.js 20
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 20
           cache: "npm"
@@ -64,14 +64,65 @@ jobs:
         run: npx ts-node gen-money.ts --check
         working-directory: scripts
 
+  # Issue #432: the stroop-integer money kernel exists twice on purpose — once in
+  # Rust (`contracts/money`, what the chain executes) and once in TypeScript
+  # (`backend/src/money/decimal.ts`, the off-chain settlement path) — and the two
+  # must agree bit-for-bit for the same amount, or an off-chain confirmation can
+  # disagree with what actually settles. This job runs both halves of the parity
+  # harness and fails the build the moment they diverge: the shared vectors in
+  # `contracts/money/tests/parity_vectors.rs` and `parity-vectors.test.ts`, then
+  # `scripts/money-parity.ts`, which replays every vector in
+  # `tests/money-parity/vectors.json` plus a randomized batch through both
+  # implementations and diffs the outputs.
+  money-parity:
+    needs: money-policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable # not SHA-pinned: rolling channel branch (stable/beta/nightly track new Rust releases); pinning would freeze the toolchain version
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: contracts
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+          cache: "npm"
+          cache-dependency-path: backend/package-lock.json
+      - name: Install backend dependencies
+        run: npm ci
+        working-directory: backend
+
+      - name: Rust shared money vectors and properties
+        # `--test-threads=1` matches the contracts job: soroban's test host
+        # meters a budget per `Env`, and the randomized split test allocates one
+        # per iteration.
+        run: cargo test -p money -- --test-threads=1
+        working-directory: contracts
+
+      - name: Backend money vectors and properties
+        run: npm test -- src/money/__tests__/parity-vectors.test.ts
+        working-directory: backend
+        env:
+          NODE_ENV: test
+
+      - name: Cross-language money parity (shared vectors + randomized)
+        run: npx tsx money-parity.ts --randomized 5000
+        working-directory: scripts
+
   backend:
     needs: [supply-chain-audit, money-policy]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Use Node.js 20
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 20
           cache: "npm"
@@ -132,9 +183,9 @@ jobs:
     needs: supply-chain-audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Use Node.js 20
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 20
           cache: "npm"
@@ -157,7 +208,7 @@ jobs:
     outputs:
       migrations: ${{ steps.filter.outputs.migrations }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       # Pinned to a commit SHA, not the `v3` tag: a tag is mutable and can
       # be repointed upstream without review on our side.
       - uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad # v3
@@ -188,9 +239,9 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Use Node.js 20
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 20
           cache: "npm"
@@ -206,7 +257,7 @@ jobs:
       - name: Migrate all the way down (reversibility check)
         run: |
           # Count migrations and roll them all back one by one
-          MIGRATION_COUNT=$(ls migrations/*.js 2>/dev/null | wc -l)
+          MIGRATION_COUNT=$(ls migrations/*.cjs 2>/dev/null | wc -l)
           for i in $(seq 1 "$MIGRATION_COUNT"); do
             npm run migrate:down -- --count 1
           done
@@ -251,9 +302,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Use Node.js 20
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 20
           cache: "npm"
@@ -263,6 +314,9 @@ jobs:
         working-directory: frontend
       - name: Lint
         run: npm run lint
+        working-directory: frontend
+      - name: Format check
+        run: npm run format:check
         working-directory: frontend
       - name: Type check
         run: npm run typecheck
@@ -284,10 +338,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Use Node.js 20
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 20
           cache: npm
@@ -304,12 +358,16 @@ jobs:
   e2e:
     needs: [supply-chain-audit, frontend]
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' || contains(github.event.pull_request.changed_files, 'frontend/')
+    # Run e2e on push and on pull requests that touch frontend; the previous
+    # `contains(github.event.pull_request.changed_files, 'frontend/')` used a
+    # non-existent field and caused the job to be skipped on PRs (see review feedback).
+    # Until a proper paths-filter is added, run on all pull requests.
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Use Node.js 20
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 20
           cache: "npm"
@@ -327,8 +385,8 @@ jobs:
           NODE_ENV: test
           CI: true
       - name: Upload Playwright report
-        if: failure()
-        uses: actions/upload-artifact@v4
+        if: failure() || cancelled()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: playwright-report
           path: frontend/playwright-report/
@@ -337,20 +395,22 @@ jobs:
   env-docs-check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Use Node.js 20
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 20
       - name: Check env docs are in sync
         run: node scripts/check-env-docs.mjs
+      - name: Check prod-flag launch posture (KYC + audit-anchor)
+        run: node scripts/check-prod-flags.mjs
 
   error-code-mapping-check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Use Node.js 20
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 20
       - name: Check every backend ErrorCode has a frontend message mapping
@@ -365,10 +425,10 @@ jobs:
       id-token: write
       attestations: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@stable # not SHA-pinned: rolling channel branch (stable/beta/nightly track new Rust releases); pinning would freeze the toolchain version
       - name: Cache dependencies
         # Pinned to a commit SHA, not the `v2` tag (see other pins in this
         # workflow for rationale).
@@ -414,7 +474,7 @@ jobs:
           done
         working-directory: contracts
       - name: Upload wasm artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: contracts-wasm
           path: contracts/target/wasm32-unknown-unknown/release/*.wasm
@@ -443,7 +503,7 @@ jobs:
         run: cargo tarpaulin --out Xml
         working-directory: contracts
       - name: Upload coverage report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: contracts-coverage
           path: contracts/cobertura.xml
@@ -457,9 +517,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@stable # not SHA-pinned: rolling channel branch (stable/beta/nightly track new Rust releases); pinning would freeze the toolchain version
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
@@ -475,20 +535,51 @@ jobs:
         run: cargo test
         working-directory: indexer
 
+  image-digest-check:
+    needs: supply-chain-audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Verify all Kubernetes images are pinned to SHA256 digests
+        run: |
+          set -euo pipefail
+          FAIL=0
+          while IFS= read -r file; do
+            while IFS= read -r line; do
+              if echo "$line" | grep -qE '^\s+image:'; then
+                image=$(echo "$line" | sed 's/.*image:\s*//')
+                if echo "$image" | grep -q ':latest'; then
+                  echo "::error file=$file::Unpinned :latest tag found: $image"
+                  FAIL=1
+                elif ! echo "$image" | grep -qE '@sha256:[a-f0-9]{64}'; then
+                  echo "::error file=$file::Image not pinned to SHA256 digest: $image"
+                  FAIL=1
+                fi
+              fi
+            done < "$file"
+          done < <(find infra/kubernetes -name "*.yaml" -o -name "*.yml")
+          if [ "$FAIL" -eq 1 ]; then
+            exit 1
+          fi
+          echo "All Kubernetes images are pinned to SHA256 digests."
+
   sdk:
     needs: supply-chain-audit
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Use Node.js 20
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 20
           cache: npm
           cache-dependency-path: sdk/package-lock.json
       - name: Install dependencies
         run: npm ci
+        working-directory: sdk
+      - name: Lint
+        run: npm run lint
         working-directory: sdk
       - name: Type check
         run: npm run typecheck

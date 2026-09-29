@@ -4,6 +4,7 @@
  */
 // Only import types once at the top
 import { getAuditLogs, type AuditLogFilters } from '../services/auditLogService.js';
+import { listAuditLogsQuerySchema } from '../schemas/auditSchemas.js';
 import type { Request, Response, NextFunction } from 'express';
 import { asyncHandler } from '../utils/asyncHandler.js';
 export const registerTestUser = asyncHandler(
@@ -30,6 +31,7 @@ import {
   generateDeviceFingerprint,
   revokeToken,
   revokeTokenFamily,
+  invalidateAllFamilies,
 } from '../services/authService.js';
 import logger from '../utils/logger.js';
 import { complianceService } from '../services/complianceService.js';
@@ -214,14 +216,16 @@ export async function listAuditLogs(
   next: NextFunction,
 ): Promise<void> {
   try {
+    const validated = listAuditLogsQuerySchema.parse(req.query);
     const result = await getAuditLogs({
-      actor: req.query.actor as string | undefined,
-      action: req.query.action as string | undefined,
-      from: req.query.from as string | undefined,
-      to: req.query.to as string | undefined,
-      cursor: req.query.cursor as string | undefined,
-      limit: Number(req.query.limit ?? 25),
-      withTotal: req.query.withTotal === 'true',
+      actor: validated.actor,
+      action: validated.action,
+      from: validated.from,
+      to: validated.to,
+      cursor: validated.cursor,
+      limit: validated.limit,
+      offset: validated.offset,
+      withTotal: validated.withTotal,
     } as AuditLogFilters);
 
     res.json(result);
@@ -263,3 +267,26 @@ export const logout = async (req: Request, res: Response): Promise<void> => {
     data: { message: 'Logged out' },
   });
 };
+
+export const logoutAllSessions = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user?.publicKey) {
+    throw AppError.unauthorized('Authentication required');
+  }
+
+  await invalidateAllFamilies(req.user.publicKey, 'user_logout_all');
+
+  const cookieName = process.env.JWT_COOKIE_NAME ?? 'dukapay_jwt';
+  const refreshCookieName = process.env.REFRESH_COOKIE_NAME ?? 'dukapay_refresh';
+  res.clearCookie(cookieName, { path: '/' });
+  res.clearCookie(refreshCookieName, { path: '/api/v1/auth' });
+
+  logger.withContext().info('User logged out from all sessions', {
+    publicKey: req.user.publicKey,
+    timestamp: new Date().toISOString(),
+  });
+
+  res.status(200).json({
+    success: true,
+    data: { message: 'Logged out from all sessions' },
+  });
+});

@@ -10,17 +10,14 @@ their columns, indexes, and relationships.
 | Column | Type | Constraints | Notes |
 |---|---|---|---|
 | `id` | `serial` | `PRIMARY KEY` | |
-| `user_id` | `varchar(255)` | `NOT NULL, UNIQUE` | Historical name; renamed `borrower` in ensure-core-tables migration |
-| `current_score` | `integer` | `NOT NULL, DEFAULT 500` | Historical name; renamed `score` in ensure-core-tables migration. Clamped 300-850 |
+| `borrower` | `varchar(255)` | `NOT NULL, UNIQUE` | Historical name `user_id`; renamed in ensure-core-tables migration |
+| `score` | `integer` | `NOT NULL, DEFAULT 500` | Historical name `current_score`; renamed in ensure-core-tables migration. Clamped 300-850 |
 | `created_at` | `timestamp` | `DEFAULT CURRENT_TIMESTAMP` | Added by migration 1774000000004 |
 | `updated_at` | `timestamp` | `DEFAULT CURRENT_TIMESTAMP` | |
 
-**Indexes**: unique on `user_id`.
+**Indexes**: unique on `borrower`.
 
-**Notes**: The column names differ across environments depending on which migrations
-have run. The `ensure-core-tables` migration (1789000000000) renames `user_id -> borrower`
-and `current_score -> score` if the old names still exist. Code that queries this table
-at runtime uses the CURRENT column names (see `scoresService.ts`).
+**Notes**: The column names are normalized by the `ensure-core-tables` migration (1789000000000), which renames `user_id -> borrower` and `current_score -> score` if the old names still exist. All runtime queries across the backend (controllers, services, indexers, privacy DSAR, seed) use the current column names (`borrower`, `score`).
 
 ---
 
@@ -357,6 +354,249 @@ This table stores per-user digest frequency settings independently.
 
 ---
 
+## Table: `agent_float_transfer_limits`
+
+| Column | Type | Constraints | Notes |
+|---|---|---|---|
+| `id` | `serial` | `PRIMARY KEY` | |
+| `from_agent` | `varchar(255)` | `NOT NULL` | |
+| `to_agent` | `varchar(255)` | `NOT NULL` | |
+| `daily_limit` | `numeric` | `NOT NULL, DEFAULT '100000'` | |
+| `weekly_limit` | `numeric` | `NOT NULL, DEFAULT '500000'` | |
+| `created_at` | `timestamp` | `NOT NULL, DEFAULT current_timestamp` | |
+| `updated_at` | `timestamp` | `NOT NULL, DEFAULT current_timestamp` | |
+
+**Indexes**: on `from_agent`, `to_agent`.
+**Constraints**: UNIQUE on `(from_agent, to_agent)`.
+
+---
+
+## Table: `agent_float_transfers`
+
+| Column | Type | Constraints | Notes |
+|---|---|---|---|
+| `id` | `varchar(255)` | `PRIMARY KEY` | |
+| `from_agent` | `varchar(255)` | `NOT NULL` | |
+| `to_agent` | `varchar(255)` | `NOT NULL` | |
+| `amount` | `numeric` | `NOT NULL` | |
+| `reason` | `varchar(255)` | | |
+| `status` | `varchar(50)` | `NOT NULL, DEFAULT 'PENDING_APPROVAL'` | |
+| `required_approvals` | `integer` | `NOT NULL, DEFAULT 2` | |
+| `approval_count` | `integer` | `NOT NULL, DEFAULT 1` | |
+| `created_by` | `varchar(255)` | `NOT NULL` | |
+| `tx_hash` | `varchar(255)` | | |
+| `created_at` | `timestamp` | `NOT NULL, DEFAULT current_timestamp` | |
+| `updated_at` | `timestamp` | `NOT NULL, DEFAULT current_timestamp` | |
+
+**Indexes**: on `from_agent`, `to_agent`, `status`, `created_at`.
+
+---
+
+## Table: `agent_float_transfer_approvals`
+
+| Column | Type | Constraints | Notes |
+|---|---|---|---|
+| `id` | `serial` | `PRIMARY KEY` | |
+| `transfer_id` | `varchar(255)` | `NOT NULL, REFERENCES agent_float_transfers ON DELETE CASCADE` | |
+| `approver` | `varchar(255)` | `NOT NULL` | |
+| `role` | `varchar(50)` | `NOT NULL` | |
+| `approved_at` | `timestamp` | `NOT NULL, DEFAULT current_timestamp` | |
+
+**Indexes**: on `transfer_id`.
+**Constraints**: UNIQUE on `(transfer_id, approver)`.
+
+---
+
+## Table: `audit_epochs`
+
+| Column | Type | Constraints | Notes |
+|---|---|---|---|
+| `id` | `bigserial` | `PRIMARY KEY` | |
+| `epoch_start` | `timestamptz` | `NOT NULL, UNIQUE` | |
+| `epoch_end` | `timestamptz` | `NOT NULL` | |
+| `merkle_root` | `varchar(64)` | `NOT NULL` | |
+| `leaf_count` | `integer` | `NOT NULL` | |
+| `anchor_status` | `varchar(20)` | `NOT NULL, DEFAULT 'pending'` | CHECK IN (`pending`, `anchored`, `failed`) |
+| `stellar_tx_hash` | `varchar(64)` | | |
+| `anchored_at` | `timestamptz` | | |
+| `created_at` | `timestamptz` | `NOT NULL, DEFAULT NOW()` | |
+
+---
+
+## Table: `audit_merkle_leaves`
+
+| Column | Type | Constraints | Notes |
+|---|---|---|---|
+| `epoch_id` | `bigint` | `NOT NULL, REFERENCES audit_epochs ON DELETE RESTRICT` | |
+| `log_id` | `integer` | `NOT NULL, UNIQUE, REFERENCES audit_logs ON DELETE RESTRICT` | |
+| `leaf_index` | `integer` | `NOT NULL` | |
+| `leaf_hash` | `varchar(64)` | `NOT NULL` | |
+
+**Constraints**: UNIQUE on `(epoch_id, leaf_index)`.
+
+---
+
+## Table: `compliance_profiles`
+
+| Column | Type | Constraints | Notes |
+|---|---|---|---|
+| `subject_id` | `varchar(56)` | `PRIMARY KEY` | |
+| `provider` | `varchar(40)` | `NOT NULL` | |
+| `provider_reference` | `varchar(255)` | | |
+| `status` | `varchar(20)` | `NOT NULL` | CHECK IN (`approved`, `review`, `rejected`) |
+| `country_code` | `char(2)` | | |
+| `sanctions_match` | `boolean` | `NOT NULL, DEFAULT false` | |
+| `pep_match` | `boolean` | `NOT NULL, DEFAULT false` | |
+| `adverse_media_match` | `boolean` | `NOT NULL, DEFAULT false` | |
+| `screened_at` | `timestamptz` | `NOT NULL, DEFAULT NOW()` | |
+| `next_screening_at` | `timestamptz` | `NOT NULL` | |
+| `created_at` | `timestamptz` | `NOT NULL, DEFAULT NOW()` | |
+| `updated_at` | `timestamptz` | `NOT NULL, DEFAULT NOW()` | |
+
+---
+
+## Table: `compliance_audit_log`
+
+| Column | Type | Constraints | Notes |
+|---|---|---|---|
+| `id` | `bigserial` | `PRIMARY KEY` | |
+| `subject_id` | `varchar(56)` | | |
+| `event_type` | `varchar(60)` | `NOT NULL` | |
+| `decision` | `varchar(30)` | `NOT NULL` | |
+| `provider_reference` | `varchar(255)` | | |
+| `reason_codes` | `jsonb` | `NOT NULL, DEFAULT '[]'` | |
+| `metadata` | `jsonb` | `NOT NULL, DEFAULT '{}'` | |
+| `created_at` | `timestamptz` | `NOT NULL, DEFAULT NOW()` | |
+
+**Indexes**: on `(subject_id, created_at)`.
+**Notes**: Append-only table enforced by `compliance_audit_log_immutable` trigger.
+
+---
+
+## Table: `transaction_monitoring_alerts`
+
+| Column | Type | Constraints | Notes |
+|---|---|---|---|
+| `id` | `uuid` | `PRIMARY KEY` | |
+| `subject_id` | `varchar(56)` | `NOT NULL` | |
+| `transaction_reference` | `uuid` | | |
+| `risk_score` | `integer` | `NOT NULL` | |
+| `rule_codes` | `jsonb` | `NOT NULL` | |
+| `status` | `varchar(20)` | `NOT NULL, DEFAULT 'open'` | |
+| `created_at` | `timestamptz` | `NOT NULL, DEFAULT NOW()` | |
+
+**Indexes**: on `(subject_id, created_at)`.
+
+---
+
+## Table: `sar_reports`
+
+| Column | Type | Constraints | Notes |
+|---|---|---|---|
+| `id` | `uuid` | `PRIMARY KEY` | |
+| `alert_id` | `uuid` | `NOT NULL, REFERENCES transaction_monitoring_alerts` | |
+| `subject_id` | `varchar(56)` | `NOT NULL` | |
+| `narrative` | `text` | `NOT NULL` | |
+| `filing_status` | `varchar(30)` | `NOT NULL, DEFAULT 'pending_submission'` | |
+| `provider_reference` | `varchar(255)` | | |
+| `generated_at` | `timestamptz` | `NOT NULL, DEFAULT NOW()` | |
+| `filed_at` | `timestamptz` | | |
+
+---
+
+## Table: `cross_contract_reconciliation`
+
+| Column | Type | Constraints | Notes |
+|---|---|---|---|
+| `id` | `serial` | `PRIMARY KEY` | |
+| `intent_key` | `varchar(255)` | `NOT NULL, UNIQUE` | Deterministic idempotency key: `${operation}:${loan_id}:${event_id}` |
+| `loan_id` | `integer` | | |
+| `borrower` | `varchar(255)` | `NOT NULL` | |
+| `operation` | `varchar(16)` | `NOT NULL` | CHECK IN (`approve`, `repay`, `default`) |
+| `disbursement_ledger` | `integer` | | |
+| `disbursement_tx_hash` | `varchar(255)` | | |
+| `expected_score_delta` | `integer` | `NOT NULL, DEFAULT 0` | Expected credit-score change (0 = none expected) |
+| `score_applied` | `boolean` | `NOT NULL, DEFAULT false` | |
+| `score_ledger` | `integer` | | |
+| `state` | `varchar(16)` | `NOT NULL, DEFAULT 'pending'` | CHECK IN (`pending`, `half_applied`, `reconciled`, `failed`) |
+| `attempts` | `integer` | `NOT NULL, DEFAULT 0` | |
+| `last_checked_at` | `timestamp` | | |
+| `created_at` | `timestamp` | `NOT NULL, DEFAULT current_timestamp` | |
+| `updated_at` | `timestamp` | | |
+
+**Indexes**: on `state`, `borrower`, `loan_id`.
+
+---
+
+## Table: `decay_events`
+
+| Column | Type | Constraints | Notes |
+|---|---|---|---|
+| `id` | `serial` | `PRIMARY KEY` | |
+| `borrower` | `varchar(255)` | `NOT NULL` | |
+| `event_type` | `varchar(64)` | `NOT NULL` | |
+| `event_timestamp` | `timestamp` | `NOT NULL` | |
+| `initial_score` | `integer` | `NOT NULL` | |
+| `half_life_days` | `integer` | `NOT NULL, DEFAULT 30` | |
+| `decay_factor` | `numeric` | | |
+| `decayed_score` | `integer` | | |
+| `created_at` | `timestamp` | `NOT NULL, DEFAULT current_timestamp` | |
+
+**Indexes**: on `(borrower, event_timestamp)`, `event_type`.
+**Constraints**: UNIQUE on `(borrower, event_type, event_timestamp)`.
+
+---
+
+## Table: `dsar_requests`
+
+| Column | Type | Constraints | Notes |
+|---|---|---|---|
+| `id` | `uuid` | `PRIMARY KEY, DEFAULT gen_random_uuid()` | |
+| `public_key` | `text` | `NOT NULL` | |
+| `type` | `text` | `NOT NULL` | CHECK IN (`access`, `deletion`, `anonymization`) |
+| `status` | `text` | `NOT NULL, DEFAULT 'pending'` | CHECK IN (`pending`, `processing`, `completed`, `rejected`) |
+| `reason` | `text` | `NOT NULL` | |
+| `created_at` | `timestamptz` | `NOT NULL, DEFAULT NOW()` | |
+| `completed_at` | `timestamptz` | | |
+
+**Indexes**: on `public_key`, `status`, `created_at`.
+
+---
+
+## Table: `ledger_checkpoints`
+
+| Column | Type | Constraints | Notes |
+|---|---|---|---|
+| `id` | `serial` | `PRIMARY KEY` | |
+| `contract` | `text` | `NOT NULL` | |
+| `range_start` | `bigint` | `NOT NULL` | |
+| `range_end` | `bigint` | `NOT NULL` | |
+| `status` | `text` | `NOT NULL, DEFAULT 'verified'` | CHECK IN (`verified`, `suspect`) |
+| `created_at` | `timestamptz` | `NOT NULL, DEFAULT CURRENT_TIMESTAMP` | |
+
+**Indexes**:
+- `idx_ledger_checkpoints_contract_range_end` on `(contract, range_end)`
+- `idx_ledger_checkpoints_contract_status` on `(contract, status)` WHERE `status = 'suspect'`
+**Constraints**: `range_end >= range_start`.
+
+---
+
+## Table: `pii_access_log`
+
+| Column | Type | Constraints | Notes |
+|---|---|---|---|
+| `id` | `uuid` | `PRIMARY KEY, DEFAULT gen_random_uuid()` | |
+| `actor` | `text` | `NOT NULL` | |
+| `record_id` | `text` | `NOT NULL` | |
+| `field` | `text` | `NOT NULL` | |
+| `reason` | `text` | `NOT NULL` | |
+| `request_id` | `text` | `NOT NULL` | |
+| `created_at` | `timestamptz` | `NOT NULL, DEFAULT NOW()` | |
+
+**Indexes**: on `(record_id, created_at)`, `(actor, created_at)`.
+
+---
+
 ## Entity Relationships
 
 ```
@@ -367,6 +607,10 @@ notifications (many per user) ──> user_id
 webhook_deliveries (many per subscription) ──> subscription_id -> webhook_subscriptions
 loan_disputes (1:1 per disputed loan) ──> loan_id -> contract_events(loan_id)
 user_profiles (1:1 per address) ──> public_key
+audit_merkle_leaves (many per epoch) ──> epoch_id -> audit_epochs
+audit_merkle_leaves (1:1 per log) ──> log_id -> audit_logs
+sar_reports (1:1 per alert) ──> alert_id -> transaction_monitoring_alerts
+agent_float_transfer_approvals (many per transfer) ──> transfer_id -> agent_float_transfers
 ```
 
 ### Event Flow
