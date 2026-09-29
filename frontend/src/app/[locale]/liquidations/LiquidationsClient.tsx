@@ -51,6 +51,7 @@ function LiquidationsTable({
   pendingLoanId: number | null;
 }) {
   const t = useTranslations("Liquidations");
+  const locale = useLocale();
 
   return (
     <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">

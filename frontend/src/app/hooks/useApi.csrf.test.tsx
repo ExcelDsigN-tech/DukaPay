@@ -22,18 +22,25 @@ function createWrapper() {
   };
 }
 
+function clearCsrfCookie() {
+  // Assigning "" is a no-op in jsdom (as in real browsers) — deleting a
+  // cookie requires expiring it explicitly, otherwise it leaks into
+  // subsequent tests.
+  document.cookie = `${CSRF_COOKIE_NAME}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
+}
+
 describe("CSRF token mechanism", () => {
   const originalFetch = global.fetch;
   const testToken = "test-csrf-token-abc123";
 
   beforeEach(() => {
-    document.cookie = "";
+    clearCsrfCookie();
   });
 
   afterEach(() => {
     global.fetch = originalFetch;
     jest.restoreAllMocks();
-    document.cookie = "";
+    clearCsrfCookie();
   });
 
   it("reads CSRF token from cookie when present", async () => {

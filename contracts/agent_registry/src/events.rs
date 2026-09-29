@@ -21,7 +21,8 @@ pub fn bond_updated(env: &Env, agent: &Address, new_bond: i128) {
 
 pub fn reputation_updated(env: &Env, agent: &Address, old_reputation: i128, new_reputation: i128) {
     let topics = (Symbol::new(env, "ReputationUpdated"), agent.clone());
-    env.events().publish(topics, (old_reputation, new_reputation));
+    env.events()
+        .publish(topics, (old_reputation, new_reputation));
 }
 
 pub fn license_renewed(env: &Env, agent: &Address, old_expiry: u64, new_expiry: u64) {

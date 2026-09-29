@@ -902,7 +902,9 @@ mod test {
     #[contractimpl]
     impl MockBreaker {
         pub fn set_blocked(env: Env, blocked: bool) {
-            env.storage().instance().set(&symbol_short!("blk"), &blocked);
+            env.storage()
+                .instance()
+                .set(&symbol_short!("blk"), &blocked);
         }
 
         pub fn is_blocked(env: Env, _contract: Address, _function: Symbol) -> bool {

@@ -43,6 +43,7 @@ describe('Environment Variable Validation', () => {
     process.env.SCORE_DELTA_LATE = '5';
     process.env.REMITTANCE_NFT_CONTRACT_ID = 'C3';
     process.env.MULTISIG_GOVERNANCE_CONTRACT_ID = 'C4';
+    process.env.PII_KEK_KEY = '0'.repeat(64);
   }
 
   it('should not exit if all required variables are present', () => {

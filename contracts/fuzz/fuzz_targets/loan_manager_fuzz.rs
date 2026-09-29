@@ -58,14 +58,15 @@ fuzz_target!(|data: FuzzAction| {
     let admin = Address::generate(&env);
     nft_client.initialize(&admin);
 
-    // 2. Setup LoanManager. initialize now takes (nft_contract, lending_pool, token, admin).
+    // 2. Setup LoanManager. initialize takes (nft_contract, lending_pool, token, admin, governance).
     let lending_pool_id = env.register(LendingPool, ());
     let token_admin = Address::generate(&env);
     let token_contract_id = env.register_stellar_asset_contract_v2(token_admin.clone());
     let token_id = token_contract_id.address();
     let loan_manager_id = env.register(LoanManager, ());
     let loan_manager_client = LoanManagerClient::new(&env, &loan_manager_id);
-    loan_manager_client.initialize(&nft_id, &lending_pool_id, &token_id, &admin);
+    let governance = Address::generate(&env);
+    loan_manager_client.initialize(&nft_id, &lending_pool_id, &token_id, &admin, &governance);
 
     // Authorize LoanManager to update scores in NFT contract
     nft_client.authorize_minter(&loan_manager_id);

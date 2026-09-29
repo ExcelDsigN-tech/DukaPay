@@ -10,7 +10,6 @@ export default function AdminKycPage() {
   const role = useUserStore((state) => state.user?.role);
   const { data, isLoading } = useAdminUsers({ limit: 100 });
   const { mutateAsync: overrideKyc, isPending } = useKycOverride();
-  const overrideKyc = useKycOverride();
   const [targetKey, setTargetKey] = useState("");
   const [verified, setVerified] = useState(true);
   const [level, setLevel] = useState("basic");
@@ -100,10 +99,10 @@ export default function AdminKycPage() {
 
         <button
           onClick={handleSubmit}
-          disabled={overrideKyc.isPending || !targetKey}
+          disabled={isPending || !targetKey}
           className="rounded bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200"
         >
-          {overrideKyc.isPending ? t("applying") : t("applyButton")}
+          {isPending ? t("applying") : t("applyButton")}
         </button>
       </section>
 

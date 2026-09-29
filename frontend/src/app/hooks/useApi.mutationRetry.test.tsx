@@ -10,7 +10,7 @@
 import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
-import { useRepayLoan, useCreateRemittance } from "./useApi";
+import { useRepayLoan, useCreateRemittance, CSRF_COOKIE_NAME } from "./useApi";
 
 function createWrapper() {
   const queryClient = new QueryClient({
@@ -27,9 +27,17 @@ function createWrapper() {
 describe("mutation retry behavior", () => {
   const originalFetch = global.fetch;
 
+  beforeEach(() => {
+    // Preset the CSRF cookie so apiFetch doesn't trigger its own bootstrap
+    // fetch(/auth/csrf) call, which would otherwise be counted by fetchMock
+    // alongside the mutation request these tests are actually asserting on.
+    document.cookie = `${CSRF_COOKIE_NAME}=test-csrf-token`;
+  });
+
   afterEach(() => {
     global.fetch = originalFetch;
     jest.restoreAllMocks();
+    document.cookie = `${CSRF_COOKIE_NAME}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
   });
 
   it("useRepayLoan calls the mutationFn exactly once on a non-network 5xx", async () => {

@@ -20,9 +20,12 @@ const DEFAULT_EXEMPT_PATHS = [
   '/version',
 ];
 
+// Cookie names come straight off the wire, so writing them onto a plain
+// object as property keys risks prototype pollution (e.g. a "__proto__"
+// cookie). Object.create(null) has no prototype to pollute.
 function parseCookies(cookieHeader: string | undefined): Record<string, string> {
-  if (!cookieHeader) return {};
-  const cookies: Record<string, string> = {};
+  const cookies: Record<string, string> = Object.create(null) as Record<string, string>;
+  if (!cookieHeader) return cookies;
   cookieHeader.split(';').forEach((cookie) => {
     const [name, ...rest] = cookie.split('=');
     const trimmedName = name?.trim();
@@ -153,13 +156,16 @@ export function csrfProtection(options: CsrfOptions = {}) {
  * GET /api/v1/auth/csrf
  */
 export function getCsrfTokenController(req: Request, res: Response): void {
-  const cookies =
-    (req as unknown as { cookies?: Record<string, string> }).cookies ??
-    parseCookies(req.headers.cookie);
-
-  let token = cookies[CSRF_COOKIE_NAME];
+  // csrfProtection() runs ahead of this controller on every route and already
+  // issues (and stashes in res.locals) a token when the request has none, so
+  // reuse it here instead of minting a second, mismatched token that would
+  // overwrite the cookie/header pair the middleware just set.
+  let token = res.locals.csrfToken as string | undefined;
   if (!token) {
-    token = generateCsrfToken();
+    const cookies =
+      (req as unknown as { cookies?: Record<string, string> }).cookies ??
+      parseCookies(req.headers.cookie);
+    token = cookies[CSRF_COOKIE_NAME] ?? generateCsrfToken();
   }
 
   setCsrfCookie(res, token);

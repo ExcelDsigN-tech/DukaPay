@@ -153,6 +153,7 @@ export function StepAmountAsset({ data, onChange, onNext, error, onError }: Step
                   ? "Not eligible"
                   : `Eligible range: ${formatMoney(minAmount, locale)} – ${formatMoney(
                       data.maxAmount,
+                      locale,
                     )} • Max ${decimals} decimal places`)
               }
               error={precisionError || undefined}
