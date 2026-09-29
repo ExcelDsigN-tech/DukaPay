@@ -184,7 +184,7 @@ impl LendingPool {
     /// Deliberately never derived from `token::Client::balance`: reading the
     /// live balance would let anyone move the share price within a single
     /// ledger by transferring tokens directly to the pool's address,
-    /// without going through `deposit`/`redeem` (see #1380). It is mutated
+    /// without going through `deposit`/`redeem`. It is mutated
     /// only by `deposit` (+amount), `redeem`/`withdraw` (-assets_to_return),
     /// and `distribute_yield` (+amount) — never by `adjust_outstanding`,
     /// since moving principal between "idle" and "outstanding" does not
@@ -351,7 +351,7 @@ impl LendingPool {
     /// gives a 1-for-1 allocation) even when the pool is empty, without a
     /// special-cased first-depositor branch. The offset also means a
     /// donation-inflated `total_managed_assets_before` can no longer round a
-    /// victim's minted shares down to zero — see #1380. Rounds down, in the
+    /// victim's minted shares down to zero. Rounds down, in the
     /// pool's favor.
     fn calc_shares_to_mint(
         amount: i128,
@@ -643,7 +643,7 @@ impl LendingPool {
     /// `min_shares_out` is the caller's slippage bound: if the computed
     /// `shares_to_mint` would be less than `min_shares_out`, the call
     /// reverts with `PoolError::MinSharesNotMet` instead of settling at a
-    /// worse price than the caller expected (#1380).
+    /// worse price than the caller expected.
     pub fn deposit(
         env: Env,
         provider: Address,
@@ -799,7 +799,7 @@ impl LendingPool {
     /// minting shares. Unlike a bare token transfer to the pool's address,
     /// which is deliberately ignored for pricing, this performs the real
     /// transfer itself and requires `from`'s authorization, so it cannot be
-    /// used to move the price at someone else's expense (#1380).
+    /// used to move the price at someone else's expense.
     pub fn distribute_yield(
         env: Env,
         from: Address,
@@ -919,7 +919,7 @@ impl LendingPool {
     /// `min_assets_out` is the caller's slippage bound: if the computed
     /// `assets_to_return` would be less than `min_assets_out`, the call
     /// reverts with `PoolError::MinAssetsNotMet` instead of settling at a
-    /// worse price than the caller expected (#1380).
+    /// worse price than the caller expected.
     pub fn withdraw(
         env: Env,
         provider: Address,

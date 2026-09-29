@@ -598,7 +598,7 @@ fn test_share_price_increases_when_interest_arrives() {
 
     // Simulate loan repayment with 100 tokens of interest, realized through
     // the explicit accrual path (a bare transfer to the pool's address is
-    // deliberately ignored for pricing — see #1380).
+    // deliberately ignored for pricing).
     stellar_asset_client.mint(&token_admin, &100);
     pool_client.distribute_yield(&token_admin, &token_id, &100);
 
@@ -799,7 +799,7 @@ fn test_full_loan_cycle_with_interest() {
     // return is a bare transfer paired with adjust_outstanding; the 80
     // interest is realized through the explicit accrual path (which
     // performs its own transfer) so it -- and only it -- moves the share
-    // price. A bare transfer alone would not (#1380).
+    // price. A bare transfer alone would not.
     stellar_asset_client.mint(&borrower, &80);
     token_client.transfer(&borrower, &pool_id, &800);
     pool_client.adjust_outstanding(&token_id, &-800);
@@ -1498,7 +1498,7 @@ fn test_withdrawal_with_utilization() {
     // (utilization does not dilute share price), but only 200 tokens are
     // actually liquid. The withdrawal must revert with InsufficientLiquidity
     // rather than silently paying out less than the shares are worth
-    // (#1380 bound-safety invariant).
+    // (bound-safety invariant).
     let result = pool_client.try_withdraw(&provider, &token_id, &500, &0);
     assert_eq!(result, Err(Ok(crate::PoolError::InsufficientLiquidity)));
     assert_eq!(token_client.balance(&provider), 0);
@@ -1828,10 +1828,10 @@ fn test_adjust_outstanding_blocked_during_circuit_breaker_pause() {
     assert_eq!(pool_client.get_total_outstanding(&token), 1_000);
 }
 
-// ── #1380: slippage bounds & virtual-share/asset offset ───────────────────────
+// ── slippage bounds & virtual-share/asset offset ───────────────────────
 //
 // These tests reproduce the single-ledger share-price manipulation described
-// in #1380 and assert it is now prevented: a bare token transfer to the
+// and assert it is now prevented: a bare token transfer to the
 // pool's address ("donation") cannot move the share price, the classic
 // first-depositor inflation attack is defused by the virtual offset, and
 // `min_shares_out`/`min_assets_out` cause settlement to revert rather than
@@ -1839,7 +1839,7 @@ fn test_adjust_outstanding_blocked_during_circuit_breaker_pause() {
 
 #[test]
 fn test_donation_to_pool_address_does_not_move_share_price() {
-    // The exact extraction walkthrough from #1380, replayed against the
+    // The exact extraction walkthrough, replayed against the
     // fixed contract: attacker deposits a token unit, donates a huge amount
     // directly to the pool's token balance (bypassing `deposit`), then a
     // victim deposits. Under the pre-fix code the victim would be minted
@@ -2078,7 +2078,7 @@ fn test_round_trip_deposit_then_redeem_is_never_profitable() {
     // Property-style check over a range of deposit sizes and pool states
     // (including states perturbed by unsolicited donations): depositing `d`
     // and immediately redeeming all resulting shares must never return more
-    // than `d` (round-trip non-profitability, #1380). A fixed-seed
+    // than `d` (round-trip non-profitability). A fixed-seed
     // xorshift PRNG is used instead of pulling in a property-testing crate.
     fn next(state: &mut u64) -> u64 {
         *state ^= *state << 13;
