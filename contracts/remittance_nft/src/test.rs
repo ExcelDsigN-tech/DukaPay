@@ -1840,7 +1840,7 @@ fn test_admin_remint_clears_seized_flag() {
     assert!(!client.is_seized(&user));
 }
 
-// ── Additional test coverage for issue #738 ──────────────────────────────────
+// ── Additional test coverage for mint flow ───────────────────────────────────
 
 #[test]
 fn test_mint_nft_success() {

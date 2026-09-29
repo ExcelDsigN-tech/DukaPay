@@ -12,6 +12,7 @@ import { ErrorBoundary } from "./components/global_ui/ErrorBoundary";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
 import { THEME_STORAGE_KEY } from "./lib/theme";
+import { headers } from "next/headers";
 import { getSiteUrl } from "./lib/metadata";
 
 const geistSans = Geist({
@@ -38,11 +39,16 @@ export default async function RootLayout({
 }>) {
   const locale = await getLocale();
   const messages = await getMessages();
+  
+  // Await headers() in Next.js 15+
+  const headersList = await headers();
+  const nonce = headersList.get("x-nonce") || undefined;
 
   return (
     <html lang={locale} suppressHydrationWarning>
       <head>
         <script
+          nonce={nonce}
           dangerouslySetInnerHTML={{
             __html: `(function(){try{var root=document.documentElement;var stored=localStorage.getItem("${THEME_STORAGE_KEY}");if(stored==="system"){var resolved=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";root.dataset.theme="system";root.classList.toggle("dark",resolved==="dark");}else if(stored==="dark"||stored==="light"){root.dataset.theme=stored;root.classList.toggle("dark",stored==="dark");}else{var theme=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";root.dataset.theme=theme;root.classList.toggle("dark",theme==="dark");}}catch(e){}})()`,
           }}

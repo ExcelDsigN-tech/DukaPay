@@ -1,6 +1,6 @@
 /**
  * Tests for the contiguous-cursor invariant / gap detection added for
- * issue #1376: EventIndexer.recordCheckpoint (called from pollOnce) and
+ * EventIndexer.recordCheckpoint (called from pollOnce) and
  * EventIndexer.getSuspectRanges.
  *
  * Mocking pattern mirrors eventIndexer.test.ts's ESM module mocks — this
@@ -114,7 +114,7 @@ function makeIndexer() {
   });
 }
 
-describe('EventIndexer gap detection (contiguous-cursor invariant, #1376)', () => {
+describe('EventIndexer gap detection (contiguous-cursor invariant)', () => {
   it('records a verified checkpoint on the very first poll (nothing prior to compare against)', async () => {
     const inserted: Array<{ sql: string; params: unknown[] }> = [];
 
@@ -247,7 +247,7 @@ describe('EventIndexer gap detection (contiguous-cursor invariant, #1376)', () =
   });
 });
 
-describe('hasUnresolvedLedgerGaps (consumer-side gate, #1376)', () => {
+describe('hasUnresolvedLedgerGaps (consumer-side gate)', () => {
   it('returns true when the contract has a suspect ledger range', async () => {
     mockQuery.mockImplementation(async (sql: string) => {
       if (sql.includes('has_suspect')) {

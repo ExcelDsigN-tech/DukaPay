@@ -68,7 +68,7 @@ pub fn admin_transferred(env: &Env, previous_admin: Address, new_admin: Address,
 /// Emitted on every mutation of a token pool's share-pricing state
 /// (`deposit`, `withdraw`/`emergency_withdraw`, `distribute_yield`) so that
 /// off-chain indexers can reconcile quoted prices against the last settled
-/// on-chain price and detect ledger skew (#1380).
+/// on-chain price and detect ledger skew.
 pub fn price_updated(
     env: &Env,
     token: Address,

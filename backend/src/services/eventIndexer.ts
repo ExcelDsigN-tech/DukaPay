@@ -364,7 +364,7 @@ export class EventIndexer {
   }
 
   /**
-   * Contiguous-cursor invariant (issue #1376): records the ledger range this
+   * Contiguous-cursor invariant: records the ledger range this
    * poll iteration just requested, and flags a gap when it doesn't
    * immediately follow the previously-recorded range for this contract.
    *

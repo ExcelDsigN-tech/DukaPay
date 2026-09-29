@@ -7,7 +7,7 @@ import logger from '../utils/logger.js';
  * `EventIndexer.recordCheckpoint` in `eventIndexer.ts`). A consumer that
  * draws conclusions from indexed events — e.g. `defaultChecker.ts` deciding
  * a loan was never repaid — should treat events in a suspect window as
- * unreliable until the gap is reconciled (issue #1376).
+ * unreliable until the gap is reconciled.
  *
  * Deliberately kept in its own module, separate from `eventIndexer.ts`:
  * `defaultChecker.ts` needs this single query but not the rest of the
