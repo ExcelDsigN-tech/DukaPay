@@ -1205,9 +1205,6 @@ impl LoanManager {
             .instance()
             .get(&borrower_loans_key)
             .unwrap_or(Vec::new(&env));
-        if borrower_loans.len() >= max_loans_per_borrower {
-            return Err(LoanError::MaxLoansReached);
-        }
 
         let mut loan_counter: u32 = env
             .storage()
