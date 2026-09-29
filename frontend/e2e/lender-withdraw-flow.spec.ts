@@ -3,7 +3,7 @@ import { test, expect, type Page, type Route } from "@playwright/test";
 
 /**
  * E2E Test Suite for Lender Withdraw Flow
- * Issue #867: highest-value happy path not yet covered — a lender withdrawing
+ * highest-value happy path not yet covered — a lender withdrawing
  * their deposited liquidity from the pool.
  *
  * Mocks a connected lender with a pool position, walks the withdraw modal,

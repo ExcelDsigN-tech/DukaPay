@@ -3,7 +3,7 @@ import { test, expect, type Page, type Route } from "@playwright/test";
 
 /**
  * E2E Test Suite for Borrower Loan Request Flow
- * Issue #770: Add Playwright E2E tests for borrower loan request flow
+ * E2E tests for borrower loan request flow
  *
  * Test Cases:
  * 1. Connect Freighter wallet (mock in CI)
