@@ -107,7 +107,7 @@ export interface DefaultCheckRunResult {
   /**
    * True when this run was deliberately skipped instead of evaluating loans
    * — currently only set when the indexer has an unresolved ('suspect')
-   * ledger gap for the loan manager contract (issue #1376). Conclusions
+   * ledger gap for the loan manager contract. Conclusions
    * drawn from `contract_events` are unreliable until the gap is
    * reconciled, so no defaults are submitted for this run.
    */
@@ -217,7 +217,7 @@ export class DefaultChecker {
    * loan state entirely from indexed `contract_events`, so a gap means a
    * `LoanApproved`, `LoanRepaid`, or `LoanDefaulted` event could be missing
    * — submitting `check_defaults` against that view risks a false default
-   * (issue #1376). Extracted as its own method so tests can stub it out
+   * Extracted as its own method so tests can stub it out
    * without needing a live database.
    */
   private async hasSuspectLedgerRanges(): Promise<boolean> {
