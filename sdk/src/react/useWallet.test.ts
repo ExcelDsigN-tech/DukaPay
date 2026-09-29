@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * Tests for the useWallet hook — verifies the cancelled-flag pattern added
  * in fix #534 (no state update after component unmounts while getAddress()
