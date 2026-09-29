@@ -164,6 +164,8 @@ proptest! {
         client.register(&a, &kycs(&env), &region(&env), &bond, &cap);
         prop_assert_eq!(client.get_agent(&a).bond_amount, bond);
     }
+}
+
 // ── Upgrade (issue #501) ─────────────────────────────────────────────────────
 
 fn create_upgrade_hash(env: &Env) -> BytesN<32> {

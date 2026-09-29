@@ -6,7 +6,9 @@
 //! operator (the DukaPay deployment backend) can register/activate/suspend;
 //! the agent must authorize their own registration.
 
-use soroban_sdk::{contract, contracterror, contractimpl, contracttype, Address, BytesN, Env, Symbol};
+use soroban_sdk::{
+    contract, contracterror, contractimpl, contracttype, Address, BytesN, Env, Symbol,
+};
 
 mod events;
 
