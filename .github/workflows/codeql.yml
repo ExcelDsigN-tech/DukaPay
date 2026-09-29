@@ -15,6 +15,12 @@ on:
     # Weekly, Monday 06:00 UTC — catches newly-published query updates.
     - cron: "0 6 * * 1"
 
+# Least-privilege workflow default; the analyze job overrides with the
+# minimum set it actually needs (security-events: write, contents: read,
+# actions: read).
+permissions:
+  contents: read
+
 jobs:
   analyze:
     name: Analyze (${{ matrix.language }})

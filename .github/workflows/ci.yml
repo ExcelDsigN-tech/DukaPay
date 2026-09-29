@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [main]
 
+# Least-privilege default: every job gets read-only contents unless it
+# explicitly declares elevated permissions (e.g. the contracts job needs
+# id-token: write and attestations: write for OIDC-based artifact signing).
+permissions:
+  contents: read
+
 # Cancel superseded runs for the same branch/PR to avoid wasting CI minutes
 # on commits that have already been replaced by newer ones.
 concurrency:

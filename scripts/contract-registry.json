@@ -16,7 +16,7 @@
           "upgradeAuthority": "not yet recorded",
           "timelock": null,
           "envVar": "LOAN_MANAGER_CONTRACT_ID",
-          "initParams": ["remittance_nft", "lending_pool", "token", "admin"]
+          "initParams": ["nft_contract", "lending_pool", "token", "admin"]
         },
         "lending_pool": {
           "address": "not yet recorded",
@@ -27,7 +27,7 @@
           "upgradeAuthority": "not yet recorded",
           "timelock": null,
           "envVar": "LENDING_POOL_CONTRACT_ID",
-          "initParams": ["token", "admin"]
+          "initParams": ["admin"]
         },
         "remittance_nft": {
           "address": "not yet recorded",
