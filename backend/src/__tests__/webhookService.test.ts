@@ -764,7 +764,7 @@ describe('WebhookService', () => {
         string,
         string
       >;
-      expect(callHeaders['x-webhook-signature']).toMatch(/^[0-9a-f]{64}$/);
+      expect(callHeaders['x-dukapay-signature']).toMatch(/^sha256=[0-9a-f]{64}$/);
     });
   });
 });

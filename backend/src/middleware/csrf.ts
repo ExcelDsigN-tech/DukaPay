@@ -153,13 +153,16 @@ export function csrfProtection(options: CsrfOptions = {}) {
  * GET /api/v1/auth/csrf
  */
 export function getCsrfTokenController(req: Request, res: Response): void {
-  const cookies =
-    (req as unknown as { cookies?: Record<string, string> }).cookies ??
-    parseCookies(req.headers.cookie);
-
-  let token = cookies[CSRF_COOKIE_NAME];
+  // csrfProtection() runs ahead of this controller on every route and already
+  // issues (and stashes in res.locals) a token when the request has none, so
+  // reuse it here instead of minting a second, mismatched token that would
+  // overwrite the cookie/header pair the middleware just set.
+  let token = res.locals.csrfToken as string | undefined;
   if (!token) {
-    token = generateCsrfToken();
+    const cookies =
+      (req as unknown as { cookies?: Record<string, string> }).cookies ??
+      parseCookies(req.headers.cookie);
+    token = cookies[CSRF_COOKIE_NAME] ?? generateCsrfToken();
   }
 
   setCsrfCookie(res, token);
