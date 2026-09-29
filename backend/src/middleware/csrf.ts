@@ -20,9 +20,12 @@ const DEFAULT_EXEMPT_PATHS = [
   '/version',
 ];
 
+// Cookie names come straight off the wire, so writing them onto a plain
+// object as property keys risks prototype pollution (e.g. a "__proto__"
+// cookie). Object.create(null) has no prototype to pollute.
 function parseCookies(cookieHeader: string | undefined): Record<string, string> {
-  if (!cookieHeader) return {};
-  const cookies: Record<string, string> = {};
+  const cookies: Record<string, string> = Object.create(null) as Record<string, string>;
+  if (!cookieHeader) return cookies;
   cookieHeader.split(';').forEach((cookie) => {
     const [name, ...rest] = cookie.split('=');
     const trimmedName = name?.trim();
