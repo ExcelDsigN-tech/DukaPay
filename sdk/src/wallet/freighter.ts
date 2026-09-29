@@ -87,7 +87,7 @@ export class FreighterAdapter implements WalletAdapter {
 
   async signMessage(message: string): Promise<SignedMessage> {
     const api = await this.lib();
-    const signer = (api as unknown as { signMessage?: Function }).signMessage;
+    const signer = (api as unknown as { signMessage?: (msg: string) => Promise<FreighterSignMessageResult> }).signMessage;
     if (!signer) throw new WalletError('This Freighter version does not support signMessage');
     const res = await withTimeoutAndRetry<FreighterSignMessageResult>(
       () => signer(message),

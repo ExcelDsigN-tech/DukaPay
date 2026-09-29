@@ -10,12 +10,10 @@ export class KycPage extends BasePage {
   }
 
   /**
-   * Navigate to KYC page — currently no /en/kyc route exists in src/app/[locale]/.
-   * See tracking issue #578: KYC UI not yet built; tests using this page are skipped
-   * until product confirms whether the route was removed/renamed or was never built.
+   * Navigate to KYC administration page
    */
   async navigateToKyc(): Promise<void> {
-    await this.goto("/en/kyc");
+    await this.goto("/en/admin/kyc");
   }
 
   /**

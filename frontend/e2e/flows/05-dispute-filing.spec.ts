@@ -87,7 +87,7 @@ test.describe("Dispute Filing Flow", () => {
   });
 
   test("File dispute with evidence documents", async ({ page }) => {
-    await page.goto(`/en/loans/${loanId}/dispute`);
+    await page.goto(`/en/admin/disputes/${loanId}`);
 
     // Select dispute reason
     await disputePage.selectDisputeReason("payment_not_reflected");

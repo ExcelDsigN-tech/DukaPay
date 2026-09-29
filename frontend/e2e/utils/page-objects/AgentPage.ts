@@ -10,12 +10,10 @@ export class AgentPage extends BasePage {
   }
 
   /**
-   * Navigate to agent dashboard — currently no /en/agent directory exists in
-   * src/app/[locale]/. See tracking issue #578: agent dashboard UI not yet built;
-   * tests using this are skipped until product confirms intended route.
+   * Navigate to agent dashboard
    */
   async navigateToAgentDashboard(): Promise<void> {
-    await this.goto("/en/agent");
+    await this.goto("/en/agent/dashboard");
   }
 
   /**

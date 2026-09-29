@@ -265,7 +265,7 @@ test.describe("Complete User Journey", () => {
       });
     });
 
-    await page.goto("/en/settlement");
+    await page.goto("/en/admin/settlement");
     await expect(page.locator("text=/pending.*settlements/i")).toBeVisible();
 
     // Process settlement

@@ -91,7 +91,7 @@ test.describe("Agent Onboarding & KYC", () => {
   });
 
   test("KYC approval flow", async ({ page }) => {
-    await page.goto("/en/kyc");
+    await page.goto("/en/admin/kyc");
 
     // Mock KYC approval
     await page.route("**/api/auth/kyc", async (route: Route) => {
@@ -123,7 +123,7 @@ test.describe("Agent Onboarding & KYC", () => {
   });
 
   test("KYC rejection handling", async ({ page }) => {
-    await page.goto("/en/kyc");
+    await page.goto("/en/admin/kyc");
 
     // Mock KYC rejection
     await page.route("**/api/auth/kyc", async (route: Route) => {
@@ -157,7 +157,7 @@ test.describe("Agent Onboarding & KYC", () => {
   });
 
   test("KYC form validation", async ({ page }) => {
-    await page.goto("/en/kyc");
+    await page.goto("/en/admin/kyc");
 
     // Try to submit without filling required fields
     await kycPage.submitKyc();
