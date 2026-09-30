@@ -196,37 +196,16 @@ describe('AgentFloatService', () => {
       expect(result.approvals[0]?.role).toBe('initiator');
     });
 
-    it('assigns role recipient when createdBy equals toAgent', async () => {
-      mockQuery.mockResolvedValueOnce({ rows: [] }); // limits lookup
-      mockQuery.mockResolvedValueOnce({ rows: [{ total: '0' }] }); // daily
-      mockQuery.mockResolvedValueOnce({ rows: [{ total: '0' }] }); // weekly
-      mockQuery.mockResolvedValueOnce({
-        rows: [
-          {
-            id: 'ft_test_2',
-            from_agent: AGENT_A,
-            to_agent: AGENT_B,
-            amount: '5000',
-            status: 'PENDING_APPROVAL',
-            required_approvals: 2,
-            approval_count: 1,
-            created_by: AGENT_B,
-          },
-        ],
-      });
-      mockQuery.mockResolvedValueOnce({
-        rows: [{ id: 1, transfer_id: 'ft_test_2', approver: AGENT_B, role: 'recipient' }],
-      });
-      mockQuery.mockResolvedValueOnce({ rows: [] }); // audit
-
-      const result = await service.initiateTransfer({
-        fromAgent: AGENT_A,
-        toAgent: AGENT_B,
-        amount: 5000,
-        createdBy: AGENT_B,
-      });
-
-      expect(result.approvals[0]?.role).toBe('recipient');
+    it('rejects recipient-only initiation without touching transfer state', async () => {
+      await expect(
+        service.initiateTransfer({
+          fromAgent: AGENT_A,
+          toAgent: AGENT_B,
+          amount: 5000,
+          createdBy: AGENT_B,
+        }),
+      ).rejects.toThrow(/source agent or an administrator/i);
+      expect(mockQuery).not.toHaveBeenCalled();
     });
 
     it('assigns role admin when createdBy is a third party admin', async () => {
@@ -257,6 +236,7 @@ describe('AgentFloatService', () => {
         toAgent: AGENT_B,
         amount: 5000,
         createdBy: ADMIN_USER,
+        userRole: 'admin',
       });
 
       expect(result.approvals[0]?.role).toBe('admin');

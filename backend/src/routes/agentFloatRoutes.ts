@@ -15,6 +15,7 @@ router.post(
   asyncHandler(async (req: Request, res: Response) => {
     const { fromAgent, toAgent, amount, reason } = req.body;
     const publicKey = (req as { user?: { publicKey?: string } }).user?.publicKey;
+    const role = (req as { user?: { role?: string } }).user?.role;
 
     const result = await agentFloatService.initiateTransfer({
       fromAgent,
@@ -22,6 +23,7 @@ router.post(
       amount: Number(amount),
       reason,
       createdBy: publicKey!,
+      userRole: role,
     });
 
     res.status(201).json({ success: true, data: result });
