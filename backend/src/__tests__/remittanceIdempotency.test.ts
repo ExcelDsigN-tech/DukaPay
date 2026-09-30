@@ -40,8 +40,21 @@ const fakeCacheStore = new Map<string, unknown>();
 jest.unstable_mockModule('../services/cacheService.js', () => ({
   cacheService: {
     get: jest.fn(async (key: string) => fakeCacheStore.get(key) ?? null),
+    reserve: jest.fn(async (key: string, value: unknown) => {
+      if (fakeCacheStore.has(key)) return false;
+      fakeCacheStore.set(key, value);
+      return true;
+    }),
     set: jest.fn(async (key: string, value: unknown) => {
       fakeCacheStore.set(key, value);
+    }),
+    setRequired: jest.fn(async (key: string, value: unknown) => {
+      fakeCacheStore.set(key, value);
+    }),
+    deleteIfMatch: jest.fn(async (key: string, value: string) => {
+      if (fakeCacheStore.get(key) !== value) return false;
+      fakeCacheStore.delete(key);
+      return true;
     }),
     delete: jest.fn(async (key: string) => {
       fakeCacheStore.delete(key);
