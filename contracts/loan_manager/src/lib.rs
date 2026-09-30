@@ -35,6 +35,7 @@ pub trait LendingPoolInterface {
     fn is_paused(env: Env) -> bool;
     fn pool_balance(env: Env, token: Address) -> i128;
     fn get_total_outstanding(env: Env, token: Address) -> i128;
+    fn disburse(env: Env, to: Address, amount: i128);
 }
 
 mod events;
@@ -1335,8 +1336,8 @@ impl LoanManager {
         Self::bump_persistent_ttl(&env, &loan_key);
 
         // ── INTERACTIONS (external calls last) ──────────────────────────────
-        let token_client = TokenClient::new(&env, &token);
-        token_client.transfer(&lending_pool, &borrower, &transfer_amount);
+        let pool_client = PoolClient::new(&env, &lending_pool);
+        pool_client.disburse(&borrower, &transfer_amount);
 
         events::loan_approved(
             &env,
@@ -2117,7 +2118,8 @@ impl LoanManager {
                 if available_liquidity < additional {
                     return Err(LoanError::InsufficientPoolLiquidity);
                 }
-                token_client.transfer(&lending_pool, &loan.borrower, &additional);
+                let pool_client = PoolClient::new(&env, &lending_pool);
+                pool_client.disburse(&loan.borrower, &additional);
             }
             core::cmp::Ordering::Less => {
                 // Borrower returns the excess principal to the pool.
