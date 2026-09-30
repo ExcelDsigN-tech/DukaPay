@@ -1,5 +1,11 @@
-import crypto from 'cypto';
-import { Asset, Networks, Operation, TransactionBuilder } from '@stellar/stellar-sdk';
+import crypto from 'crypto';
+import {
+  Asset,
+  FeeBumpTransaction,
+  Networks,
+  Operation,
+  TransactionBuilder,
+} from '@stellar/stellar-sdk';
 import { createSorobanRpcServer, getStellarNetworkPassphrase } from '../config/stellar.js';
 import { query } from '../db/connection.js';
 import { withTransaction } from '../db/transaction.js';
@@ -16,6 +22,8 @@ export interface CreateRemittancePayload {
   senderAddress: string;
 }
 
+export type RemittanceStatus = 'pending' | 'processing' | 'completed' | 'failed';
+
 export interface Remittance {
   id: string;
   senderId: string;
@@ -24,7 +32,7 @@ export interface Remittance {
   fromCurrency: string;
   toCurrency: string;
   memo?: string;
-  status: 'pending' | 'processing' | 'completed' | 'failed';
+  status: RemittanceStatus;
   transactionHash?: string;
   xdr?: string;
   createdAt: string;
@@ -327,22 +335,52 @@ export const remittanceService = {
     }
   },
 
+  /**
+   * Transition a remittance to `status`.
+   *
+   * When `expectedStatus` is given the UPDATE only applies if the row is
+   * currently in one of those states; otherwise it throws a 409 and leaves the
+   * row untouched. An existing `transaction_hash` is never cleared.
+   */
   async updateRemittanceStatus(
     id: string,
     status: 'processing' | 'completed' | 'failed',
     transactionHash?: string,
     errorMessage?: string,
+    expectedStatus?: RemittanceStatus | RemittanceStatus[],
   ): Promise<Remittance> {
     try {
+      const params: unknown[] = [
+        status,
+        transactionHash || null,
+        errorMessage || null,
+        new Date().toISOString(),
+        id,
+      ];
+      let stateGuard = '';
+      if (expectedStatus !== undefined) {
+        params.push(Array.isArray(expectedStatus) ? expectedStatus : [expectedStatus]);
+        stateGuard = ` AND status = ANY($${params.length})`;
+      }
+
       const result = await query(
         `UPDATE remittances 
-         SET status = $1, transaction_hash = $2, error_message = $3, updated_at = $4
-         WHERE id = $5
+         SET status = $1, transaction_hash = COALESCE($2, transaction_hash),
+             error_message = $3, updated_at = $4
+         WHERE id = $5${stateGuard}
          RETURNING *`,
-        [status, transactionHash || null, errorMessage || null, new Date().toISOString(), id],
+        params,
       );
 
       if (!result.rows[0]) {
+        if (expectedStatus !== undefined) {
+          const existing = await query('SELECT status FROM remittances WHERE id = $1', [id]);
+          if (existing.rows[0]) {
+            throw AppError.conflict(
+              `Remittance is ${existing.rows[0].status}; cannot transition to ${status}`,
+            );
+          }
+        }
         throw AppError.notFound('Remittance not found');
       }
 
@@ -370,6 +408,47 @@ export const remittanceService = {
       }
 
       throw AppError.internal('Failed to update remittance');
+    }
+  },
+
+  /**
+   * Ensure a signed XDR is the payment this remittance describes: a single
+   * payment from the sender to the recipient for the exact amount and asset.
+   * Throws 400 otherwise.
+   */
+  validateSignedXdr(remittance: Remittance, signedXdr: string): void {
+    const networkPassphrase = getStellarNetworkPassphrase() || Networks.TESTNET;
+
+    let tx;
+    try {
+      tx = TransactionBuilder.fromXDR(signedXdr, networkPassphrase);
+    } catch {
+      throw AppError.badRequest('signedXdr is not a valid transaction envelope', undefined, 'signedXdr');
+    }
+    if (tx instanceof FeeBumpTransaction) {
+      tx = tx.innerTransaction;
+    }
+
+    const mismatch = (detail: string) =>
+      AppError.badRequest(`signedXdr does not match remittance: ${detail}`, undefined, 'signedXdr');
+
+    if (tx.operations.length !== 1 || tx.operations[0].type !== 'payment') {
+      throw mismatch('expected exactly one payment operation');
+    }
+    const op = tx.operations[0] as Operation.Payment;
+
+    const source = op.source ?? tx.source;
+    if (source !== remittance.senderId) {
+      throw mismatch('source account');
+    }
+    if (op.destination !== remittance.recipientAddress) {
+      throw mismatch('destination');
+    }
+    if (Number(op.amount).toFixed(7) !== Number(remittance.amount).toFixed(7)) {
+      throw mismatch('amount');
+    }
+    if (!op.asset.equals(getCurrencyAsset(remittance.fromCurrency))) {
+      throw mismatch('asset');
     }
   },
 };
