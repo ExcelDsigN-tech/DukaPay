@@ -254,7 +254,8 @@ Run tests manually via GitHub Actions:
 2. Select "Load Tests" workflow
 3. Click "Run workflow"
 4. Select environment and load profile
-5. Click "Run workflow"
+5. Optionally paste a `target_url` to override the API base URL
+6. Click "Run workflow"
 
 ### Artifacts
 

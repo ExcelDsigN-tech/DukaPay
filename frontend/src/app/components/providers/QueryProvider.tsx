@@ -13,6 +13,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { useState, type ReactNode } from "react";
 import { SessionExpiryHandler } from "./SessionExpiryHandler";
+import { RepaymentSyncHandler } from "./RepaymentSyncHandler";
 
 interface QueryProviderProps {
   children: ReactNode;
@@ -56,6 +57,8 @@ export function QueryProvider({ children }: QueryProviderProps) {
     <QueryClientProvider client={queryClient}>
       {/* Listen for 401 auth:session-expired events and trigger full logout */}
       <SessionExpiryHandler />
+      {/* Reacts to service-worker replays of offline-queued repayments */}
+      <RepaymentSyncHandler />
       {children}
       {/* DevTools only render in development */}
       <ReactQueryDevtools initialIsOpen={false} />

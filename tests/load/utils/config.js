@@ -20,7 +20,12 @@ export function getConfig() {
     },
   };
 
-  return configs[env] || configs.staging;
+  const config = configs[env] || configs.staging;
+
+  // An explicit TARGET_URL (e.g. the workflow_dispatch input) overrides the
+  // environment's base URL while keeping its RPC URL.
+  const targetUrl = __ENV.TARGET_URL;
+  return targetUrl ? { ...config, baseUrl: targetUrl } : config;
 }
 
 export function getTestDuration() {
