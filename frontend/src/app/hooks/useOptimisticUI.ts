@@ -11,6 +11,11 @@ export type TransactionStatus =
   | "submitted"
   | "confirming"
   | "confirmed"
+  /**
+   * Written to the offline queue and waiting for background sync. Distinct from
+   * `confirmed`: nothing has reached the API or the network yet.
+   */
+  | "queued"
   | "failed";
 
 export interface TransactionState {
@@ -35,6 +40,8 @@ interface OptimisticUIActions {
   completeTransaction: (id: string, txHash?: string, message?: string) => void;
   submitTransaction: (id: string, txHash: string, message?: string) => void;
   confirmTransaction: (id: string, message?: string) => void;
+  /** Mark a transaction as written to the offline queue, awaiting sync. */
+  queueTransaction: (id: string, reference: string, message?: string) => void;
   signTransaction: (id: string, message?: string) => void;
   failTransaction: (id: string, error: string) => void;
   clearTransaction: (id: string) => void;
@@ -159,6 +166,26 @@ export const useOptimisticUI = create<OptimisticUIStore>()(
           };
         }),
 
+      // Mark transaction as queued offline, pending background sync
+      queueTransaction: (id, reference, message) =>
+        set((state) => {
+          const tx = state.transactions[id];
+          if (!tx) return state;
+          return {
+            transactions: {
+              ...state.transactions,
+              [id]: {
+                ...tx,
+                status: "queued",
+                progress: undefined,
+                txHash: reference,
+                confirmedAt: undefined,
+                ...(message ? { message } : {}),
+              },
+            },
+          };
+        }),
+
       failTransaction: (id, error) =>
         set((state) => {
           const tx = state.transactions[id];
@@ -233,6 +260,7 @@ export function useTransaction(id: string) {
     complete: (txHash?: string, message?: string) => store.completeTransaction(id, txHash, message),
     submit: (txHash: string, message?: string) => store.submitTransaction(id, txHash, message),
     confirm: (message?: string) => store.confirmTransaction(id, message),
+    queue: (reference: string, message?: string) => store.queueTransaction(id, reference, message),
     sign: (message?: string) => store.signTransaction(id, message),
     fail: (error: string) => store.failTransaction(id, error),
     clear: () => store.clearTransaction(id),
@@ -245,6 +273,8 @@ export function useTransaction(id: string) {
     isSubmitted: transaction?.status === "submitted",
     isConfirming: transaction?.status === "confirming",
     isSuccess: transaction?.status === "confirmed",
+    /** Queued offline and waiting for background sync — not yet paid. */
+    isQueued: transaction?.status === "queued",
     isError: transaction?.status === "failed",
   };
 }
