@@ -68,6 +68,11 @@ class CacheService {
     }
   }
 
+  async setOrThrow(key: string, value: unknown, ttlSeconds: number): Promise<void> {
+    await this.ensureConnected();
+    await this.client!.setEx(key, ttlSeconds, JSON.stringify(value));
+  }
+
   /**
    * Get a value from the cache.
    * @param key The cache key
