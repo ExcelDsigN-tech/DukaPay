@@ -474,6 +474,31 @@ impl Oracle {
         Ok(mid)
     }
 
+    /// Returns the manipulation-resistant reference price for deviation checks:
+    /// 1. Preferred: Fresh multi-source median (>= 2 fresh sources).
+    ///    A single rogue source cannot move the median of the cluster.
+    /// 2. Fallback: Trailing TWAP window (smooths when sources temporarily drop out).
+    /// 3. Fallback: Last accepted aggregate if within staleness limit (initial bootstrap).
+    fn reference_price(env: &Env, asset: &Address, now: u64) -> Option<i128> {
+        if let Ok(median) = Self::fresh_median(env, asset, now) {
+            if median > 0 {
+                return Some(median);
+            }
+        }
+        if let Some(twap) = Self::twap(env, asset, now) {
+            if twap > 0 {
+                return Some(twap);
+            }
+        }
+        let agg_key = DataKey::Aggregate(asset.clone());
+        if let Some(agg) = env.storage().instance().get::<_, AggregateState>(&agg_key) {
+            if agg.price > 0 && now.saturating_sub(agg.ts) <= MAX_SOURCE_AGE_SECS {
+                return Some(agg.price);
+            }
+        }
+        None
+    }
+
     /// Submit a price for `asset` from an authorized source.
     pub fn submit_price(
         env: Env,
@@ -497,26 +522,25 @@ impl Oracle {
 
         let now = env.ledger().timestamp();
 
-        // Circuit breaker: reject a price that deviates >3% from the last
-        // accepted aggregate (first submission for an asset is always allowed).
-        let agg_key = DataKey::Aggregate(asset.clone());
-        let last_agg: Option<AggregateState> = env.storage().instance().get(&agg_key);
-        if let Some(agg) = last_agg {
-            if agg.price > 0 {
-                let deviation_bps = if price >= agg.price {
+        // Circuit breaker: reject a price that deviates >3% from the manipulation-resistant
+        // reference (multi-source median / TWAP / bootstrap aggregate).
+        // First submission for an asset is always allowed (reference is None).
+        if let Some(ref_price) = Self::reference_price(&env, &asset, now) {
+            if ref_price > 0 {
+                let deviation_bps = if price >= ref_price {
                     price
-                        .checked_sub(agg.price)
+                        .checked_sub(ref_price)
                         .expect("price deviation overflow")
                         .checked_mul(10_000)
                         .expect("price deviation overflow")
-                        / agg.price
+                        / ref_price
                 } else {
-                    agg.price
+                    ref_price
                         .checked_sub(price)
                         .expect("price deviation overflow")
                         .checked_mul(10_000)
                         .expect("price deviation overflow")
-                        / agg.price
+                        / ref_price
                 };
                 if deviation_bps > MAX_DEVIATION_BPS as i128 {
                     return Err(OracleError::CircuitBroken);
@@ -1202,5 +1226,90 @@ mod test {
             .try_set_source(&symbol_short!("foo"), &dia_addr)
             .is_err());
         assert!(client.try_remove_source(&symbol_short!("foo")).is_err());
+    }
+
+    #[test]
+    fn step_down_manipulation_blocked_by_multi_source_reference() {
+        // Reproduces the attack vector where a single source attempted successive
+        // -3% drops over 40 minutes (from 10,000,000 down to 6,893,675).
+        // With the manipulation-resistant reference, step-down manipulation is blocked.
+        let (env, oracle_id, asset) = setup();
+        let base = 10_000_000i128;
+
+        // Establish normal initial consensus across 3 sources
+        submit(&env, &oracle_id, symbol_short!("pyth"), asset.clone(), base).unwrap();
+        submit(
+            &env,
+            &oracle_id,
+            symbol_short!("chain"),
+            asset.clone(),
+            base,
+        )
+        .unwrap();
+        submit(&env, &oracle_id, symbol_short!("dex"), asset.clone(), base).unwrap();
+        assert_eq!(
+            get_price_result(&env, &oracle_id, asset.clone()).unwrap(),
+            base
+        );
+
+        // Step 1: DEX attempts 3% drop (9,700,000)
+        let step1 = 9_700_000i128;
+        assert_eq!(
+            submit(&env, &oracle_id, symbol_short!("dex"), asset.clone(), step1),
+            Ok(())
+        );
+
+        // Over 40 minutes, DEX repeatedly attempts to walk down the price by 3% steps:
+        // 9,409,000 -> 9,126,730 -> ... -> 6,893,675
+        let successive_drop = 9_409_000i128; // -3% from step1, but -5.91% from median (10M)
+        bump(&env, 180);
+
+        // Step 2 MUST be rejected because deviation against multi-source reference > 3%
+        let res = submit(
+            &env,
+            &oracle_id,
+            symbol_short!("dex"),
+            asset.clone(),
+            successive_drop,
+        );
+        assert_eq!(res, Err(OracleError::CircuitBroken));
+
+        // Fast forward 40 minutes with repeated attacks: none can move the price to 6,893,675
+        let target_attack_price = 6_893_675i128;
+        for _ in 0..13 {
+            bump(&env, 180);
+            let attack_res = submit(
+                &env,
+                &oracle_id,
+                symbol_short!("dex"),
+                asset.clone(),
+                target_attack_price,
+            );
+            assert_eq!(attack_res, Err(OracleError::CircuitBroken));
+        }
+
+        // Effective price was protected from collapsing down to 6,893,675
+        let final_price = get_price_result(&env, &oracle_id, asset.clone()).unwrap();
+        assert!(
+            final_price >= 9_700_000,
+            "effective price must be bounded at >= 9.7M, got {final_price}"
+        );
+        assert!(
+            final_price > target_attack_price,
+            "attack to reach 6,893,675 was completely prevented"
+        );
+
+        // When honest sources report baseline prices, consensus is preserved
+        submit(&env, &oracle_id, symbol_short!("pyth"), asset.clone(), base).unwrap();
+        submit(
+            &env,
+            &oracle_id,
+            symbol_short!("chain"),
+            asset.clone(),
+            base,
+        )
+        .unwrap();
+        let honest_price = get_price_result(&env, &oracle_id, asset.clone()).unwrap();
+        assert_eq!(honest_price, base);
     }
 }
