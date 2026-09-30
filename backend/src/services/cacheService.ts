@@ -68,7 +68,9 @@ class CacheService {
     }
   }
 
-  async setOrThrow(key: string, value: unknown, ttlSeconds: number): Promise<void> {
+  /** Store a value or throw, for workflows that must not continue as if a
+   * durable idempotency response had been saved when Redis rejected the write. */
+  async setRequired(key: string, value: unknown, ttlSeconds: number): Promise<void> {
     await this.ensureConnected();
     await this.client!.setEx(key, ttlSeconds, JSON.stringify(value));
   }
@@ -117,6 +119,20 @@ class CacheService {
       logger.withContext().error(`Error setting NX cache for key ${key}`, { error });
       return false;
     }
+  }
+
+  /**
+   * Atomically reserve a key, distinguishing an occupied key (`false`) from
+   * a Redis failure (throws) so callers can fail closed rather than execute
+   * a non-idempotent operation without its lock.
+   */
+  async reserve(key: string, value: unknown, ttlSeconds: number): Promise<boolean> {
+    await this.ensureConnected();
+    const result = await this.client!.set(key, JSON.stringify(value), {
+      NX: true,
+      EX: ttlSeconds,
+    });
+    return result === 'OK';
   }
 
   /**

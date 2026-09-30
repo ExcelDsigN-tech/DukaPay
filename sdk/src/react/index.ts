@@ -12,7 +12,7 @@ import {
   type ReactNode,
 } from 'react';
 import { DukaPayClient, type DukaPayClientOptions } from '../client.js';
-import type { Loan, PoolStats, Session } from '../types.js';
+import type { BorrowerLoan, BorrowerLoanStatus, PoolStats, Session } from '../types.js';
 import type { WalletAdapter } from '../wallet/index.js';
 
 // ── Provider ──────────────────────────────────────────────────────────────────
@@ -153,27 +153,38 @@ export function useWallet(wallet?: WalletAdapter): UseWalletResult {
 
 // ── useLoans ──────────────────────────────────────────────────────────────────
 
-export interface UseLoansResult extends AsyncState<Loan[]> {
-  repay: (loanId: number, amount: string) => Promise<Loan>;
+export interface UseLoansResult extends AsyncState<BorrowerLoan[]> {
+  /** `amount` is a positive integer in the asset's base units. */
+  repay: (loanId: number, amount: number) => Promise<unknown>;
 }
 
 export function useLoans(
-  params: { borrower?: string; status?: string } = {},
+  params: { borrower?: string; status?: BorrowerLoanStatus } = {},
 ): UseLoansResult {
   const { client, session } = useDukaPay();
   const borrower = params.borrower ?? session?.address;
-  const state = useAsync<Loan[]>(
-    () => client.loans.list({ ...params, borrower }).then((p) => p.items),
+  const state = useAsync<BorrowerLoan[]>(
+    () =>
+      borrower
+        ? client.loans.list({ borrower, status: params.status }).then((p) => p.loans)
+        : Promise.resolve([]),
     [borrower, params.status],
     Boolean(borrower),
   );
 
   const repay = useCallback(
-    async (loanId: number, amount: string) => {
-      const unsigned = await client.loans.buildRepay(loanId, amount);
-      const loan = await client.signAndSubmit(unsigned, (xdr) => client.loans.submit(loanId, xdr));
+    async (loanId: number, amount: number) => {
+      // The API requires the borrower's public key to match the session.
+      const borrowerPublicKey = await client.address();
+      if (!borrowerPublicKey) {
+        throw new Error('Cannot repay without a connected wallet');
+      }
+      const unsigned = await client.loans.buildRepay(loanId, amount, borrowerPublicKey);
+      const result = await client.signAndSubmit({ xdr: unsigned.unsignedTxXdr }, (xdr) =>
+        client.loans.submit(loanId, xdr),
+      );
       state.refetch();
-      return loan;
+      return result;
     },
     [client, state],
   );

@@ -31,7 +31,7 @@ export interface DukaPayClientOptions {
  * ```ts
  * const client = new DukaPayClient({ baseUrl, wallet: new FreighterAdapter() });
  * await client.loginWithWallet();
- * const loans = await client.loans.list({ borrower: await client.address() });
+ * const { loans } = await client.loans.list({ borrower: await client.address()! });
  * ```
  */
 export class DukaPayClient {

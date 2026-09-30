@@ -440,6 +440,7 @@ Located at `.github/workflows/load-tests.yml`
 4. Choose:
    - Environment: `staging` or `production`
    - Load profile: `smoke`, `normal`, `stress`, `spike`
+   - Target URL (optional): overrides the environment's API base URL
 5. Run
 
 ### Viewing CI Results

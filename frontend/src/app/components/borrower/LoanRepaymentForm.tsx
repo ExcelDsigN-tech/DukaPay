@@ -31,6 +31,7 @@ interface LoanRepaymentFormProps {
 export function LoanRepaymentForm({ loanId, totalOwed, minPayment = 0 }: LoanRepaymentFormProps) {
   const [amount, setAmount] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [queuedAmount, setQueuedAmount] = useState<number | null>(null);
   const txPreview = useTransactionPreview();
   const gamificationStore = useGamificationStore();
   const address = useWalletStore(selectWalletAddress);
@@ -47,6 +48,11 @@ export function LoanRepaymentForm({ loanId, totalOwed, minPayment = 0 }: LoanRep
         }, 1000);
       }
       setAmount("");
+    },
+    // Queued offline: the loan is NOT paid yet, so no XP and the amount stays
+    // in the box while the service worker replays it.
+    onQueued: () => {
+      setQueuedAmount(parseAmount(amount));
     },
   });
   const precisionError = getPrecisionError(amount, "USDC");
@@ -193,6 +199,17 @@ export function LoanRepaymentForm({ loanId, totalOwed, minPayment = 0 }: LoanRep
           </p>
 
           <OperationProgress transaction={repayment.transaction} type="repayment" />
+
+          {queuedAmount !== null && (
+            <p
+              role="status"
+              className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-300"
+            >
+              You are offline. {formatCurrency(queuedAmount).replace("$", "")} USDC is queued on
+              this device and will be sent automatically once you are back online. The loan is not
+              paid until then.
+            </p>
+          )}
 
           {/* Action Button */}
           <Button

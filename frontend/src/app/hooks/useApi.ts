@@ -82,6 +82,7 @@ export const queryKeys = {
     breakdown: (userId: string) => ["scoreBreakdown", userId] as const,
   },
   borrowerLoans: {
+    all: () => ["borrowerLoans"] as const,
     byAddress: (address: string) => ["borrowerLoans", address] as const,
   },
   creditScore: {
