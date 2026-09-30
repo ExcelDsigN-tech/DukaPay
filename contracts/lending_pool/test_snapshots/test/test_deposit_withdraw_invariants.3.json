@@ -445,6 +445,18 @@
                         "key": {
                           "vec": [
                             {
+                              "symbol": "CallDepth"
+                            }
+                          ]
+                        },
+                        "val": {
+                          "u32": 0
+                        }
+                      },
+                      {
+                        "key": {
+                          "vec": [
+                            {
                               "symbol": "CircuitBreaker"
                             }
                           ]
@@ -471,6 +483,18 @@
                           "vec": [
                             {
                               "symbol": "Paused"
+                            }
+                          ]
+                        },
+                        "val": {
+                          "bool": false
+                        }
+                      },
+                      {
+                        "key": {
+                          "vec": [
+                            {
+                              "symbol": "ReentrancyLock"
                             }
                           ]
                         },

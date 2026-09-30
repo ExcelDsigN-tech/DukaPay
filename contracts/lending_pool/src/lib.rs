@@ -1180,12 +1180,7 @@ impl LendingPool {
     /// configured loan_manager may trigger this. The pool authorizes the
     /// transfer itself via `current_contract_address`, so the loan_manager
     /// does not need to hold the funds or authorize the token transfer.
-    pub fn disburse(
-        env: Env,
-        to: Address,
-        token: Address,
-        amount: i128,
-    ) -> Result<(), PoolError> {
+    pub fn disburse(env: Env, to: Address, token: Address, amount: i128) -> Result<(), PoolError> {
         let loan_manager = Self::loan_manager(&env).ok_or(PoolError::Unauthorized)?;
         loan_manager.require_auth();
         Self::assert_not_paused(&env)?;
@@ -1200,11 +1195,7 @@ impl LendingPool {
             return Err(PoolError::InsufficientLiquidity);
         }
 
-        TokenClient::new(&env, &token).transfer(
-            &env.current_contract_address(),
-            &to,
-            &amount,
-        );
+        TokenClient::new(&env, &token).transfer(&env.current_contract_address(), &to, &amount);
 
         Ok(())
     }
