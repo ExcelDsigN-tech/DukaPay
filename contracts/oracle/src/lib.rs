@@ -78,6 +78,13 @@ pub struct AggregateState {
 }
 
 #[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SourceConfig {
+    pub source: Symbol,
+    pub address: Address,
+}
+
+#[contracttype]
 #[derive(Clone, Debug)]
 pub enum DataKey {
     Admin,
@@ -86,6 +93,7 @@ pub enum DataKey {
     Paused,
     CircuitBreaker,
     Sources,
+    SourceAddress(Symbol),
     Sample(Address, Symbol),
     SourceList(Address),
     Aggregate(Address),
@@ -99,13 +107,23 @@ pub struct Oracle;
 impl Oracle {
     /// Initialize the oracle. Only `admin` may configure sources and the
     /// `sources` list gates who is allowed to submit prices.
-    pub fn initialize(env: Env, admin: Address, sources: Vec<Symbol>) {
+    pub fn initialize(env: Env, admin: Address, sources: Vec<SourceConfig>) {
         if env.storage().instance().has(&DataKey::Admin) {
             panic!("already initialized");
         }
         admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
-        env.storage().instance().set(&DataKey::Sources, &sources);
+
+        let mut source_names = Vec::new(&env);
+        for s in sources.iter() {
+            source_names.push_back(s.source.clone());
+            env.storage()
+                .instance()
+                .set(&DataKey::SourceAddress(s.source), &s.address);
+        }
+        env.storage()
+            .instance()
+            .set(&DataKey::Sources, &source_names);
         env.storage().instance().set(&DataKey::Paused, &false);
     }
 
@@ -276,12 +294,77 @@ impl Oracle {
             .flatten()
     }
 
-    fn is_authorized_source(env: &Env, source: &Symbol) -> bool {
+    /// Register or update an authorized source address. Admin-only.
+    pub fn set_source(env: Env, source: Symbol, address: Address) -> Result<(), OracleError> {
+        let admin = Self::admin(&env);
+        admin.require_auth();
+
+        let mut sources: Vec<Symbol> = env
+            .storage()
+            .instance()
+            .get(&DataKey::Sources)
+            .unwrap_or_else(|| Vec::new(&env));
+
+        if !sources.iter().any(|s| s == source) {
+            sources.push_back(source.clone());
+            env.storage().instance().set(&DataKey::Sources, &sources);
+        }
+
         env.storage()
             .instance()
-            .get::<_, Vec<Symbol>>(&DataKey::Sources)
-            .map(|sources| sources.iter().any(|s| &s == source))
-            .unwrap_or(false)
+            .set(&DataKey::SourceAddress(source.clone()), &address);
+
+        env.events()
+            .publish((Symbol::new(&env, "source_set"),), (source, address));
+        Ok(())
+    }
+
+    /// Remove an authorized source. Admin-only.
+    pub fn remove_source(env: Env, source: Symbol) -> Result<(), OracleError> {
+        let admin = Self::admin(&env);
+        admin.require_auth();
+
+        let sources_opt: Option<Vec<Symbol>> = env.storage().instance().get(&DataKey::Sources);
+        if let Some(sources) = sources_opt {
+            let mut new_sources = Vec::new(&env);
+            for s in sources.iter() {
+                if s != source {
+                    new_sources.push_back(s);
+                }
+            }
+            env.storage()
+                .instance()
+                .set(&DataKey::Sources, &new_sources);
+        }
+        env.storage()
+            .instance()
+            .remove(&DataKey::SourceAddress(source.clone()));
+
+        env.events()
+            .publish((Symbol::new(&env, "source_removed"),), source);
+        Ok(())
+    }
+
+    /// The registered address for `source`, if any.
+    pub fn get_source_address(env: Env, source: Symbol) -> Option<Address> {
+        env.storage()
+            .instance()
+            .get(&DataKey::SourceAddress(source))
+    }
+
+    /// All configured source names.
+    pub fn get_sources(env: Env) -> Vec<Symbol> {
+        env.storage()
+            .instance()
+            .get(&DataKey::Sources)
+            .unwrap_or_else(|| Vec::new(&env))
+    }
+
+    /// Whether `source` has an authorized address configured.
+    pub fn is_authorized_source(env: Env, source: Symbol) -> bool {
+        env.storage()
+            .instance()
+            .has(&DataKey::SourceAddress(source))
     }
 
     fn bump_persistent_ttl(env: &Env, key: &DataKey) {
@@ -400,29 +483,19 @@ impl Oracle {
     ) -> Result<(), OracleError> {
         Self::assert_not_paused(&env)?;
         Self::assert_circuit_ok(&env, Symbol::new(&env, "submit_price"))?;
-        if !Self::is_authorized_source(&env, &source) {
-            return Err(OracleError::UnauthorizedSource);
-        }
+
+        let source_addr: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::SourceAddress(source.clone()))
+            .ok_or(OracleError::UnauthorizedSource)?;
+        source_addr.require_auth();
+
         if price <= 0 {
             return Err(OracleError::ZeroPrice);
         }
 
         let now = env.ledger().timestamp();
-        let sample_key = DataKey::Sample(asset.clone(), source.clone());
-
-        // Update the source sample.
-        env.storage().persistent().set(&sample_key, &(now, price));
-        Self::bump_persistent_ttl(&env, &sample_key);
-
-        // Keep a per-asset source list so aggregation knows which sources exist.
-        let list_key = DataKey::SourceList(asset.clone());
-        let known_opt: Option<Vec<Symbol>> = env.storage().persistent().get(&list_key);
-        let mut known = known_opt.unwrap_or_else(|| Vec::new(&env));
-        if !known.iter().any(|s| s == source) {
-            known.push_back(source.clone());
-            env.storage().persistent().set(&list_key, &known);
-            Self::bump_persistent_ttl(&env, &list_key);
-        }
 
         // Circuit breaker: reject a price that deviates >3% from the last
         // accepted aggregate (first submission for an asset is always allowed).
@@ -451,7 +524,24 @@ impl Oracle {
             }
         }
 
+        let sample_key = DataKey::Sample(asset.clone(), source.clone());
+
+        // Update the source sample.
+        env.storage().persistent().set(&sample_key, &(now, price));
+        Self::bump_persistent_ttl(&env, &sample_key);
+
+        // Keep a per-asset source list so aggregation knows which sources exist.
+        let list_key = DataKey::SourceList(asset.clone());
+        let known_opt: Option<Vec<Symbol>> = env.storage().persistent().get(&list_key);
+        let mut known = known_opt.unwrap_or_else(|| Vec::new(&env));
+        if !known.iter().any(|s| s == source) {
+            known.push_back(source.clone());
+            env.storage().persistent().set(&list_key, &known);
+            Self::bump_persistent_ttl(&env, &list_key);
+        }
+
         // Accept and fold into the aggregate + TWAP series.
+        let agg_key = DataKey::Aggregate(asset.clone());
         Self::bump_persistent_ttl(&env, &agg_key);
         env.storage()
             .instance()
@@ -521,9 +611,9 @@ fn sort_in_place(arr: &mut Vec<i128>) {
 mod test {
     use super::*;
     use soroban_sdk::testutils::{Address as _, Ledger, LedgerInfo};
-    use soroban_sdk::{symbol_short, vec, Env};
+    use soroban_sdk::{symbol_short, vec, Env, IntoVal};
 
-    fn setup() -> (Env, Address, Address) {
+    fn setup_full() -> (Env, Address, Address, Address, Address, Address, Address) {
         let env = Env::default();
         env.mock_all_auths();
         env.ledger().set(LedgerInfo {
@@ -537,16 +627,33 @@ mod test {
             max_entry_ttl: 0,
         });
         let admin = Address::generate(&env);
+        let pyth = Address::generate(&env);
+        let chain = Address::generate(&env);
+        let dex = Address::generate(&env);
         let sources = vec![
             &env,
-            symbol_short!("pyth"),
-            symbol_short!("chain"),
-            symbol_short!("dex"),
+            SourceConfig {
+                source: symbol_short!("pyth"),
+                address: pyth.clone(),
+            },
+            SourceConfig {
+                source: symbol_short!("chain"),
+                address: chain.clone(),
+            },
+            SourceConfig {
+                source: symbol_short!("dex"),
+                address: dex.clone(),
+            },
         ];
         let oracle_id = env.register(Oracle, ());
         let client = OracleClient::new(&env, &oracle_id);
         client.initialize(&admin, &sources);
         let asset = Address::generate(&env);
+        (env, oracle_id, asset, admin, pyth, chain, dex)
+    }
+
+    fn setup() -> (Env, Address, Address) {
+        let (env, oracle_id, asset, _admin, _pyth, _chain, _dex) = setup_full();
         (env, oracle_id, asset)
     }
 
@@ -976,5 +1083,124 @@ mod test {
             10_000_000,
         )
         .unwrap();
+    }
+
+    #[test]
+    fn negative_unauthenticated_submission_fails() {
+        let env = Env::default();
+        env.ledger().set(LedgerInfo {
+            timestamp: 1_700_000_000,
+            protocol_version: 22,
+            sequence_number: 1,
+            network_id: Default::default(),
+            base_reserve: 0,
+            min_temp_entry_ttl: 0,
+            min_persistent_entry_ttl: 0,
+            max_entry_ttl: 0,
+        });
+        let admin = Address::generate(&env);
+        let pyth = Address::generate(&env);
+        let chain = Address::generate(&env);
+        let dex = Address::generate(&env);
+        let asset = Address::generate(&env);
+
+        let oracle_id = env.register(Oracle, ());
+        let client = OracleClient::new(&env, &oracle_id);
+
+        // Initialize with admin auth mocked
+        env.mock_all_auths();
+        let sources = vec![
+            &env,
+            SourceConfig {
+                source: symbol_short!("pyth"),
+                address: pyth.clone(),
+            },
+            SourceConfig {
+                source: symbol_short!("chain"),
+                address: chain.clone(),
+            },
+            SourceConfig {
+                source: symbol_short!("dex"),
+                address: dex.clone(),
+            },
+        ];
+        client.initialize(&admin, &sources);
+
+        // Now clear all mocked auths: require_auth() is strictly enforced!
+        env.mock_auths(&[]);
+
+        // 1. Unauthenticated submission without any auth fails
+        let res = client.try_submit_price(&symbol_short!("pyth"), &asset, &10_000_000);
+        assert!(res.is_err(), "unauthenticated submission must fail");
+
+        // 2. Attacker cannot submit using pyth symbol with their own auth
+        let attacker = Address::generate(&env);
+        env.mock_auths(&[soroban_sdk::testutils::MockAuth {
+            address: &attacker,
+            invoke: &soroban_sdk::testutils::MockAuthInvoke {
+                contract: &oracle_id,
+                fn_name: "submit_price",
+                args: (symbol_short!("pyth"), asset.clone(), 10_000_000i128).into_val(&env),
+                sub_invokes: &[],
+            },
+        }]);
+        let res = client.try_submit_price(&symbol_short!("pyth"), &asset, &10_000_000);
+        assert!(res.is_err(), "attacker auth must fail to authenticate pyth");
+
+        // 3. Genuine source signature succeeds
+        env.mock_auths(&[soroban_sdk::testutils::MockAuth {
+            address: &pyth,
+            invoke: &soroban_sdk::testutils::MockAuthInvoke {
+                contract: &oracle_id,
+                fn_name: "submit_price",
+                args: (symbol_short!("pyth"), asset.clone(), 10_000_000i128).into_val(&env),
+                sub_invokes: &[],
+            },
+        }]);
+        let res = client.try_submit_price(&symbol_short!("pyth"), &asset, &10_000_000);
+        assert!(res.is_ok(), "genuine source auth must succeed");
+    }
+
+    #[test]
+    fn admin_source_management_and_unauthorized_source() {
+        let (env, oracle_id, asset, _admin, _pyth, _chain, _dex) = setup_full();
+        let client = OracleClient::new(&env, &oracle_id);
+
+        let dia_addr = Address::generate(&env);
+        let dia_source = symbol_short!("dia");
+
+        // Admin adds new source
+        client.set_source(&dia_source, &dia_addr);
+        assert_eq!(
+            client.get_source_address(&dia_source),
+            Some(dia_addr.clone())
+        );
+        assert!(client.get_sources().iter().any(|s| s == dia_source));
+
+        // New source can submit price
+        submit(
+            &env,
+            &oracle_id,
+            dia_source.clone(),
+            asset.clone(),
+            10_000_000,
+        )
+        .unwrap();
+
+        // Admin removes source
+        client.remove_source(&dia_source);
+        assert_eq!(client.get_source_address(&dia_source), None);
+        assert!(!client.get_sources().iter().any(|s| s == dia_source));
+
+        // Submissions for removed source are rejected
+        let res = submit(&env, &oracle_id, dia_source, asset.clone(), 10_000_000);
+        assert_eq!(res, Err(OracleError::UnauthorizedSource));
+
+        // Non-admin cannot set or remove sources
+        env.mock_auths(&[]);
+        assert!(client
+            .try_set_source(&symbol_short!("foo"), &dia_addr)
+            .is_err());
+        assert!(client.try_remove_source(&symbol_short!("foo")).is_err());
     }
 }
