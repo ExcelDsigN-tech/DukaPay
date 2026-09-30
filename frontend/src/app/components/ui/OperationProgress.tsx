@@ -25,6 +25,7 @@ const statusColors: Record<TransactionStatus, { border: string; bg: string; text
   submitted: { border: "border-blue-200", bg: "bg-blue-50", text: "text-blue-900" },
   confirming: { border: "border-indigo-200", bg: "bg-indigo-50", text: "text-indigo-900" },
   confirmed: { border: "border-green-200", bg: "bg-green-50", text: "text-green-900" },
+  queued: { border: "border-amber-200", bg: "bg-amber-50", text: "text-amber-900" },
   failed: { border: "border-red-200", bg: "bg-red-50", text: "text-red-900" },
 };
 
@@ -35,6 +36,9 @@ const statusIcons: Record<TransactionStatus, React.ReactNode> = {
   submitted: <Send aria-hidden="true" className="h-5 w-5 text-blue-500" />,
   confirming: <Loader aria-hidden="true" className="h-5 w-5 animate-spin text-indigo-500" />,
   confirmed: <CheckCircle2 aria-hidden="true" className="h-5 w-5 text-green-500" />,
+  // Queued offline: the clock reads as "waiting", not "done", and must not
+  // spin — nothing is in flight until the service worker replays it.
+  queued: <Clock aria-hidden="true" className="h-5 w-5 text-amber-500" />,
   failed: <AlertCircle aria-hidden="true" className="h-5 w-5 text-red-500" />,
 };
 
@@ -55,8 +59,10 @@ export function OperationProgress({ transaction, type = "generic" }: OperationPr
     }
   };
 
-  // Only show progress bar for non-terminal states
-  const showProgress = status !== "confirmed" && status !== "failed" && status !== "idle";
+  // Only show progress bar for non-terminal states. "queued" is terminal for
+  // this UI — the replay happens in the background with its own feedback.
+  const showProgress =
+    status !== "confirmed" && status !== "queued" && status !== "failed" && status !== "idle";
 
   return (
     <div
@@ -81,7 +87,8 @@ export function OperationProgress({ transaction, type = "generic" }: OperationPr
           </div>
         </div>
 
-        {/* Show explorer link for submitted, confirming, and confirmed states */}
+        {/* Show explorer link for submitted, confirming, and confirmed states.
+            A queued transaction has no on-chain hash yet, so it gets no link. */}
         {txHash &&
           (status === "submitted" || status === "confirming" || status === "confirmed") && (
             <a

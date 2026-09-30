@@ -1,8 +1,10 @@
 import type { Request, Response, NextFunction } from 'express';
+import { randomUUID } from 'node:crypto';
 import { cacheService } from '../services/cacheService.js';
 import logger from '../utils/logger.js';
 
 const IDEMPOTENCY_TTL = 24 * 60 * 60; // 24 hours in seconds
+const IDEMPOTENCY_LOCK_TTL = IDEMPOTENCY_TTL;
 
 interface CachedResponse {
   status: number;
@@ -90,7 +92,12 @@ export const idempotencyMiddleware = async (
   }
 
   try {
-    const cacheKey = `idemp:${key}`;
+    const user = (req as Request & { user?: { publicKey?: string } }).user;
+    const principal = user?.publicKey ? `user:${user.publicKey}` : `ip:${req.ip || 'unknown'}`;
+    const route = `${req.baseUrl || ''}${req.path || req.originalUrl}`;
+    const scope = `${principal}:${req.method}:${route}`;
+    const cacheKey = `idemp:${scope}:${key}`;
+    const lockKey = `${cacheKey}:inflight`;
     const cached = await cacheService.get<CachedResponse>(cacheKey);
 
     idempotencyCircuitBreaker.recordSuccess();
@@ -108,6 +115,40 @@ export const idempotencyMiddleware = async (
         .set('X-Idempotency-Cache', 'HIT')
         .set('X-Idempotent-Replayed', 'true')
         .json(cached.body);
+      return;
+    }
+
+    const lockToken = randomUUID();
+    const acquired = await cacheService.reserve(lockKey, lockToken, IDEMPOTENCY_LOCK_TTL);
+    if (!acquired) {
+      // The first lookup can race with another request finishing and releasing
+      // its lock. Re-read the response before returning an in-flight conflict.
+      const completed = await cacheService.get<CachedResponse>(cacheKey);
+      if (completed) {
+        res
+          .status(completed.status)
+          .set('X-Idempotency-Cache', 'HIT')
+          .set('X-Idempotent-Replayed', 'true')
+          .json(completed.body);
+        return;
+      }
+      res.status(409).json({
+        error: 'Conflict',
+        message: 'A request with this idempotency key is already in progress.',
+      });
+      return;
+    }
+
+    // A request may have completed between the first cache read and lock
+    // acquisition. Return that result and release our otherwise redundant lock.
+    const completed = await cacheService.get<CachedResponse>(cacheKey);
+    if (completed) {
+      await cacheService.deleteIfMatch(lockKey, lockToken);
+      res
+        .status(completed.status)
+        .set('X-Idempotency-Cache', 'HIT')
+        .set('X-Idempotent-Replayed', 'true')
+        .json(completed.body);
       return;
     }
 
@@ -147,9 +188,11 @@ export const idempotencyMiddleware = async (
     res.on('finish', async () => {
       // Only cache 2xx and 4xx status codes.
       // 5xx errors should usually be retried without returning a cached failure.
-      if (res.statusCode >= 200 && res.statusCode < 500 && responseBody) {
+      const cacheable = res.statusCode >= 200 && res.statusCode < 500 && responseBody !== undefined;
+      let responseStored = false;
+      if (cacheable) {
         try {
-          await cacheService.set(
+          await cacheService.setRequired(
             cacheKey,
             {
               status: res.statusCode,
@@ -158,6 +201,7 @@ export const idempotencyMiddleware = async (
             IDEMPOTENCY_TTL,
           );
           idempotencyCircuitBreaker.recordSuccess();
+          responseStored = true;
         } catch (error) {
           idempotencyCircuitBreaker.recordFailure();
           logger.error(`Alert: Error caching idempotency key in Redis: ${key}`, {
@@ -165,6 +209,12 @@ export const idempotencyMiddleware = async (
             key,
           });
         }
+      }
+      // Keep the reservation if saving the successful response failed: letting
+      // a retry execute again would defeat idempotency. It expires with the
+      // response TTL. Non-cacheable failures can be retried immediately.
+      if (responseStored || !cacheable) {
+        await cacheService.deleteIfMatch(lockKey, lockToken);
       }
     });
 

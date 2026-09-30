@@ -1,13 +1,19 @@
 import type { HttpClient } from './http.js';
 import type {
+  BorrowerLoanStatus,
+  BorrowerLoans,
   Challenge,
   DepositorPortfolio,
+  Leaderboard,
   Loan,
   LoanConfig,
-  Paginated,
   PoolAnalyticsResponse,
   PoolStats,
-  Remittance,
+  RemittanceCreated,
+  RemittanceEnvelope,
+  RemittanceList,
+  RemittanceSubmitResult,
+  RepayTransaction,
   Score,
   Session,
   UnsignedTransaction,
@@ -57,10 +63,30 @@ export class LoansResource {
     return this.http.get('/loans/config', { anonymous: true });
   }
 
-  list(params: { borrower?: string; status?: string; page?: number; pageSize?: number } = {}): Promise<
-    Paginated<Loan>
-  > {
-    return this.http.get('/loans', { query: params });
+  /**
+   * Lists the loans of a single borrower.
+   *
+   * The API exposes loans per borrower (`GET /loans/borrower/{borrower}`), so
+   * `borrower` is required and must match the authenticated wallet.
+   */
+  list(params: {
+    borrower: string;
+    status?: BorrowerLoanStatus;
+    from?: string;
+    to?: string;
+    limit?: number;
+    cursor?: string;
+  }): Promise<BorrowerLoans> {
+    validateStellarAddress(params.borrower, 'borrower');
+    return this.http.get(`/loans/borrower/${params.borrower}`, {
+      query: {
+        status: params.status,
+        from: params.from,
+        to: params.to,
+        limit: params.limit,
+        cursor: params.cursor,
+      },
+    });
   }
 
   get(loanId: number | string): Promise<Loan> {
@@ -68,11 +94,22 @@ export class LoansResource {
     return this.http.get(`/loans/${loanId}`);
   }
 
-  /** Returns an unsigned XDR to be signed by the borrower's wallet. */
-  buildRepay(loanId: number | string, amount: string): Promise<UnsignedTransaction> {
+  /**
+   * Returns the unsigned repayment XDR for a loan, to be signed by the
+   * borrower's wallet and then passed to {@link LoansResource.submit}.
+   *
+   * `amount` is a positive integer in the asset's base units, and
+   * `borrowerPublicKey` must match the authenticated wallet.
+   */
+  buildRepay(
+    loanId: number | string,
+    amount: number,
+    borrowerPublicKey: string,
+  ): Promise<RepayTransaction> {
     validatePositiveInt(loanId, 'loanId');
-    validateAmount(amount, 'amount');
-    return this.http.post(`/loans/${loanId}/build-repay`, { amount });
+    validatePositiveInt(amount, 'amount');
+    validateStellarAddress(borrowerPublicKey, 'borrowerPublicKey');
+    return this.http.post(`/loans/${loanId}/repay`, { amount, borrowerPublicKey });
   }
 
   buildCancel(loanId: number | string): Promise<UnsignedTransaction> {
@@ -133,35 +170,73 @@ export class PoolResource {
 export class ScoresResource {
   constructor(private http: HttpClient) {}
 
+  /**
+   * Credit score for a wallet. The route is mounted at `/score` (singular) and
+   * `userId` is the wallet's Stellar address.
+   */
   get(address: string): Promise<Score> {
     validateStellarAddress(address, 'address');
-    return this.http.get(`/scores/${address}`);
+    return this.http.get(`/score/${address}`);
   }
 
-  leaderboard(limit = 50): Promise<Score[]> {
-    return this.http.get('/scores/leaderboard', { query: { limit }, anonymous: true });
+  /** Public leaderboard. The endpoint takes no parameters. */
+  leaderboard(): Promise<Leaderboard> {
+    return this.http.get('/score/leaderboard', { anonymous: true });
   }
 }
 
 export class RemittanceResource {
   constructor(private http: HttpClient) {}
 
+  /**
+   * Lists the authenticated sender's remittances. The route is mounted at
+   * `/remittances` (plural) and paginates with a keyset cursor.
+   */
   list(
-    params: { sender?: string; recipient?: string; page?: number; pageSize?: number } = {},
-  ): Promise<Paginated<Remittance>> {
-    return this.http.get('/remittance', {
-      query: { ...params, page: params.page ?? 1, pageSize: params.pageSize ?? 20 },
+    params: {
+      status?: 'pending' | 'processing' | 'completed' | 'failed';
+      from?: string;
+      to?: string;
+      q?: string;
+      limit?: number;
+      cursor?: string;
+    } = {},
+  ): Promise<RemittanceList> {
+    return this.http.get('/remittances', { query: params });
+  }
+
+  get(id: string): Promise<RemittanceEnvelope> {
+    return this.http.get(`/remittances/${id}`);
+  }
+
+  /**
+   * Creates a remittance and returns the stored record, including the unsigned
+   * transaction XDR in `data.xdr`. Sign that XDR and pass it to
+   * {@link RemittanceResource.submit} to settle it on-chain.
+   *
+   * The sender is taken from the authenticated session, so it is not a
+   * parameter here.
+   */
+  buildSend(params: {
+    recipient: string;
+    amount: number;
+    fromCurrency: 'USDC' | 'EURC' | 'PHP';
+    toCurrency: 'USDC' | 'EURC' | 'PHP';
+    memo?: string;
+  }): Promise<RemittanceCreated> {
+    validateStellarAddress(params.recipient, 'recipient');
+    validatePositiveInt(params.amount, 'amount');
+    return this.http.post('/remittances', {
+      recipientAddress: params.recipient,
+      amount: params.amount,
+      fromCurrency: params.fromCurrency,
+      toCurrency: params.toCurrency,
+      ...(params.memo ? { memo: params.memo } : {}),
     });
   }
 
-  get(id: string): Promise<Remittance> {
-    return this.http.get(`/remittance/${id}`);
-  }
-
-  buildSend(params: { recipient: string; amount: string; from: string }): Promise<UnsignedTransaction> {
-    validateStellarAddress(params.recipient, 'recipient');
-    validateAmount(params.amount, 'amount');
-    validateStellarAddress(params.from, 'from');
-    return this.http.post('/remittance/build-send', params);
+  /** Submits the signed XDR for a created remittance. */
+  submit(id: string, signedXdr: string): Promise<{ success: boolean; data: RemittanceSubmitResult }> {
+    return this.http.post(`/remittances/${id}/submit`, { signedXdr });
   }
 }
