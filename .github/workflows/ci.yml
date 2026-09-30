@@ -415,6 +415,8 @@ jobs:
           node-version-file: '.nvmrc'
       - name: Check every backend ErrorCode has a frontend message mapping
         run: node scripts/check-error-code-mappings.mjs
+      - name: Check i18n catalogs match en.json keys
+        run: node scripts/check-i18n-parity.mjs
 
   contracts:
     needs: money-policy
