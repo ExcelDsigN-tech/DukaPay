@@ -54,7 +54,7 @@ jobs:
       - name: Use Node.js 20
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 20
+          node-version-file: '.nvmrc'
           cache: "npm"
           cache-dependency-path: scripts/package-lock.json
       - name: Install dependencies
@@ -91,7 +91,7 @@ jobs:
       - name: Use Node.js 20
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 20
+          node-version-file: '.nvmrc'
           cache: "npm"
           cache-dependency-path: backend/package-lock.json
       - name: Install backend dependencies
@@ -124,7 +124,7 @@ jobs:
       - name: Use Node.js 20
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 20
+          node-version-file: '.nvmrc'
           cache: "npm"
           cache-dependency-path: backend/package-lock.json
       - name: Install dependencies
@@ -187,7 +187,7 @@ jobs:
       - name: Use Node.js 20
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 20
+          node-version-file: '.nvmrc'
           cache: "npm"
           cache-dependency-path: backend/package-lock.json
       - name: Install dependencies
@@ -243,7 +243,7 @@ jobs:
       - name: Use Node.js 20
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 20
+          node-version-file: '.nvmrc'
           cache: "npm"
           cache-dependency-path: backend/package-lock.json
       - name: Install dependencies
@@ -306,7 +306,7 @@ jobs:
       - name: Use Node.js 20
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 20
+          node-version-file: '.nvmrc'
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
       - name: Install dependencies
@@ -343,7 +343,7 @@ jobs:
       - name: Use Node.js 20
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 20
+          node-version-file: '.nvmrc'
           cache: npm
           cache-dependency-path: scripts/package-lock.json
 
@@ -369,7 +369,7 @@ jobs:
       - name: Use Node.js 20
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 20
+          node-version-file: '.nvmrc'
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
       - name: Install dependencies
@@ -399,7 +399,7 @@ jobs:
       - name: Use Node.js 20
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 20
+          node-version-file: '.nvmrc'
       - name: Check env docs are in sync
         run: node scripts/check-env-docs.mjs
       - name: Check prod-flag launch posture (KYC + audit-anchor)
@@ -412,7 +412,7 @@ jobs:
       - name: Use Node.js 20
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 20
+          node-version-file: '.nvmrc'
       - name: Check every backend ErrorCode has a frontend message mapping
         run: node scripts/check-error-code-mappings.mjs
 
@@ -572,7 +572,7 @@ jobs:
       - name: Use Node.js 20
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 20
+          node-version-file: '.nvmrc'
           cache: npm
           cache-dependency-path: sdk/package-lock.json
       - name: Install dependencies
