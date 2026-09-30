@@ -1,18 +1,13 @@
-// e2e coverage temporarily skipped: assertions rely on product wiring (wallet-connect state, /api/* mock paths, Zustand hydration) that has drifted from the current app. Restore file-by-file once the flows are re-aligned with the mocks.
 import { test, expect } from "@playwright/test";
 
-test.describe.skip("Landing Page", () => {
+test.describe("Landing Page", () => {
   test("should load the landing page successfully", async ({ page }) => {
-    await page.goto("/en"); // Localized home
-    // Check for title or specific branding
+    await page.goto("/en");
     await expect(page).toHaveTitle(/dukapay/i);
-
-    // Verify main content structure (Dashboard heading in [locale]/page.tsx)
     await expect(page.getByRole("heading", { name: /Dashboard/i })).toBeVisible();
   });
 
   test("should display wallet connection prompt when disconnected", async ({ page }) => {
-    // Ensure localStorage is empty for this test
     await page.addInitScript(() => window.localStorage.clear());
     await page.goto("/en");
 
@@ -22,6 +17,8 @@ test.describe.skip("Landing Page", () => {
 
   test("should show localized help text for new visitors", async ({ page }) => {
     await page.goto("/en");
-    await expect(page.locator("text=Welcome to DukaPay. Please connect your wallet")).toBeVisible();
+    await expect(
+      page.locator("text=Welcome to DukaPay. Please connect your wallet"),
+    ).toBeVisible();
   });
 });
