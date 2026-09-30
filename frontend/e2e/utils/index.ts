@@ -17,6 +17,7 @@ import {
   type TestLoan,
   type TestRemittance,
 } from "./fixtures.js";
+import type { Page, Route } from "@playwright/test";
 
 export {
   TEST_USERS,
@@ -50,10 +51,10 @@ export { SettlementPage } from "./page-objects/SettlementPage.js";
  * Wait for API call to complete
  */
 export async function waitForApiCall(
-  page: any,
+  page: Page,
   urlPattern: string | RegExp,
   timeout = 10000,
-): Promise<any> {
+): Promise<unknown> {
   const response = await page.waitForResponse(urlPattern, { timeout });
   return response.json();
 }
@@ -61,7 +62,7 @@ export async function waitForApiCall(
 /**
  * Mock successful API response
  */
-export async function mockSuccessResponse(route: any, data: any): Promise<void> {
+export async function mockSuccessResponse(route: Route, data: unknown): Promise<void> {
   await route.fulfill({
     status: 200,
     contentType: "application/json",
@@ -76,7 +77,7 @@ export async function mockSuccessResponse(route: any, data: any): Promise<void> 
  * Mock error API response
  */
 export async function mockErrorResponse(
-  route: any,
+  route: Route,
   error: string,
   statusCode = 400,
 ): Promise<void> {
@@ -93,7 +94,7 @@ export async function mockErrorResponse(
 /**
  * Setup common route mocks for authenticated user
  */
-export async function setupAuthenticatedUser(page: any, user: any): Promise<void> {
+export async function setupAuthenticatedUser(page: Page, user: TestUser): Promise<void> {
   // Setup wallet state
   const walletState = createWalletState(user);
   await page.addInitScript((stateJson: string) => {
@@ -101,9 +102,9 @@ export async function setupAuthenticatedUser(page: any, user: any): Promise<void
   }, JSON.stringify(walletState));
 
   // Mock user profile
-  await page.route("**/api/user/profile", async (route: any) => {
+  await page.route("**/api/user/profile", async (route: Route) => {
     await mockSuccessResponse(route, {
-      id: user.id || "test_user",
+      id: "test_user",
       email: user.email,
       walletAddress: user.publicKey,
       kycVerified: user.kycVerified,
@@ -115,7 +116,7 @@ export async function setupAuthenticatedUser(page: any, user: any): Promise<void
 /**
  * Take screenshot with timestamp
  */
-export async function takeTimestampedScreenshot(page: any, name: string): Promise<void> {
+export async function takeTimestampedScreenshot(page: Page, name: string): Promise<void> {
   const timestamp = Date.now();
   await page.screenshot({
     path: `screenshots/${name}-${timestamp}.png`,
@@ -127,14 +128,14 @@ export async function takeTimestampedScreenshot(page: any, name: string): Promis
  * Wait for element with custom error message
  */
 export async function waitForElement(
-  page: any,
+  page: Page,
   selector: string,
   options: { timeout?: number; errorMessage?: string } = {},
 ): Promise<void> {
   const { timeout = 10000, errorMessage } = options;
   try {
     await page.waitForSelector(selector, { timeout });
-  } catch (error) {
+  } catch {
     const message = errorMessage || `Element "${selector}" not found within ${timeout}ms`;
     throw new Error(message);
   }

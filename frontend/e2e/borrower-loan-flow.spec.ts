@@ -108,7 +108,7 @@ test.describe("Borrower Loan Request Flow", () => {
 
   test("Step 2: View credit score on dashboard", async ({ page }: { page: Page }) => {
     // Mock User Credit Score
-    await page.route("**/api/score/*", async (route: any) => {
+    await page.route("**/api/score/*", async (route: Route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -139,7 +139,7 @@ test.describe("Borrower Loan Request Flow", () => {
 
   test("Step 3: Navigate to loan request form and submit", async ({ page }: { page: Page }) => {
     // Mock User Credit Score
-    await page.route("**/api/score/*", async (route: any) => {
+    await page.route("**/api/score/*", async (route: Route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -241,7 +241,7 @@ test.describe("Borrower Loan Request Flow", () => {
     // Initially mock loan as pending
     let loanStatus = "pending";
 
-    await page.route("**/api/loans/borrower/**", async (route: any) => {
+    await page.route("**/api/loans/borrower/**", async (route: Route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -285,7 +285,7 @@ test.describe("Borrower Loan Request Flow", () => {
 
   test("Step 6: Submit repayment and confirm balance change", async ({ page }: { page: Page }) => {
     // Mock active loan
-    await page.route("**/api/loans/borrower/**", async (route: any) => {
+    await page.route("**/api/loans/borrower/**", async (route: Route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -450,7 +450,7 @@ test.describe("Borrower Loan Request Flow", () => {
 
   test("Complete end-to-end borrower flow", async ({ page }: { page: Page }) => {
     // Mock User Credit Score
-    await page.route("**/api/score/*", async (route: any) => {
+    await page.route("**/api/score/*", async (route: Route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -477,7 +477,7 @@ test.describe("Borrower Loan Request Flow", () => {
     await page.getByRole("button", { name: /Continue to Signature/i }).click();
 
     // Mock loan creation
-    await page.route("**/api/loans", async (route: any) => {
+    await page.route("**/api/loans", async (route: Route) => {
       if (route.request().method() === "POST") {
         await route.fulfill({
           status: 200,
@@ -500,7 +500,7 @@ test.describe("Borrower Loan Request Flow", () => {
     await expect(page.locator("text=Application Submitted")).toBeVisible({ timeout: 10000 });
 
     // Step 4: Verify pending loan appears
-    await page.route("**/api/loans/borrower/**", async (route: any) => {
+    await page.route("**/api/loans/borrower/**", async (route: Route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",

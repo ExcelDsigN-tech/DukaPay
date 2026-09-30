@@ -11,15 +11,12 @@ import {
   MOCK_LOAN_CONFIG,
 } from "../utils/fixtures.js";
 import { LoanPage } from "../utils/page-objects/LoanPage.js";
-import { WalletPage } from "../utils/page-objects/WalletPage.js";
 
 test.describe("Loan Application → Approval → Funding", () => {
   let loanPage: LoanPage;
-  let walletPage: WalletPage;
 
   test.beforeEach(async ({ page }: { page: Page }) => {
     loanPage = new LoanPage(page);
-    walletPage = new WalletPage(page);
 
     // Mock borrower wallet
     const walletState = createWalletState(TEST_USERS.borrower);

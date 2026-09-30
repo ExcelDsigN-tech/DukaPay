@@ -32,6 +32,12 @@ export interface TestRemittance {
   sender: string;
 }
 
+export interface WalletBalance {
+  symbol: string;
+  amount: string;
+  usdValue: number;
+}
+
 /**
  * Mock wallet addresses for different user roles
  */
@@ -101,7 +107,7 @@ export const createMockRemittance = (overrides?: Partial<TestRemittance>): TestR
 /**
  * Create wallet state for localStorage injection
  */
-export const createWalletState = (user: TestUser, balances?: any[]) => ({
+export const createWalletState = (user: TestUser, balances?: WalletBalance[]) => ({
   state: {
     status: "connected",
     address: user.publicKey,

@@ -5,17 +5,14 @@
 import { test, expect, type Page, type Route } from "@playwright/test";
 import { TEST_USERS, createWalletState, createMockLoan } from "../utils/fixtures.js";
 import { DisputePage } from "../utils/page-objects/DisputePage.js";
-import { LoanPage } from "../utils/page-objects/LoanPage.js";
 
 test.describe("Dispute Filing Flow", () => {
   let disputePage: DisputePage;
-  let loanPage: LoanPage;
   const loanId = 42;
   const disputeId = "disp_12345";
 
   test.beforeEach(async ({ page }: { page: Page }) => {
     disputePage = new DisputePage(page);
-    loanPage = new LoanPage(page);
 
     // Mock borrower wallet
     const walletState = createWalletState(TEST_USERS.borrower);

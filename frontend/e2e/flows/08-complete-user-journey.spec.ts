@@ -3,7 +3,7 @@
  * Integration test covering entire user lifecycle across multiple flows
  * This test tags flaky scenarios and demonstrates the quarantine process
  */
-import { test, expect, type Page, type Route } from "@playwright/test";
+import { test, expect, type Route } from "@playwright/test";
 import {
   TEST_USERS,
   createWalletState,
@@ -381,8 +381,6 @@ test.describe("Complete User Journey", () => {
         }),
       });
     });
-
-    const loanPage = new LoanPage(page);
 
     // Try to apply for loan
     await page.click('button:has-text("Apply for Loan")');
