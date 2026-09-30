@@ -1,4 +1,4 @@
-import crypto from 'cypto';
+import crypto from 'node:crypto';
 import { Asset, Networks, Operation, TransactionBuilder } from '@stellar/stellar-sdk';
 import { createSorobanRpcServer, getStellarNetworkPassphrase } from '../config/stellar.js';
 import { query } from '../db/connection.js';
