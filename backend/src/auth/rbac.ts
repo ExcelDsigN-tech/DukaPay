@@ -24,6 +24,7 @@ export const ROLE_SCOPES: Record<UserRole, string[]> = {
     'read:loans',
     'write:loans',
     'read:pool',
+    'write:pool',
     'read:score',
     'read:notifications',
     'write:notifications',
@@ -58,7 +59,7 @@ export const ROLE_SCOPES: Record<UserRole, string[]> = {
   ],
   // `lender` is retained as a legacy alias for the pool-provider role that
   // predates the `agent` naming. New integrations should use `agent`.
-  lender: ['read:loans', 'read:pool', 'write:loans'],
+  lender: ['read:loans', 'read:pool', 'write:loans', 'write:pool'],
 };
 
 /** Privilege ordering used for read-level "at least" comparisons. */

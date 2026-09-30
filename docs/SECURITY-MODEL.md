@@ -29,7 +29,7 @@ JWT payload shape (`JwtPayload` in `authService.ts`):
 ```ts
 {
   publicKey: string;   // Stellar G… address
-  role: UserRole;      // "admin" | "borrower" | "lender"
+   role: UserRole;      // "admin" | "borrower" | "lender"
   scopes: string[];    // derived from role via ROLE_SCOPES
   iat: number;
   exp: number;
@@ -37,6 +37,7 @@ JWT payload shape (`JwtPayload` in `authService.ts`):
 ```
 
 Subsequent requests supply the JWT via:
+
 - `Authorization: Bearer <token>` header, or
 - the `dukapay_jwt` cookie.
 
@@ -63,9 +64,17 @@ Implemented in `backend/src/middleware/auth.ts` (`requireApiKey`).
 
 `resolveRoleForWallet(publicKey)` in `backend/src/auth/rbac.ts`:
 
-1. If the public key is in `ADMIN_WALLETS` (comma-separated env) → **admin**.
-2. If the public key is in `LENDER_WALLETS` → **lender**.
-3. Otherwise → **borrower**.
+Wallets are checked against these comma-separated environment variables in
+order; the first match determines the role:
+
+1. `SUPER_ADMIN_WALLETS` → **super_admin**
+2. `OPS_WALLETS` → **ops**
+3. `SUPPORT_WALLETS` → **support**
+4. `ADMIN_WALLETS` → **admin**
+5. `AGENT_WALLETS` → **agent**
+6. `AUDITOR_WALLETS` → **auditor**
+7. `LENDER_WALLETS` → **lender**
+8. No match → **borrower**
 
 ---
 
@@ -76,13 +85,13 @@ Defined in `ROLE_SCOPES` in `backend/src/auth/rbac.ts`:
 | Role | Scopes granted |
 |---|---|
 | `admin` | `admin:all` |
-| `lender` | `read:loans`, `read:pool` |
-| `borrower` | `read:loans`, `write:repayment`, `read:score`, `read:notifications`, `write:notifications` |
-
-> **Note:** `lender` does **not** have `write:pool`. Pool write endpoints
-> (`build-deposit`, `build-withdraw`, `build-emergency-withdraw`, `submit`)
-> require `write:pool`, which means lenders currently receive 403 on those
-> routes. This is a known gap tracked in issue #1179.
+| `super_admin` | `admin:all` |
+| `ops` | `read:loans`, `read:pool`, `read:score`, `read:remittances`, `read:notifications` |
+| `support` | `read:loans`, `read:score`, `read:remittances`, `read:notifications` |
+| `agent` | `read:loans`, `write:loans`, `read:pool`, `write:pool`, `read:score`, `read:notifications`, `write:notifications`, `read:remittances`, `write:remittances`, `agents:view-assigned` |
+| `borrower` | `read:loans`, `write:loans`, `read:score`, `read:notifications`, `write:notifications`, `read:remittances`, `write:remittances` |
+| `auditor` | `read:audit`, `read:compliance`, `read:loans`, `read:score`, `read:notifications`, `read:remittances`, `read:pool` |
+| `lender` | `read:loans`, `read:pool`, `write:loans`, `write:pool` |
 
 ---
 
