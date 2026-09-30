@@ -3,7 +3,7 @@
  * Tests remittance settlement and reconciliation processes
  */
 import { test, expect, type Page, type Route } from "@playwright/test";
-import { TEST_USERS, createWalletState, createMockRemittance } from "../utils/fixtures.js";
+import { TEST_USERS, createWalletState } from "../utils/fixtures.js";
 import { SettlementPage } from "../utils/page-objects/SettlementPage.js";
 import { AgentPage } from "../utils/page-objects/AgentPage.js";
 

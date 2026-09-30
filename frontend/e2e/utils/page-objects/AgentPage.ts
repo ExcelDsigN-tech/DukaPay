@@ -1,7 +1,7 @@
 /**
  * Agent Dashboard Page Object
  */
-import { type Page, expect } from "@playwright/test";
+import { type Page } from "@playwright/test";
 import { BasePage } from "./BasePage.js";
 
 export class AgentPage extends BasePage {

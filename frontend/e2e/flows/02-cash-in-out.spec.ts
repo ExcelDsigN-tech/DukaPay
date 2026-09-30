@@ -4,15 +4,12 @@
  */
 import { test, expect, type Page, type Route } from "@playwright/test";
 import { TEST_USERS, createWalletState, createMockRemittance } from "../utils/fixtures.js";
-import { WalletPage } from "../utils/page-objects/WalletPage.js";
 import { RemittancePage } from "../utils/page-objects/RemittancePage.js";
 
 test.describe("Cash-in/Cash-out Flow", () => {
-  let walletPage: WalletPage;
   let remittancePage: RemittancePage;
 
   test.beforeEach(async ({ page }: { page: Page }) => {
-    walletPage = new WalletPage(page);
     remittancePage = new RemittancePage(page);
 
     // Mock verified borrower wallet

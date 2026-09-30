@@ -1,5 +1,12 @@
 import { test, expect, type Page } from "@playwright/test";
 
+declare global {
+  interface Window {
+    __swUnregistered?: boolean;
+    __deletedCaches?: string[];
+  }
+}
+
 const MOCK_ADDRESS = "GCJPBXSE6WCQDCEYZW6C3YVZCSSCHC4AE72L5KWKCYL2CLLL7NH5VSCI";
 
 async function setupMockWalletState(page: Page) {
@@ -20,14 +27,12 @@ async function setupMockWalletState(page: Page) {
 
   // Stub serviceWorker and caches to observe calls
   await page.addInitScript(() => {
-    // @ts-ignore
     Object.defineProperty(navigator, "serviceWorker", {
       configurable: true,
       value: {
         getRegistrations: async () => [
           {
             unregister: async () => {
-              // @ts-ignore
               window.__swUnregistered = true;
               return true;
             },
@@ -36,17 +41,19 @@ async function setupMockWalletState(page: Page) {
       },
     });
 
-    // @ts-ignore
     window.__deletedCaches = [];
-    // @ts-ignore
     window.caches = {
       keys: async () => ["duk-cached"],
       delete: async (k: string) => {
-        // @ts-ignore
-        window.__deletedCaches.push(k);
+        window.__deletedCaches?.push(k);
         return true;
       },
-    };
+      has: async () => false,
+      match: async () => undefined,
+      open: async () => {
+        throw new Error("not implemented in test stub");
+      },
+    } as CacheStorage;
   });
 }
 
@@ -62,14 +69,14 @@ for (const provider of ["Freighter", "Albedo", "XBull"]) {
     await logoutBtn.scrollIntoViewIfNeeded();
 
     // Click and wait for navigation/reload that our app triggers
-    const [response] = await Promise.all([
+    await Promise.all([
       page.waitForNavigation({ waitUntil: "load", timeout: 5000 }).catch(() => null),
       logoutBtn.click(),
     ]);
 
     // After reload, check that our stubbed unregister and cache delete ran
-    const swUnregistered = await page.evaluate(() => (window as any).__swUnregistered === true);
-    const deletedCaches = await page.evaluate(() => (window as any).__deletedCaches || []);
+    const swUnregistered = await page.evaluate(() => window.__swUnregistered === true);
+    const deletedCaches = await page.evaluate(() => window.__deletedCaches || []);
 
     expect(swUnregistered).toBe(true);
     expect(Array.isArray(deletedCaches)).toBe(true);

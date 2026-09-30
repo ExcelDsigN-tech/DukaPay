@@ -63,7 +63,7 @@ export class BasePage {
   /**
    * Wait for API response
    */
-  async waitForApiResponse(urlPattern: string | RegExp): Promise<any> {
+  async waitForApiResponse(urlPattern: string | RegExp): Promise<unknown> {
     const response = await this.page.waitForResponse(urlPattern);
     return response.json();
   }
