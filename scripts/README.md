@@ -36,12 +36,15 @@ SECRET_KEY=S... npm run deploy -- testnet
 
 ## Load Testing
 
-The repository includes a baseline load test using [k6](https://k6.io/). It hits key API endpoints to measure latency and error rates.
+Load testing lives in `tests/load` and runs on the `Load Tests` GitHub Actions
+workflow. That suite authenticates against the API (see
+`tests/load/utils/auth.js`) and targets real, scope-checked routes, so it is the
+only supported load-test entrypoint.
 
 To run locally:
 ```bash
 # Install k6 (https://k6.io/docs/get-started/installation/)
-# Run against local environment
-TARGET_URL=http://localhost:3000 k6 run scripts/loadtest/baseline.js
+cd tests/load
+TEST_ENV=local LOAD_PROFILE=smoke k6 run scenarios/api-read.js
 ```
 

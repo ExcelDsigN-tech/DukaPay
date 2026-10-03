@@ -32,6 +32,12 @@ export interface ChallengeMessage {
   expiresIn: number;
 }
 
+interface StoredChallenge {
+  publicKey: string;
+  message: string;
+  expiresAt: number;
+}
+
 export interface TokenPair {
   accessToken: string;
   refreshToken: string;
@@ -89,10 +95,82 @@ const CLOCK_SKEW_TOLERANCE_MS = 5 * 1000;
 const REFRESH_TOKEN_PREFIX = 'refresh_token:';
 const TOKEN_FAMILY_PREFIX = 'token_family:';
 const REVOKED_JTI_PREFIX = 'revoked-jti:';
+const AUTH_CHALLENGE_PREFIX = 'auth_challenge:';
 
 // In-memory fallback stores when Redis / cache is offline
 const inMemoryRefreshTokens = new Map<string, StoredRefreshTokenMetadata>();
 const inMemoryRevokedFamilies = new Map<string, { revokedAt: number; reason: string }>();
+const inMemoryChallenges = new Map<string, StoredChallenge>();
+
+function getChallengeKey(publicKey: string, message: string): string | null {
+  const nonceMatch = message.match(/\nNonce: ([a-f0-9]{64})\n/);
+  if (!nonceMatch) return null;
+  return `${AUTH_CHALLENGE_PREFIX}${publicKey}:${nonceMatch[1]}`;
+}
+
+export async function storeChallenge(
+  publicKey: string,
+  challenge: ChallengeMessage,
+): Promise<void> {
+  const stored: StoredChallenge = {
+    publicKey,
+    message: challenge.message,
+    expiresAt: challenge.timestamp + challenge.expiresIn,
+  };
+  const key = getChallengeKey(publicKey, challenge.message);
+  if (!key) throw new Error('Generated challenge has an invalid nonce');
+
+  if (process.env.NODE_ENV === 'test') {
+    inMemoryChallenges.set(key, stored);
+    return;
+  }
+
+  await cacheService.setOrThrow(key, stored, Math.ceil(challenge.expiresIn / 1000));
+}
+
+export async function getIssuedChallenge(
+  publicKey: string,
+  message: string,
+): Promise<StoredChallenge | null> {
+  const key = getChallengeKey(publicKey, message);
+  if (!key) return null;
+
+  if (process.env.NODE_ENV === 'test') {
+    const stored = inMemoryChallenges.get(key) ?? null;
+    if (stored && stored.expiresAt < Date.now()) {
+      inMemoryChallenges.delete(key);
+      return null;
+    }
+    return stored;
+  }
+
+  return cacheService.get<StoredChallenge>(key);
+}
+
+export async function consumeIssuedChallenge(
+  publicKey: string,
+  message: string,
+  expected: StoredChallenge,
+): Promise<boolean> {
+  const key = getChallengeKey(publicKey, message);
+  if (!key) return false;
+
+  if (process.env.NODE_ENV === 'test') {
+    const stored = inMemoryChallenges.get(key);
+    if (
+      !stored ||
+      stored.publicKey !== expected.publicKey ||
+      stored.message !== expected.message ||
+      stored.expiresAt !== expected.expiresAt
+    ) {
+      return false;
+    }
+    inMemoryChallenges.delete(key);
+    return true;
+  }
+
+  return cacheService.deleteIfMatch(key, expected);
+}
 
 function getJwtSecret(): string {
   const secret = process.env.JWT_SECRET;
@@ -110,7 +188,8 @@ export function generateChallenge(publicKey: string): ChallengeMessage {
   const nonce = crypto.randomBytes(32).toString('hex');
   const timestamp = Date.now();
 
-  const message = `Sign this message to authenticate with DukaPay.\n\nNonce: ${nonce}\nTimestamp: ${timestamp}\n\nThis request will expire in 5 minutes.`;
+  const domain = new URL(process.env.FRONTEND_URL ?? 'https://dukapay.com').host;
+  const message = `Sign this message to authenticate with DukaPay.\n\nDomain: ${domain}\nNonce: ${nonce}\nTimestamp: ${timestamp}\n\nThis request will expire in 5 minutes.`;
 
   return {
     message,

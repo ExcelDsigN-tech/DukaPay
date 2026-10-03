@@ -9,14 +9,14 @@ describe('Admin reindex endpoint', () => {
   });
 
   it('rejects requests without API key', async () => {
-    const response = await request(app).post('/api/admin/reindex?fromLedger=1&toLedger=2');
+    const response = await request(app).post('/api/admin/reindex?fromLedge=1&toLedger=2');
 
     expect(response.status).toBe(401);
   });
 
   it('validates ledger range query parameters', async () => {
     const response = await request(app)
-      .post('/api/admin/reindex?fromLedger=abc&toLedger=2')
+      .post('/api/admin/reindex?fromLedge=abc&toLedge=2')
       .set('x-api-key', apiKey);
 
     expect(response.status).toBe(400);

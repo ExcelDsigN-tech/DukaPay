@@ -42,11 +42,17 @@ interface RepaymentOperationOptions {
 
 interface RepaymentOperationResult {
   txHash: string;
-  status: "success";
+  /**
+   * `success` when the API accepted the repayment, `queued` when it was only
+   * written to the offline queue and has not reached the API yet.
+   */
+  status: "success" | "queued";
 }
 
 export function useRepaymentOperation(options?: {
   onSuccess?: (result: RepaymentOperationResult) => void;
+  /** Called instead of `onSuccess` when the repayment was queued for replay. */
+  onQueued?: (result: RepaymentOperationResult) => void;
   onError?: (error: Error) => void;
 }) {
   const uid = useId();
@@ -81,12 +87,15 @@ export function useRepaymentOperation(options?: {
             console.error("Background sync register failed", swErr);
           }
 
-          transaction.submit(`queued-${Date.now()}`, "Queued for background sync");
-          transaction.confirm("Will retry when online");
-          transaction.complete(`queued-${Date.now()}`);
+          // The repayment has NOT been paid yet — it is only queued on this
+          // device and replayed by the service worker once connectivity returns.
+          // Reporting this as a success would tell the borrower the loan is
+          // settled when the money never moved.
+          const queueRef = `queued-${Date.now()}`;
+          transaction.queue(queueRef, "Queued — will send when you are back online");
 
-          const result = { txHash: `queued-${Date.now()}`, status: "success" as const };
-          options?.onSuccess?.(result);
+          const result = { txHash: queueRef, status: "queued" as const };
+          options?.onQueued?.(result);
           return result;
         }
 

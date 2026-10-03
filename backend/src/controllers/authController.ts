@@ -24,6 +24,9 @@ import { AppError } from '../errors/AppError.js';
 import { ErrorCode } from '../errors/errorCodes.js';
 import {
   generateChallenge,
+  storeChallenge,
+  getIssuedChallenge,
+  consumeIssuedChallenge,
   verifySignature,
   verifyChallengeTimestamp,
   generateTokenPair,
@@ -62,7 +65,7 @@ export const submitKyc = asyncHandler(async (req: Request, res: Response) => {
   });
 });
 
-export const requestChallenge = (req: Request, res: Response): void => {
+export const requestChallenge = asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const { publicKey } = req.body;
 
   if (!publicKey || typeof publicKey !== 'string') {
@@ -85,11 +88,13 @@ export const requestChallenge = (req: Request, res: Response): void => {
     throw error;
   }
 
+  await storeChallenge(publicKey, challenge);
+
   res.status(200).json({
     success: true,
     data: challenge,
   });
-};
+});
 
 export const login = asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const { publicKey, message, signature } = req.body;
@@ -121,10 +126,36 @@ export const login = asyncHandler(async (req: Request, res: Response): Promise<v
     throw AppError.unauthorized('Challenge has expired', ErrorCode.CHALLENGE_EXPIRED);
   }
 
+  const issuedChallenge = await getIssuedChallenge(publicKey, message);
+  if (
+    !issuedChallenge ||
+    issuedChallenge.publicKey !== publicKey ||
+    issuedChallenge.message !== message
+  ) {
+    logAuthFailure(req, publicKey, 'challenge_not_issued');
+    throw AppError.unauthorized(
+      'Challenge is invalid or has already been used',
+      ErrorCode.INVALID_CHALLENGE,
+    );
+  }
+
+  if (issuedChallenge.expiresAt < Date.now()) {
+    logAuthFailure(req, publicKey, 'challenge_expired');
+    throw AppError.unauthorized('Challenge has expired', ErrorCode.CHALLENGE_EXPIRED);
+  }
+
   const isValidSignature = verifySignature(publicKey, message, signature);
   if (!isValidSignature) {
     logAuthFailure(req, publicKey, 'invalid_signature');
     throw AppError.unauthorized('Invalid signature', ErrorCode.INVALID_SIGNATURE);
+  }
+
+  if (!(await consumeIssuedChallenge(publicKey, message, issuedChallenge))) {
+    logAuthFailure(req, publicKey, 'challenge_already_used');
+    throw AppError.unauthorized(
+      'Challenge is invalid or has already been used',
+      ErrorCode.INVALID_CHALLENGE,
+    );
   }
 
   const fingerprint = generateDeviceFingerprint(req);

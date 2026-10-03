@@ -233,66 +233,75 @@ export const submitRemittanceTransaction = asyncHandler(async (req: Request, res
 
   logger.withContext().info('Submitting remittance transaction', { remittanceId: id });
 
+  // Authorization and validation run before any state change: a rejected
+  // request must never modify the remittance.
+  const remittance = await remittanceService.getRemittance(id);
+
+  if (remittance.senderId !== senderAddress) {
+    throw AppError.forbidden('You do not have access to this remittance');
+  }
+
+  if (remittance.status !== 'pending') {
+    throw AppError.badRequest('Remittance has already been submitted');
+  }
+
+  remittanceService.validateSignedXdr(remittance, signedXdr);
+
+  // Atomically claim the remittance (pending -> processing). A concurrent
+  // submission loses here with a 409 and leaves the row untouched.
+  await remittanceService.updateRemittanceStatus(id, 'processing', undefined, undefined, 'pending');
+
+  let stellarResult: Awaited<ReturnType<typeof sorobanService.submitSignedTx>>;
   try {
-    const remittance = await remittanceService.getRemittance(id);
-
-    if (remittance.senderId !== senderAddress) {
-      throw AppError.forbidden('You do not have access to this remittance');
-    }
-
-    if (remittance.status !== 'pending') {
-      throw AppError.badRequest('Remittance has already been submitted');
-    }
-
-    // Update status to processing before submission
-    await remittanceService.updateRemittanceStatus(id, 'processing');
-
     // Submit signed XDR to Stellar and poll for confirmation
-    const stellarResult = await sorobanService.submitSignedTx(signedXdr);
-
-    // Persist completed status with transaction hash
-    const completed = await remittanceService.updateRemittanceStatus(
-      id,
-      'completed',
-      stellarResult.txHash,
-    );
-
-    logger.withContext().info('Remittance transaction confirmed', {
-      remittanceId: id,
-      txHash: stellarResult.txHash,
-      status: stellarResult.status,
-    });
-
-    // Notify sender of successful submission
-    await notificationService.createNotification({
-      userId: senderAddress,
-      type: 'repayment_confirmed',
-      title: 'Remittance Sent',
-      message: `Your remittance of ${remittance.amount} ${remittance.fromCurrency} was submitted successfully. Transaction: ${stellarResult.txHash}`,
-      actionUrl: `/remittances/${remittance.id}`,
-    });
-
-    res.json({
-      success: true,
-      data: {
-        id,
-        status: completed.status,
-        txHash: stellarResult.txHash,
-        message: 'Transaction confirmed on Stellar network',
-      },
-    });
+    stellarResult = await sorobanService.submitSignedTx(signedXdr);
   } catch (error) {
     logger.withContext().error('Error submitting remittance transaction:', error);
 
-    if (id) {
-      await remittanceService.updateRemittanceStatus(
-        id,
-        'failed',
-        undefined,
-        error instanceof Error ? error.message : 'Unknown error',
-      );
-    }
+    // Only a failed submission marks the remittance failed, and only from the
+    // state this request put it in.
+    await remittanceService.updateRemittanceStatus(
+      id,
+      'failed',
+      undefined,
+      error instanceof Error ? error.message : 'Unknown error',
+      'processing',
+    );
 
     throw error;
   }
+
+  // Persist completed status with transaction hash
+  const completed = await remittanceService.updateRemittanceStatus(
+    id,
+    'completed',
+    stellarResult.txHash,
+    undefined,
+    'processing',
+  );
+
+  logger.withContext().info('Remittance transaction confirmed', {
+    remittanceId: id,
+    txHash: stellarResult.txHash,
+    status: stellarResult.status,
+  });
+
+  // Notify sender of successful submission
+  await notificationService.createNotification({
+    userId: senderAddress,
+    type: 'repayment_confirmed',
+    title: 'Remittance Sent',
+    message: `Your remittance of ${remittance.amount} ${remittance.fromCurrency} was submitted successfully. Transaction: ${stellarResult.txHash}`,
+    actionUrl: `/remittances/${remittance.id}`,
+  });
+
+  res.json({
+    success: true,
+    data: {
+      id,
+      status: completed.status,
+      txHash: stellarResult.txHash,
+      message: 'Transaction confirmed on Stellar network',
+    },
+  });
 });
