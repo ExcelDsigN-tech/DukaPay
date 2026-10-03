@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
+import { describe, it, expect, beforeAll, afterAll, jest } from '@jest/globals';
 import request from 'supertest';
 import app from '../app.js';
 import { Keypair } from '@stellar/stellar-sdk';
@@ -19,6 +19,7 @@ describe('Auth API', () => {
 
       expect(response.body.success).toBe(true);
       expect(response.body.data.message).toContain('Sign this message');
+      expect(response.body.data.message).toContain('Domain:');
       expect(response.body.data.nonce).toBeDefined();
       expect(response.body.data.timestamp).toBeDefined();
       expect(response.body.data.expiresIn).toBe(5 * 60 * 1000);
@@ -41,6 +42,17 @@ describe('Auth API', () => {
   });
 
   describe('POST /api/auth/login', () => {
+    let originalTrustProxy: unknown;
+
+    beforeAll(() => {
+      originalTrustProxy = app.get('trust proxy');
+      app.set('trust proxy', 1);
+    });
+
+    afterAll(() => {
+      app.set('trust proxy', originalTrustProxy ?? false);
+    });
+
     it('should login with valid signature', async () => {
       const keypair = Keypair.random();
 
@@ -64,6 +76,63 @@ describe('Auth API', () => {
       expect(loginResponse.body.success).toBe(true);
       expect(loginResponse.body.data.token).toBeDefined();
       expect(loginResponse.body.data.publicKey).toBe(keypair.publicKey());
+    });
+
+    it('should reject a fresh message that was not issued as a challenge', async () => {
+      const keypair = Keypair.random();
+      const message = `Sign this message to authenticate with DukaPay.\n\nTimestamp: ${Date.now()}\n`;
+      const signature = keypair.sign(Buffer.from(message, 'utf-8')).toString('base64');
+
+      await request(app)
+        .post('/api/auth/login')
+        .set('X-Forwarded-For', '198.51.100.8')
+        .send({ publicKey: keypair.publicKey(), message, signature })
+        .expect(401);
+    });
+
+    it('should reject reuse of a successfully consumed challenge', async () => {
+      const keypair = Keypair.random();
+      const challenge = await request(app)
+        .post('/api/auth/challenge')
+        .send({ publicKey: keypair.publicKey() })
+        .expect(200);
+      const message = challenge.body.data.message as string;
+      const signature = keypair.sign(Buffer.from(message, 'utf-8')).toString('base64');
+      const loginPayload = { publicKey: keypair.publicKey(), message, signature };
+
+      await request(app)
+        .post('/api/auth/login')
+        .set('X-Forwarded-For', '198.51.100.9')
+        .send(loginPayload)
+        .expect(200);
+      await request(app)
+        .post('/api/auth/login')
+        .set('X-Forwarded-For', '198.51.100.9')
+        .send(loginPayload)
+        .expect(401);
+    });
+
+    it('should reject an expired server-issued challenge', async () => {
+      const keypair = Keypair.random();
+      const now = Date.now();
+      const dateNow = jest.spyOn(Date, 'now').mockReturnValue(now - 6 * 60 * 1000);
+      let message = '';
+      try {
+        const challenge = await request(app)
+          .post('/api/auth/challenge')
+          .send({ publicKey: keypair.publicKey() })
+          .expect(200);
+        message = challenge.body.data.message as string;
+      } finally {
+        dateNow.mockRestore();
+      }
+      const signature = keypair.sign(Buffer.from(message, 'utf-8')).toString('base64');
+
+      await request(app)
+        .post('/api/auth/login')
+        .set('X-Forwarded-For', '198.51.100.10')
+        .send({ publicKey: keypair.publicKey(), message, signature })
+        .expect(401);
     });
 
     it('should reject invalid signature', async () => {

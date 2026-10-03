@@ -1,9 +1,20 @@
 import { defaultCache } from "@serwist/next/worker";
 import type { PrecacheEntry } from "@serwist/precaching";
 import { Serwist } from "serwist";
+import { replayQueuedRepayments, type RepaymentSyncMessage } from "../lib/repaymentSync";
 
 declare const self: WorkerGlobalScope & {
   __SW_MANIFEST: PrecacheEntry[];
+  /**
+   * `ServiceWorkerGlobalScope` and `Client` live in lib.webworker, which this
+   * project does not include, so declare just the shape `notifyClients` uses.
+   */
+  clients: {
+    matchAll(options?: {
+      type?: string;
+      includeUncontrolled?: boolean;
+    }): Promise<Array<{ postMessage(message: unknown): void }>>;
+  };
   addEventListener: typeof globalThis.addEventListener;
 };
 
@@ -29,7 +40,9 @@ const serwist = new Serwist({
 
 serwist.addEventListeners();
 
-// Background sync: process queued repayments when connectivity is restored
+// Background sync: replay repayments that were queued while offline.
+// The replay logic lives in src/lib/repaymentSync.ts so it can be unit tested;
+// this handler only owns the `sync` event and the client messaging.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- SyncEvent not in standard TS lib
 self.addEventListener("sync", (event: any) => {
   if (event.tag !== "sync-repayments") return;
@@ -37,59 +50,24 @@ self.addEventListener("sync", (event: any) => {
   event.waitUntil(
     (async () => {
       try {
-        // Open the same IndexedDB used by the client queue
-        const DB_NAME = "dukapay-offline-queue";
-        const STORE = "repayments";
-
-        const openDb = () =>
-          new Promise<IDBDatabase>((resolve, reject) => {
-            const req = indexedDB.open(DB_NAME, 1);
-            req.onupgradeneeded = () => {
-              const db = req.result;
-              if (!db.objectStoreNames.contains(STORE)) {
-                db.createObjectStore(STORE, { keyPath: "id", autoIncrement: true });
-              }
-            };
-            req.onsuccess = () => resolve(req.result);
-            req.onerror = () => reject(req.error);
-          });
-
-        const db = await openDb();
-        const tx = db.transaction(STORE, "readwrite");
-        const store = tx.objectStore(STORE);
-        const allReq = store.getAll();
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- IndexedDB result
-        const items: any[] = await new Promise((res, rej) => {
-          allReq.onsuccess = () => res(allReq.result as any[]); // eslint-disable-line @typescript-eslint/no-explicit-any
-          allReq.onerror = () => rej(allReq.error);
-        });
-
-        for (const item of items) {
-          try {
-            // Submit to server endpoint
-            await fetch(`/loans/${item.loanId}/repay`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ amount: item.amount }),
-              credentials: "same-origin",
-            });
-
-            // Remove from queue on success
-            await new Promise<void>((resolve, reject) => {
-              const delReq = store.delete(item.id);
-              delReq.onsuccess = () => resolve();
-              delReq.onerror = () => reject(delReq.error);
-            });
-          } catch (e) {
-            // If any item fails, leave it in the store and continue with others
-            // eslint-disable-next-line no-console
-            console.error("Failed to submit queued repayment", item, e);
-          }
-        }
+        await replayQueuedRepayments({ notify: notifyClients });
       } catch (err) {
-        // eslint-disable-next-line no-console
+        // Rethrowing rejects waitUntil, which makes the browser retry the sync
+        // later instead of silently dropping the queued repayments.
         console.error("Background sync processing failed:", err);
+        throw err;
       }
     })(),
   );
 });
+
+/** Posts a sync outcome to every window client so the UI can react. */
+async function notifyClients(message: RepaymentSyncMessage) {
+  const clients = await self.clients.matchAll({
+    type: "window",
+    includeUncontrolled: true,
+  });
+  for (const client of clients) {
+    client.postMessage(message);
+  }
+}

@@ -19,7 +19,7 @@ npm install @dukapay/sdk
 ## Quick start
 
 ```ts
-import { DukaPayClient, FreighterAdapter, ContractHelpers } from '@dukapay/sdk';
+import { DukaPayClient, FreighterAdapter } from '@dukapay/sdk';
 
 const client = new DukaPayClient({
   baseUrl: 'https://api.dukapay.io',
@@ -32,11 +32,14 @@ await client.loginWithWallet();
 
 // Typed calls
 const me = await client.address();
-const { items: loans } = await client.loans.list({ borrower: me! });
+const { loans } = await client.loans.list({ borrower: me! });
 
-// Build + sign + submit a repayment
-const unsigned = await client.loans.buildRepay(loans[0].id, ContractHelpers.toStroops('25'));
-await client.signAndSubmit(unsigned, (xdr) => client.loans.submit(loans[0].id, xdr));
+// Build + sign + submit a repayment (amount is a positive integer in base units)
+const unsigned = await client.loans.buildRepay(loans[0].loanId, 25, me!);
+await client.signAndSubmit(
+  { xdr: unsigned.unsignedTxXdr },
+  (xdr) => client.loans.submit(loans[0].loanId, xdr),
+);
 ```
 
 ## React

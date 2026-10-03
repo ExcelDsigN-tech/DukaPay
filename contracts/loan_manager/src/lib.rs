@@ -37,6 +37,7 @@ pub trait LendingPoolInterface {
     fn get_total_outstanding(env: Env, token: Address) -> i128;
     fn record_loan_yield(env: Env, token: Address, amount: i128);
     fn record_loan_loss(env: Env, token: Address, amount: i128);
+    fn disburse(env: Env, to: Address, token: Address, amount: i128);
 }
 
 mod events;
@@ -1285,8 +1286,6 @@ impl LoanManager {
     /// not pending; and [`LoanError::InsufficientPoolLiquidity`] when available
     /// pool liquidity is below the loan amount.
     pub fn approve_loan(env: Env, loan_id: u32) -> Result<(), LoanError> {
-        use soroban_sdk::token::TokenClient;
-
         // ── CHECKS ──────────────────────────────────────────────────────────
         let admin = Self::admin(&env);
         admin.require_auth();
@@ -1349,8 +1348,8 @@ impl LoanManager {
         Self::bump_persistent_ttl(&env, &loan_key);
 
         // ── INTERACTIONS (external calls last) ──────────────────────────────
-        let token_client = TokenClient::new(&env, &token);
-        token_client.transfer(&lending_pool, &borrower, &transfer_amount);
+        let pool_client = PoolClient::new(&env, &lending_pool);
+        pool_client.disburse(&borrower, &token, &transfer_amount);
 
         events::loan_approved(
             &env,
@@ -2146,7 +2145,8 @@ impl LoanManager {
                 if available_liquidity < additional {
                     return Err(LoanError::InsufficientPoolLiquidity);
                 }
-                token_client.transfer(&lending_pool, &loan.borrower, &additional);
+                let pool_client = PoolClient::new(&env, &lending_pool);
+                pool_client.disburse(&loan.borrower, &token, &additional);
             }
             core::cmp::Ordering::Less => {
                 // Borrower returns the excess principal to the pool.

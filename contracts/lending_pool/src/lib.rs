@@ -45,6 +45,7 @@ pub enum PoolError {
     CallDepthExceeded = 19,
     ReentrancyGuardTriggered = 20,
     CircuitBreakerTripped = 21,
+    Unauthorized = 22,
 }
 
 /// Storage keys.
@@ -291,6 +292,11 @@ impl LendingPool {
             }
         }
         Ok(())
+    }
+
+    fn loan_manager(env: &Env) -> Option<Address> {
+        Self::bump_instance_ttl(env);
+        env.storage().instance().get(&DataKey::LoanManager)
     }
 
     // ── Reentrancy Guard (CEI + nonReentrant) ───────────────────────────────
@@ -540,16 +546,6 @@ impl LendingPool {
             .set(&DataKey::Version, &Self::CURRENT_VERSION);
         Self::bump_instance_ttl(&env);
         Ok(())
-    }
-
-    /// Configure the loan-manager contract allowed to report loan income and
-    /// realized principal losses. The admin may replace the address.
-    pub fn set_loan_manager(env: Env, loan_manager: Address) {
-        Self::admin(&env).require_auth();
-        env.storage()
-            .instance()
-            .set(&DataKey::LoanManager, &loan_manager);
-        Self::bump_instance_ttl(&env);
     }
 
     fn require_loan_manager(env: &Env) -> Result<(), PoolError> {
@@ -1226,6 +1222,44 @@ impl LendingPool {
         Self::read_pool_balance(&env, &token)
     }
 
+    /// Configure the address authorized to call `disburse` (the loan_manager).
+    /// Admin only.
+    pub fn set_loan_manager(env: Env, loan_manager: Address) {
+        Self::admin(&env).require_auth();
+        env.storage()
+            .instance()
+            .set(&DataKey::LoanManager, &loan_manager);
+        Self::bump_instance_ttl(&env);
+    }
+
+    pub fn get_loan_manager(env: Env) -> Option<Address> {
+        Self::loan_manager(&env)
+    }
+
+    /// Transfer `amount` of `token` from the pool to `to`. Only the
+    /// configured loan_manager may trigger this. The pool authorizes the
+    /// transfer itself via `current_contract_address`, so the loan_manager
+    /// does not need to hold the funds or authorize the token transfer.
+    pub fn disburse(env: Env, to: Address, token: Address, amount: i128) -> Result<(), PoolError> {
+        let loan_manager = Self::loan_manager(&env).ok_or(PoolError::Unauthorized)?;
+        loan_manager.require_auth();
+        Self::assert_not_paused(&env)?;
+        Self::assert_circuit_ok(&env, symbol_short!("disburse"))?;
+
+        if amount <= 0 {
+            return Err(PoolError::InvalidAmount);
+        }
+
+        let idle_balance = Self::read_pool_balance(&env, &token);
+        if amount > idle_balance {
+            return Err(PoolError::InsufficientLiquidity);
+        }
+
+        TokenClient::new(&env, &token).transfer(&env.current_contract_address(), &to, &amount);
+
+        Ok(())
+    }
+
     /// Commit a settlement transaction commitment hash to prevent front-running/MEV.
     pub fn commit_settlement(
         env: Env,
@@ -1291,46 +1325,6 @@ impl LendingPool {
             (Symbol::new(&env, "SettlementRevealed"), settler, token),
             amount,
         );
-        Ok(())
-    }
-
-    /// Enter cross-contract execution with Reentrancy Guard & Call Depth checks (max 3).
-    pub fn enter_cross_contract_call(env: &Env) -> Result<(), PoolError> {
-        let current_depth: u32 = env
-            .storage()
-            .instance()
-            .get(&DataKey::CallDepth)
-            .unwrap_or(0);
-        if current_depth >= 3 {
-            return Err(PoolError::CallDepthExceeded);
-        }
-        env.storage()
-            .instance()
-            .set(&DataKey::ReentrancyLock, &true);
-        env.storage()
-            .instance()
-            .set(&DataKey::CallDepth, &(current_depth + 1));
-        Ok(())
-    }
-
-    /// Exit cross-contract execution and reset call depth counter.
-    pub fn exit_cross_contract_call(env: &Env) -> Result<(), PoolError> {
-        let current_depth: u32 = env
-            .storage()
-            .instance()
-            .get(&DataKey::CallDepth)
-            .unwrap_or(0);
-        let next_depth = current_depth
-            .checked_sub(1)
-            .ok_or(PoolError::ReentrancyGuardTriggered)?;
-        env.storage()
-            .instance()
-            .set(&DataKey::CallDepth, &next_depth);
-        if next_depth == 0 {
-            env.storage()
-                .instance()
-                .set(&DataKey::ReentrancyLock, &false);
-        }
         Ok(())
     }
 }

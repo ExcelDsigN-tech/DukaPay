@@ -58,8 +58,9 @@ fn setup_test<'a>(
     let loan_manager_client = LoanManagerClient::new(env, &loan_manager_id);
     pool_client.set_loan_manager(&loan_manager_id);
 
-    // Authorize LoanManager on NFT contract before initialization
+    // Authorize LoanManager on NFT and pool contract before initialization
     nft_client.authorize_minter(&loan_manager_id);
+    pool_client.set_loan_manager(&loan_manager_id);
 
     // 5. Initialize the Loan Manager with the NFT contract, lending pool, token, admin, and governance
     let governance = Address::generate(env);
