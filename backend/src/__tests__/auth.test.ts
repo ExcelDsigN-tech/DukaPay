@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, jest } from '@jest/globals';
 import request from 'supertest';
 import app from '../app.js';
+import { cacheService } from '../services/cacheService.js';
 import { Keypair } from '@stellar/stellar-sdk';
 
 describe('Auth API', () => {
@@ -235,6 +236,25 @@ describe('Auth API', () => {
       const originalNodeEnv = process.env.NODE_ENV;
       process.env.NODE_ENV = 'production';
 
+      // Outside NODE_ENV=test, challenges live in Redis, which CI doesn't run.
+      // Back the three challenge-store calls with a Map so the real
+      // store/verify/consume flow still runs.
+      const store = new Map<string, string>();
+      const spies = [
+        jest.spyOn(cacheService, 'setRequired').mockImplementation(async (key, value) => {
+          store.set(key, JSON.stringify(value));
+        }),
+        jest.spyOn(cacheService, 'get').mockImplementation(async (key) => {
+          const value = store.get(key);
+          return value === undefined ? null : JSON.parse(value);
+        }),
+        jest.spyOn(cacheService, 'deleteIfMatch').mockImplementation(async (key, expected) => {
+          if (store.get(key) !== JSON.stringify(expected)) return false;
+          store.delete(key);
+          return true;
+        }),
+      ];
+
       try {
         const keypair = Keypair.random();
 
@@ -255,6 +275,7 @@ describe('Auth API', () => {
         expect(accessCookie).toContain('Secure');
       } finally {
         process.env.NODE_ENV = originalNodeEnv;
+        spies.forEach((spy) => spy.mockRestore());
       }
     });
   });
