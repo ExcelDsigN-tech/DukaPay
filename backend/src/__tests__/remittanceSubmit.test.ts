@@ -85,6 +85,10 @@ const submit = (publicKey: string) =>
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // clearAllMocks keeps implementations; reset the ones tests override so a
+  // throwing validator or rejecting submit doesn't leak into later tests.
+  mockValidateSignedXdr.mockReset();
+  mockSubmitSignedTx.mockReset();
   mockGetRemittance.mockResolvedValue({ ...baseRemittance });
   mockUpdateStatus.mockImplementation(async (_id, status, txHash) => ({
     ...baseRemittance,
