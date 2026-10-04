@@ -132,19 +132,23 @@ describe('dispatch-time IP validation (DNS-rebinding SSRF guard)', () => {
   it('retryWebhookDelivery blocks when callback URL now resolves to private IP', async () => {
     mockResolve4.mockResolvedValue(['172.16.0.1']);
 
-    await expect(
-      WebhookService.retryWebhookDelivery(
-        10,
-        1,
-        'https://rebind.example.com/hook',
-        undefined,
-        'evt-retry-001',
-        'LoanApproved',
-        { eventId: 'evt-retry-001', eventType: 'LoanApproved' },
-        1,
-      ),
-    ).rejects.toThrow(/disallowed address/i);
+    // Retry records failures on the delivery row instead of throwing, so one
+    // blocked delivery can't abort the rest of the processRetries batch.
+    await WebhookService.retryWebhookDelivery(
+      10,
+      1,
+      'https://rebind.example.com/hook',
+      undefined,
+      'evt-retry-001',
+      'LoanApproved',
+      { eventId: 'evt-retry-001', eventType: 'LoanApproved' },
+      1,
+    );
 
     expect(mockFetch).not.toHaveBeenCalled();
+    const [sql, params] = mockQuery.mock.calls[0] as unknown as [string, unknown[]];
+    expect(sql).toContain('UPDATE webhook_deliveries');
+    expect(params[1]).toMatch(/disallowed address/i); // last_error
+    expect(params[2]).toBeNull(); // next_retry_at: no retry for a blocked URL
   });
 });
