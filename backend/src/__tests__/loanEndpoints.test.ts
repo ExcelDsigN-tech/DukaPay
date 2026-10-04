@@ -116,6 +116,8 @@ jest.unstable_mockModule('../services/sorobanService.js', () => ({
 await import('../db/connection.js');
 await import('../services/sorobanService.js');
 const { default: app } = await import('../app.js');
+const { strictRateLimiter } = await import('../middleware/rateLimiter.js');
+const { ipKeyGenerator } = await import('express-rate-limit');
 
 const mockedQuery = mockQuery;
 
@@ -136,6 +138,9 @@ const bearerWithScopes = (publicKey: string, scopes: string[]) => ({
 beforeEach(() => {
   mockedQuery.mockReset();
   jest.clearAllMocks();
+  // strictRateLimiter (10 req / 45 min per IP) stays active under test; clear
+  // supertest's loopback counters so each test starts with a fresh budget.
+  for (const ip of ['127.0.0.1', '::1']) strictRateLimiter.resetKey(ipKeyGenerator(ip));
 });
 
 afterAll(() => {
