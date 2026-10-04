@@ -125,7 +125,7 @@ export async function storeChallenge(
     return;
   }
 
-  await cacheService.setOrThrow(key, stored, Math.ceil(challenge.expiresIn / 1000));
+  await cacheService.setRequired(key, stored, Math.ceil(challenge.expiresIn / 1000));
 }
 
 export async function getIssuedChallenge(
