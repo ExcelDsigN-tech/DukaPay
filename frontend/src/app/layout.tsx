@@ -39,7 +39,7 @@ export default async function RootLayout({
 }>) {
   const locale = await getLocale();
   const messages = await getMessages();
-  
+
   // Await headers() in Next.js 15+
   const headersList = await headers();
   const nonce = headersList.get("x-nonce") || undefined;

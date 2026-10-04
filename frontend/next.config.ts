@@ -25,7 +25,6 @@ const withSerwist = withSerwistInit({
 // render, dev and prod alike. We now use a nonce-based CSP via middleware
 // to secure these hydration scripts without relying on 'unsafe-inline'.
 
-
 const nextConfig: NextConfig = {
   reactCompiler: true,
   // Issue #407: Security headers for XSS prevention

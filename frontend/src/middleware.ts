@@ -31,7 +31,9 @@ export default function middleware(request: NextRequest) {
     font-src 'self' https: data:;
     connect-src 'self' https: ${apiUrl};
     frame-ancestors 'self';
-  `.replace(/\s{2,}/g, " ").trim();
+  `
+    .replace(/\s{2,}/g, " ")
+    .trim();
 
   // 4. Set headers in response
   response.headers.set("Content-Security-Policy", cspHeader);
@@ -41,7 +43,7 @@ export default function middleware(request: NextRequest) {
   // Next.js uses the 'x-middleware-request-' prefix to pass headers downstream.
   response.headers.set("x-middleware-request-x-nonce", nonce);
   response.headers.set("x-middleware-request-content-security-policy", cspHeader);
-  
+
   return response;
 }
 
