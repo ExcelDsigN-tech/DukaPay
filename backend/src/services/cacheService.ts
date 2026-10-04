@@ -174,7 +174,7 @@ return 0
    * @returns true if the key existed and the value matched (key deleted),
    *          false if the key was absent or the value did not match.
    */
-  async deleteIfMatch(key: string, expectedValue: string): Promise<boolean> {
+  async deleteIfMatch(key: string, expectedValue: unknown): Promise<boolean> {
     try {
       await this.ensureConnected();
       const result = await this.client!.eval(CacheService.COMPARE_AND_DELETE_SCRIPT, {

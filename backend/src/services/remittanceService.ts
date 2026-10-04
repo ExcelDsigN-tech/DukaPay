@@ -436,7 +436,7 @@ export const remittanceService = {
     const mismatch = (detail: string) =>
       AppError.badRequest(`signedXdr does not match remittance: ${detail}`, undefined, 'signedXdr');
 
-    if (tx.operations.length !== 1 || tx.operations[0].type !== 'payment') {
+    if (tx.operations.length !== 1 || tx.operations[0]?.type !== 'payment') {
       throw mismatch('expected exactly one payment operation');
     }
     const op = tx.operations[0] as Operation.Payment;

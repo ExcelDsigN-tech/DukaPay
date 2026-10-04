@@ -2,7 +2,7 @@ import { query } from '../db/connection.js';
 import logger from '../utils/logger.js';
 import type { Response } from 'express';
 
-// ─── Types ─────────────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 export type NotificationType =
   | 'loan_approved'
@@ -44,7 +44,7 @@ export interface NotificationPreferences {
   digestFrequency?: 'off' | 'daily' | 'weekly';
 }
 
-// ─── SSE subscriber registry ────────────────────────────────────────────────────────────────────────
+// ─── SSE subscriber registry ──────────────────────────────────────────────────
 // Maps userId → set of SSE response streams currently listening.
 // No persistence needed — streams are in-process only.
 
@@ -269,7 +269,7 @@ class NotificationService {
     const userIds = [...new Set(notifications.map((n) => n.userId))];
     const prefMap = new Map<string, string>();
     if (userIds.length > 0) {
-      const placeholders = userIds.map((_, i) => `${i + 1}`).join(', ');
+      const placeholders = userIds.map((_, i) => `$${i + 1}`).join(', ');
       const prefResult = await query(
         `SELECT user_id, digest_frequency FROM user_notification_preferences
          WHERE user_id IN (${placeholders})`,
@@ -386,99 +386,283 @@ class NotificationService {
 
     const result = await query(
       `SELECT id, user_id, type, title, message, loan_id, action_url, read, status, created_at
-       FROM notifications
-       WHERE ${whereClause}
-       ORDER BY created_at DESC
-       LIMIT -- placeholder replaced below
-       `,
-      params,
+         FROM notifications
+         WHERE ${whereClause}
+         ORDER BY created_at DESC
+         LIMIT $${paramIndex}`,
+      [...params, limit],
     );
-
-    return result.rows.map((row) => this.mapRow(row));
+    return result.rows.map(this.mapRow);
   }
 
   /**
-   * Marks a notification as read.
+   * Returns the unread notification count for a user.
    */
-  async markAsRead(userId: string, notificationId: number): Promise<boolean> {
+  async getUnreadCount(userId: string): Promise<number> {
     const result = await query(
-      `UPDATE notifications
-       SET read = true, status = 'read'
-       WHERE id = $1 AND user_id = $2
-       RETURNING id`,
-      [notificationId, userId],
+      `SELECT COUNT(*) AS count FROM notifications WHERE user_id = $1 AND status = 'unread'`,
+      [userId],
     );
-    return result.rows.length > 0;
+    return parseInt(result.rows[0]?.count ?? '0', 10);
   }
 
   /**
-   * Archives a notification.
+   * Marks specific notifications as read.
+   * Only updates rows that belong to the given user to prevent cross-user access.
    */
-  async archiveNotification(userId: string, notificationId: number): Promise<boolean> {
-    const result = await query(
-      `UPDATE notifications
-       SET status = 'archived'
-       WHERE id = $1 AND user_id = $2
-       RETURNING id`,
-      [notificationId, userId],
+  async markRead(userId: string, ids: number[]): Promise<void> {
+    if (!ids.length) return;
+    await query(
+      `UPDATE notifications SET read = true, status = 'read'
+       WHERE user_id = $1 AND id = ANY($2::int[]) AND status = 'unread'`,
+      [userId, ids],
     );
-    return result.rows.length > 0;
   }
 
   /**
-   * Registers an SSE client for a user and returns an unsubscribe function.
+   * Marks all notifications for a user as read.
    */
-  subscribe(userId: string, client: SseClient): () => void {
+  async markAllRead(userId: string): Promise<void> {
+    await query(
+      `UPDATE notifications SET read = true, status = 'read'
+       WHERE user_id = $1 AND status = 'unread'`,
+      [userId],
+    );
+  }
+
+  /**
+   * Archives specific notifications for a user.
+   * Archived notifications are excluded from the main feed and cleaned up sooner.
+   */
+  async archiveNotifications(userId: string, ids: number[]): Promise<void> {
+    if (!ids.length) return;
+    await query(
+      `UPDATE notifications SET read = true, status = 'archived'
+       WHERE user_id = $1 AND id = ANY($2::int[]) AND status != 'archived'`,
+      [userId, ids],
+    );
+  }
+
+  /**
+   * Notifies all admins of a dispute via:
+   * 1. Email to ADMIN_EMAIL (if configured)
+   * 2. In-app SSE push to each admin wallet currently subscribed
+   * 3. Webhook POST to ADMIN_WEBHOOK_URL (if configured)
+   */
+  async notifyAdmins(params: { title: string; message: string; loanId?: number }): Promise<void> {
+    const { title, message, loanId } = params;
+
+    // 1. Email the configured admin address
+    const adminEmail = process.env.ADMIN_EMAIL;
+    if (adminEmail) {
+      await sendEmail(adminEmail, message);
+    } else {
+      logger.withContext().warn('[Admin] ADMIN_EMAIL not set — logging dispute only', {
+        title,
+        message,
+      });
+    }
+
+    // 2. Push SSE notification to every admin currently connected
+    try {
+      const adminWallets = (process.env.ADMIN_WALLETS ?? '')
+        .split(',')
+        .map((w) => w.trim())
+        .filter((w) => w.length > 0);
+
+      for (const adminId of adminWallets) {
+        const actionUrl = loanId != null ? `/loans/${loanId}` : null;
+        const result = await query(
+          `INSERT INTO notifications (user_id, type, title, message, loan_id, action_url, status)
+           VALUES ($1, 'loan_defaulted', $2, $3, $4, $5, 'unread')
+           RETURNING id, user_id, type, title, message, loan_id, action_url, read, status, created_at`,
+          [adminId, title, message, loanId ?? null, actionUrl],
+        );
+        const notification = this.mapRow(result.rows[0]);
+        this.broadcast(adminId, notification);
+      }
+    } catch (err) {
+      logger.withContext().error('[Admin] Failed to persist/push admin notifications', {
+        err,
+      });
+    }
+
+    // 3. Optional webhook (Slack / Discord / custom)
+    const webhookUrl = process.env.ADMIN_WEBHOOK_URL;
+    if (webhookUrl) {
+      try {
+        await fetch(webhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: `[DukaPay] ${title}: ${message}` }),
+        });
+      } catch (err) {
+        logger.withContext().error('[Admin] Webhook POST failed', { webhookUrl, err });
+      }
+    }
+  }
+
+  // ─── SSE helpers ────────────────────────────────────────────────────────────
+
+  /**
+   * Registers an SSE response stream for the given user.
+   * Returns an unsubscribe function that should be called when the client
+   * disconnects.
+   */
+  subscribe(userId: string, res: SseClient): () => void {
     if (!sseClients.has(userId)) {
       sseClients.set(userId, new Set());
     }
-    sseClients.get(userId)!.add(client);
+    sseClients.get(userId)!.add(res);
 
     return () => {
-      const set = sseClients.get(userId);
-      if (!set) return;
-      set.delete(client);
-      if (set.size === 0) {
+      sseClients.get(userId)?.delete(res);
+      if (sseClients.get(userId)?.size === 0) {
         sseClients.delete(userId);
       }
     };
   }
 
   /**
-   * Broadcasts a notification to all active SSE clients for a user.
+   * Pushes a notification to all active SSE streams for the given user.
    */
-  broadcast(userId: string, notification: Notification): void {
+  private broadcast(userId: string, notification: Notification): void {
     const clients = sseClients.get(userId);
-    if (!clients || clients.size === 0) return;
+    if (!clients?.size) return;
 
-    const payload = `data: ${JSON.stringify(notification)}\n\n`;
-    for (const client of clients) {
+    const data = `data: ${JSON.stringify(notification)}\n\n`;
+    for (const res of clients) {
       try {
-        client.write(payload);
-      } catch {
-        clients.delete(client);
+        res.write(data);
+      } catch (err) {
+        logger.withContext().error('SSE write error', { userId, err });
+        clients.delete(res);
       }
     }
   }
 
   /**
-   * Maps a database row to a Notification object.
+   * Deletes notifications older than the specified number of days.
+   * @param retentionDays The number of days to keep notifications.
+   * @returns The number of deleted notifications.
    */
-  private mapRow(row: any): Notification {
-    return {
-      id: row.id,
-      userId: row.user_id,
-      type: row.type,
-      title: row.title,
-      message: row.message,
-      loanId: row.loan_id ?? undefined,
-      actionUrl: row.action_url ?? null,
-      read: Boolean(row.read),
-      status: row.status,
-      createdAt: row.created_at,
+  async deleteOldNotifications(retentionDays: number): Promise<number> {
+    try {
+      const result = await query(
+        `DELETE FROM notifications
+         WHERE created_at < NOW() - (INTERVAL '1 day' * $1)`,
+        [retentionDays],
+      );
+      const deletedCount = result.rowCount ?? 0;
+      if (deletedCount > 0) {
+        logger.withContext().info(`Notification cleanup completed: ${deletedCount} rows deleted`, {
+          retentionDays,
+        });
+      }
+      return deletedCount;
+    } catch (error) {
+      logger.withContext().error('Error during notification cleanup', {
+        error,
+        retentionDays,
+      });
+      return 0;
+    }
+  }
+
+  /**
+   * Deletes read and archived notifications older than the specified number of days.
+   * Acknowledged notifications are cleaned up on a shorter retention cycle than unread ones.
+   * @param retentionDays The number of days to keep read/archived notifications.
+   * @returns The number of deleted notifications.
+   */
+  async deleteReadAndArchived(retentionDays: number): Promise<number> {
+    try {
+      const result = await query(
+        `DELETE FROM notifications
+         WHERE status IN ('read', 'archived')
+           AND created_at < NOW() - (INTERVAL '1 day' * $1)`,
+        [retentionDays],
+      );
+      const deletedCount = result.rowCount ?? 0;
+      if (deletedCount > 0) {
+        logger
+          .withContext()
+          .info(`Read/archived notification cleanup completed: ${deletedCount} rows deleted`, {
+            retentionDays,
+          });
+      }
+      return deletedCount;
+    } catch (error) {
+      logger.withContext().error('Error during read/archived notification cleanup', {
+        error,
+        retentionDays,
+      });
+      return 0;
+    }
+  }
+
+  // ─── Row mapper ──────────────────────────────────────────────────────────────
+
+  private mapRow(row: Record<string, unknown>): Notification {
+    const loanId = row.loan_id != null ? (row.loan_id as number) : undefined;
+    const actionUrl = row.action_url != null ? (row.action_url as string) : undefined;
+    const base = {
+      id: row.id as number,
+      userId: row.user_id as string,
+      type: row.type as NotificationType,
+      title: row.title as string,
+      message: row.message as string,
+      read: row.read as boolean,
+      status: (row.status as NotificationStatus) ?? (row.read ? 'read' : 'unread'),
+      createdAt: new Date(row.created_at as string),
     };
+    // Keep optional fields omitted rather than null so the mapped shape is
+    // consistent (loanId is treated the same way).
+    const withLoan = loanId !== undefined ? { ...base, loanId } : base;
+    return actionUrl !== undefined ? { ...withLoan, actionUrl } : withLoan;
   }
 }
 
 export const notificationService = new NotificationService();
-export default notificationService;
+
+let cleanupInterval: ReturnType<typeof setInterval> | undefined;
+
+/**
+ * Starts a periodic scheduler to clean up old notifications based on retention policy.
+ */
+export function startNotificationCleanupScheduler(): void {
+  if (cleanupInterval) return;
+
+  const retentionDays = parseInt(process.env.NOTIFICATION_RETENTION_DAYS || '90', 10);
+  const readRetentionDays = parseInt(process.env.READ_NOTIFICATION_RETENTION_DAYS || '30', 10);
+  const intervalMs = parseInt(
+    process.env.NOTIFICATION_CLEANUP_INTERVAL_MS || String(24 * 60 * 60 * 1000), // Default: 24h
+    10,
+  );
+
+  // Run once immediately on start to clear any backlog
+  void notificationService.deleteOldNotifications(retentionDays);
+  void notificationService.deleteReadAndArchived(readRetentionDays);
+
+  cleanupInterval = setInterval(async () => {
+    await notificationService.deleteOldNotifications(retentionDays);
+    await notificationService.deleteReadAndArchived(readRetentionDays);
+  }, intervalMs);
+
+  logger.withContext().info('Notification cleanup scheduler started', {
+    retentionDays,
+    readRetentionDays,
+    intervalMs,
+  });
+}
+
+/**
+ * Stops the notification cleanup scheduler.
+ */
+export function stopNotificationCleanupScheduler(): void {
+  if (cleanupInterval) {
+    clearInterval(cleanupInterval);
+    cleanupInterval = undefined;
+    logger.withContext().info('Notification cleanup scheduler stopped');
+  }
+}
