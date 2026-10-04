@@ -39,6 +39,9 @@ function isPrivateIp(ip: string): boolean {
   return false;
 }
 
+/** Thrown when a callback URL points at a private address; retrying won't help. */
+class DisallowedCallbackUrlError extends Error {}
+
 /**
  * Resolves the hostname in callbackUrl and throws if any resolved address
  * is a private/loopback/link-local IP, preventing SSRF via DNS rebinding.
@@ -60,7 +63,9 @@ async function assertCallbackUrlSafe(callbackUrl: string): Promise<void> {
       logger.withContext().warn('Webhook dispatch blocked: callback URL resolves to private IP', {
         hostname,
       });
-      throw new Error(`Webhook callback URL resolves to a disallowed address: ${hostname}`);
+      throw new DisallowedCallbackUrlError(
+        `Webhook callback URL resolves to a disallowed address: ${hostname}`,
+      );
     }
     return;
   }
@@ -79,7 +84,7 @@ async function assertCallbackUrlSafe(callbackUrl: string): Promise<void> {
       logger.withContext().warn('Webhook dispatch blocked: callback URL resolves to private IP', {
         hostname,
       });
-      throw new Error(`Webhook callback URL resolves to a disallowed address`);
+      throw new DisallowedCallbackUrlError(`Webhook callback URL resolves to a disallowed address`);
     }
   }
 }
@@ -659,8 +664,9 @@ export class WebhookService {
       }
     } catch (error) {
       const newAttemptCount = attemptCount + 1;
+      // A blocked (private-address) callback fails every retry, so stop now.
       const nextRetryTime =
-        newAttemptCount < MAX_RETRY_ATTEMPTS
+        newAttemptCount < MAX_RETRY_ATTEMPTS && !(error instanceof DisallowedCallbackUrlError)
           ? new Date(Date.now() + getRetryDelayMs(newAttemptCount))
           : null;
 
