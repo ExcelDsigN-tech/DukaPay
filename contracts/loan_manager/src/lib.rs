@@ -253,10 +253,14 @@ impl LoanManager {
     /// excess is realized interest/fees, while a shortfall is a principal loss.
     fn record_pool_recovery(env: &Env, token: &Address, principal: i128, recovered: i128) {
         let pool = PoolClient::new(env, &Self::lending_pool(env));
-        if recovered > principal {
-            pool.record_loan_yield(token, &(recovered - principal));
-        } else if principal > recovered {
-            pool.record_loan_loss(token, &(principal - recovered));
+        match recovered.cmp(&principal) {
+            core::cmp::Ordering::Greater => {
+                pool.record_loan_yield(token, &(recovered - principal));
+            }
+            core::cmp::Ordering::Less => {
+                pool.record_loan_loss(token, &(principal - recovered));
+            }
+            core::cmp::Ordering::Equal => {}
         }
     }
 
