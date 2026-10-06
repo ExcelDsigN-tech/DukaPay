@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import {
-  BadgeCheck,
+  FlaskConical,
   HandCoins,
   Landmark,
   Send,
@@ -155,10 +155,10 @@ export function LandingPage({ onConnect }: LandingPageProps) {
 
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <span className="inline-flex items-center gap-1.5 rounded-full border border-[#22C55E]/40 bg-[#22C55E]/10 px-3 py-1 text-xs font-semibold text-[#22C55E]">
-                <BadgeCheck className="h-4 w-4" aria-hidden="true" />
-                {t("verified.audit")}
+                <FlaskConical className="h-4 w-4" aria-hidden="true" />
+                {t("verified.status")}
               </span>
-              <span className="text-sm text-[#64748B]">{t("verified.auditDesc")}</span>
+              <span className="text-sm text-[#64748B]">{t("verified.statusDesc")}</span>
             </div>
           </div>
 

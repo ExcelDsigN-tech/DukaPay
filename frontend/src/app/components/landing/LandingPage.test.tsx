@@ -21,11 +21,12 @@ const EN: Record<string, string> = {
   "arsenal.questsTitle": "Gamified Quests",
   "arsenal.questsDesc": "Earn XP rewards for financial actions",
   "arsenal.vaultsTitle": "Secure Vaults",
-  "arsenal.vaultsDesc": "Audited smart contract infrastructure",
+  "arsenal.vaultsDesc": "Smart contract infrastructure on Stellar",
   "verified.eyebrow": "Verified Growth",
   "verified.title": "Built to be trusted",
-  "verified.audit": "Certified",
-  "verified.auditDesc": "Audited by independent security firms",
+  "verified.status": "Testnet only",
+  "verified.statusDesc":
+    "Contracts run on Stellar testnet. Every transaction is shown to you before you sign.",
   "verified.stellarTitle": "Stellar Network",
   "verified.stellarDesc": "Low fees, high-speed settlement, on-chain transparency",
   "gates.eyebrow": "The Gates are Opening",
@@ -86,6 +87,10 @@ describe("LandingPage", () => {
     expect(screen.getByText("Verified Growth")).toBeInTheDocument();
     expect(screen.getByText("Stellar Network")).toBeInTheDocument();
     expect(screen.getByText(EN["verified.stellarDesc"])).toBeInTheDocument();
+    expect(screen.getByText(EN["verified.status"])).toBeInTheDocument();
+    expect(screen.getByText(EN["verified.statusDesc"])).toBeInTheDocument();
+    // No audit claims until an independent audit report exists.
+    expect(screen.queryByText(/audit/i)).not.toBeInTheDocument();
   });
 
   it("renders the closing Gates module and its Claim Access CTA calls onConnect", () => {

@@ -629,13 +629,13 @@
       "questsTitle": "Gamified na Quest",
       "questsDesc": "Kumita ng XP rewards para sa mga financial action",
       "vaultsTitle": "Ligtas na Vaults",
-      "vaultsDesc": "Audited na smart contract infrastructure"
+      "vaultsDesc": "Smart contract infrastructure sa Stellar"
     },
     "verified": {
       "eyebrow": "Verified Growth",
       "title": "Itinayo para mapagkatiwalaan",
-      "audit": "Sertipikado",
-      "auditDesc": "Na-audit ng mga independiyenteng security firm",
+      "status": "Testnet lang",
+      "statusDesc": "Tumatakbo ang mga contract sa Stellar testnet. Ipinapakita sa iyo ang bawat transaction bago ka pumirma.",
       "stellarTitle": "Stellar Network",
       "stellarDesc": "Mababang bayad, mabilis na settlement, on-chain transparency"
     },
