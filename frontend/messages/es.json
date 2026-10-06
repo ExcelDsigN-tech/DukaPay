@@ -629,13 +629,13 @@
       "questsTitle": "Misiones gamificadas",
       "questsDesc": "Gana recompensas XP por acciones financieras",
       "vaultsTitle": "Bóvedas seguras",
-      "vaultsDesc": "Infraestructura de contratos inteligentes auditada"
+      "vaultsDesc": "Infraestructura de contratos inteligentes en Stellar"
     },
     "verified": {
       "eyebrow": "Crecimiento verificado",
       "title": "Construido para inspirar confianza",
-      "audit": "Certificado",
-      "auditDesc": "Auditado por firmas de seguridad independientes",
+      "status": "Solo testnet",
+      "statusDesc": "Los contratos funcionan en la testnet de Stellar. Cada transacción se te muestra antes de firmar.",
       "stellarTitle": "Red Stellar",
       "stellarDesc": "Comisiones bajas, liquidación rápida y transparencia on-chain"
     },
