@@ -36,7 +36,7 @@ export function LandingPage({ onConnect }: LandingPageProps) {
           className="absolute inset-0 -z-10 opacity-40 [background-image:radial-gradient(rgba(241,245,249,0.12)_1px,transparent_1px)] [background-size:32px_32px] [mask-image:radial-gradient(ellipse_at_center,black_40%,transparent_75%)]"
         />
 
-        <p className="inline-flex items-center gap-2 rounded-full border border-[#7C3AED]/40 bg-[#7C3AED]/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-[#0ECFCF]">
+        <p className="inline-flex items-center gap-2 rounded-full border border-[#7C3AED]/40 bg-[#7C3AED]/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-[#18D6B0]">
           <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
           {t("hero.eyebrow")}
         </p>
@@ -51,22 +51,14 @@ export function LandingPage({ onConnect }: LandingPageProps) {
           {t("hero.tagline")}
         </p>
 
-        {/* Metrics */}
-        <dl aria-label="Platform metrics" className="mt-8 flex max-w-md gap-8 sm:gap-12">
+        {/* Network status. Real figures only: no marketing numbers while on testnet. */}
+        <dl aria-label="Network status" className="mt-8 flex max-w-md gap-8 sm:gap-12">
           <div>
             <dd className="text-3xl font-black tracking-tight text-white sm:text-4xl">
-              {t("hero.tvl")}
+              {t("hero.network")}
             </dd>
-            <dt className="mt-1 text-xs font-medium uppercase tracking-wider text-[#64748B]">
-              {t("hero.tvlLabel")}
-            </dt>
-          </div>
-          <div>
-            <dd className="text-3xl font-black tracking-tight text-white sm:text-4xl">
-              {t("hero.yield")}
-            </dd>
-            <dt className="mt-1 text-xs font-medium uppercase tracking-wider text-[#64748B]">
-              {t("hero.yieldLabel")}
+            <dt className="mt-1 text-xs font-medium uppercase tracking-wider text-[#9aa4b5]">
+              {t("hero.networkLabel")}
             </dt>
           </div>
         </dl>
@@ -75,7 +67,7 @@ export function LandingPage({ onConnect }: LandingPageProps) {
           <button
             type="button"
             onClick={onConnect}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#7C3AED] px-7 py-3.5 text-base font-bold text-white shadow-lg shadow-[#7C3AED]/30 transition-all hover:bg-[#6d28d9] hover:shadow-[#7C3AED]/40 focus-visible:ring-2 focus-visible:ring-[#0ECFCF]"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#7C3AED] px-7 py-3.5 text-base font-bold text-white shadow-lg shadow-[#7C3AED]/30 transition-all hover:bg-[#6d28d9] hover:shadow-[#7C3AED]/40 focus-visible:ring-2 focus-visible:ring-[#18D6B0]"
           >
             <WalletCards className="h-5 w-5" aria-hidden="true" />
             {t("hero.cta")}
@@ -84,7 +76,7 @@ export function LandingPage({ onConnect }: LandingPageProps) {
             href={t("hero.telegramUrl")}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#0ECFCF]/40 bg-[#0ECFCF]/10 px-7 py-3.5 text-base font-bold text-[#0ECFCF] transition-all hover:bg-[#0ECFCF]/20 focus-visible:ring-2 focus-visible:ring-[#0ECFCF]"
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#18D6B0]/40 bg-[#18D6B0]/10 px-7 py-3.5 text-base font-bold text-[#18D6B0] transition-all hover:bg-[#18D6B0]/20 focus-visible:ring-2 focus-visible:ring-[#18D6B0]"
           >
             <Send className="h-5 w-5" aria-hidden="true" />
             {t("hero.telegram")}
@@ -98,7 +90,7 @@ export function LandingPage({ onConnect }: LandingPageProps) {
         aria-labelledby="landing-arsenal-title"
         className="border-t border-white/10 bg-[#16161F] px-6 py-14 sm:px-10"
       >
-        <p className="text-xs font-semibold uppercase tracking-widest text-[#0ECFCF]">
+        <p className="text-xs font-semibold uppercase tracking-widest text-[#18D6B0]">
           {t("arsenal.eyebrow")}
         </p>
         <h2
@@ -120,7 +112,7 @@ export function LandingPage({ onConnect }: LandingPageProps) {
             </div>
           </li>
           <li className="flex items-start gap-4 rounded-2xl border border-white/10 bg-[#0D0D12] p-5">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#0ECFCF]/15 text-[#0ECFCF]">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#18D6B0]/15 text-[#18D6B0]">
               <Trophy className="h-6 w-6" aria-hidden="true" />
             </div>
             <div>
@@ -172,7 +164,7 @@ export function LandingPage({ onConnect }: LandingPageProps) {
 
           <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#16161F] p-6">
             <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#0ECFCF]/15 text-[#0ECFCF]">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#18D6B0]/15 text-[#18D6B0]">
                 <Landmark className="h-6 w-6" aria-hidden="true" />
               </div>
               <h3 className="text-lg font-bold">{t("verified.stellarTitle")}</h3>
@@ -204,7 +196,7 @@ export function LandingPage({ onConnect }: LandingPageProps) {
           <button
             type="button"
             onClick={onConnect}
-            className="mt-8 inline-flex items-center justify-center gap-2 rounded-xl bg-[#7C3AED] px-8 py-3.5 text-base font-bold text-white shadow-lg shadow-[#7C3AED]/30 transition-all hover:bg-[#6d28d9] focus-visible:ring-2 focus-visible:ring-[#0ECFCF]"
+            className="mt-8 inline-flex items-center justify-center gap-2 rounded-xl bg-[#7C3AED] px-8 py-3.5 text-base font-bold text-white shadow-lg shadow-[#7C3AED]/30 transition-all hover:bg-[#6d28d9] focus-visible:ring-2 focus-visible:ring-[#18D6B0]"
           >
             <ShieldCheck className="h-5 w-5" aria-hidden="true" />
             {t("gates.cta")}

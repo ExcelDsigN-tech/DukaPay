@@ -11,10 +11,8 @@ const EN: Record<string, string> = {
   "hero.subCta": "Connect Wallet",
   "hero.telegram": "Join our Telegram",
   "hero.telegramUrl": "https://t.me/+eRqhka27TVo0NzM8",
-  "hero.tvl": "$1.2B+",
-  "hero.tvlLabel": "Total Value Locked",
-  "hero.yield": "4.8%",
-  "hero.yieldLabel": "Avg. Yield",
+  "hero.network": "Testnet",
+  "hero.networkLabel": "Live on Stellar",
   "arsenal.eyebrow": "The DukaPay Arsenal",
   "arsenal.title": "Everything You Need to Grow",
   "arsenal.subtitle": "One platform. Three ways to put your capital to work.",
@@ -48,15 +46,15 @@ describe("LandingPage", () => {
     jest.clearAllMocks();
   });
 
-  it("renders the hero with brand, tagline, and social-proof metrics", () => {
+  it("renders the hero with brand, tagline, and network status", () => {
     render(<LandingPage onConnect={mockOnConnect} />);
 
     expect(screen.getByRole("heading", { name: "Enter the Citadel" })).toBeInTheDocument();
     expect(screen.getByText(EN["hero.tagline"])).toBeInTheDocument();
-    expect(screen.getByText("$1.2B+")).toBeInTheDocument();
-    expect(screen.getByText("Total Value Locked")).toBeInTheDocument();
-    expect(screen.getByText("4.8%")).toBeInTheDocument();
-    expect(screen.getByText("Avg. Yield")).toBeInTheDocument();
+    expect(screen.getByText("Testnet")).toBeInTheDocument();
+    expect(screen.getByText("Live on Stellar")).toBeInTheDocument();
+    // No marketing figures while the protocol runs on testnet.
+    expect(screen.queryByText("$1.2B+")).not.toBeInTheDocument();
   });
 
   it("calls onConnect when the hero CTA is pressed", () => {
