@@ -46,6 +46,59 @@ Developed a cohesive visual language built around:
 
 ---
 
+## Brand identity
+
+Logo files live in `frontend/public/brand/`. Use them as-is; never redraw, recolour or add effects.
+
+### The mark
+
+A D whose top and bottom walls are cut by one vertical currency stroke. The silhouette stays a clean D at every size, so it can't read as P or b.
+
+| Spec | Value |
+|---|---|
+| Grid | 64 units, mark 50 × 50 |
+| Wall weight | 11 units on stem, top, bottom and bowl |
+| Bowl | Outer radius 25, counter radius 14, one shared centre |
+| Cut stroke | 4 units wide, on the counter's vertical axis |
+| Corners | 2-unit radius on the two stem corners only |
+| Clear space | 14 units (one counter radius) on every side |
+| Minimum size | 16px digital, 6mm print |
+
+The wordmark is Sora Bold with the same slit cut into the D of "Duka". It is outlined in the SVGs, so no font is needed to display it.
+
+### Logo system
+
+| Tier | Version | Use |
+|---|---|---|
+| Primary | Flat: ink `#0B1020` on light, white on dark | Documents, partners, print, receipts, anything formal |
+| Digital | Gradient | Website, app, social, campaigns |
+| Dark | Gradient on ink | Dark mode, dashboards, developer docs, decks |
+
+Flat is the master. The gradient is an expression, never a requirement.
+
+### Brand palette
+
+Tokens: `--brand-*` in `globals.css`, exposed to Tailwind as `brand-teal`, `brand-blue`, `brand-indigo`, `brand-ink`, `brand-slate`, `brand-paper`.
+
+| Token | Value | Use |
+|---|---|---|
+| `--brand-teal` | `#18D6B0` | Gradient start, Kingdom secondary, success moments |
+| `--brand-blue` | `#3B82F6` | Gradient middle |
+| `--brand-indigo` | `#6366F1` | Gradient end, "Pay" in the wordmark |
+| `--brand-ink` | `#0B1020` | Flat logo, dark brand surfaces |
+| `--brand-slate` | `#64748B` | Tagline on light backgrounds |
+| `--brand-paper` | `#F5F7FA` | Light brand surfaces |
+| `--brand-gradient` | `135deg, #18D6B0 → #3B82F6 52% → #6366F1` | Logo, wordmark "Pay", hero moments only |
+
+App-shell buttons and focus stay on indigo `#4F46E5` (white text 6.29:1). For accent text and links use `--accent-text`: `#4F46E5` on light, `#818CF8` on dark (6.64:1; raw `#4F46E5` on `#0a0a0a` is only 3.15:1).
+
+### Typography
+
+- Brand and marketing headlines: Sora 700 / 600 / 500.
+- Product UI: Geist, with Geist Mono for addresses and hashes. `body` uses `--font-geist-sans`.
+
+---
+
 ## Color Palette
 
 > **Scope decision (stay distinct):** the neutral shell in
@@ -64,7 +117,7 @@ Developed a cohesive visual language built around:
 | Background | `#0D0D12` (Obsidian) |
 | Surface | `#16161F` |
 | Primary Accent | `#7C3AED` (Neon Purple) |
-| Secondary Accent | `#0ECFCF` (Teal) |
+| Secondary Accent | `#18D6B0` (Brand teal) |
 | Success | `#22C55E` |
 | Warning | `#F59E0B` |
 | Danger | `#EF4444` |
@@ -78,7 +131,7 @@ Developed a cohesive visual language built around:
 | Pair | Ratio | Verdict | Rule |
 |---|---|---|---|
 | `#F1F5F9` on `#0D0D12` | 17.69:1 | AAA pass | Default body text |
-| `#0ECFCF` on `#0D0D12` | 10.01:1 | AAA pass | Teal accents/links |
+| `#18D6B0` on `#0D0D12` | 10.42:1 | AAA pass | Teal accents/links |
 | White on `#7C3AED` | 5.70:1 | AA pass | CTA buttons (white text on purple fill) |
 | `#22C55E` on `#0D0D12` | 8.51:1 | AAA pass | Success |
 | `#9AA4B5` on `#0D0D12` | 7.71:1 | AAA pass | Body copy where muted tone is wanted |

@@ -7,12 +7,31 @@
   --background: #ffffff;
   --foreground: #171717;
   --focus-ring: #4f46e5;
+  /* Accent as text/links. Indigo-600 on white is 6.29:1 (AA). */
+  --accent-text: #4f46e5;
+
+  /* ── Brand (see docs/DESIGN.md "Brand identity") ── */
+  --brand-teal: #18d6b0;
+  --brand-blue: #3b82f6;
+  --brand-indigo: #6366f1;
+  --brand-ink: #0b1020;
+  --brand-slate: #64748b;
+  --brand-paper: #f5f7fa;
+  /* Logo, wordmark "Pay" and hero moments only. Never on buttons or body text. */
+  --brand-gradient: linear-gradient(135deg, #18d6b0 0%, #3b82f6 52%, #6366f1 100%);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-focus-ring: var(--focus-ring);
+  --color-accent-text: var(--accent-text);
+  --color-brand-teal: var(--brand-teal);
+  --color-brand-blue: var(--brand-blue);
+  --color-brand-indigo: var(--brand-indigo);
+  --color-brand-ink: var(--brand-ink);
+  --color-brand-slate: var(--brand-slate);
+  --color-brand-paper: var(--brand-paper);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -22,6 +41,8 @@
     /* WCAG AA Compliant: #ededed on #0a0a0a (15.5:1) */
     --background: #0a0a0a;
     --foreground: #ededed;
+    /* #4F46E5 on #0a0a0a is 3.15:1 (focus ring OK, text fails AA). Indigo-400 is 6.64:1. */
+    --accent-text: #818cf8;
   }
 }
 
@@ -29,6 +50,7 @@
 .dark {
   --background: #0a0a0a;
   --foreground: #ededed;
+  --accent-text: #818cf8;
 }
 
 /* ── Kingdom theme scope ─────────────────────────────────────────── */
@@ -39,7 +61,8 @@
   --kingdom-bg: #0d0d12;
   --kingdom-surface: #16161f;
   --kingdom-primary: #7c3aed;
-  --kingdom-secondary: #0ecfcf;
+  /* Brand teal. #18D6B0 on #0D0D12 is 10.42:1 (AAA). */
+  --kingdom-secondary: #18d6b0;
   --kingdom-success: #22c55e;
   --kingdom-warning: #f59e0b;
   --kingdom-danger: #ef4444;
@@ -58,7 +81,7 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
   @apply antialiased transition-colors duration-200;
 }
 

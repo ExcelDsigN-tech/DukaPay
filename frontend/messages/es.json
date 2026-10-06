@@ -617,10 +617,8 @@
       "subCta": "Conectar billetera",
       "telegram": "Únete a nuestro Telegram",
       "telegramUrl": "https://t.me/+eRqhka27TVo0NzM8",
-      "tvl": "$1.2B+",
-      "tvlLabel": "Valor total bloqueado",
-      "yield": "4.8%",
-      "yieldLabel": "Rendimiento promedio"
+      "network": "Testnet",
+      "networkLabel": "En vivo en Stellar"
     },
     "arsenal": {
       "eyebrow": "El Arsenal DukaPay",

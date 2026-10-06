@@ -745,10 +745,8 @@
       "subCta": "Connect Wallet",
       "telegram": "Join our Telegram",
       "telegramUrl": "https://t.me/+eRqhka27TVo0NzM8",
-      "tvl": "$1.2B+",
-      "tvlLabel": "Total Value Locked",
-      "yield": "4.8%",
-      "yieldLabel": "Avg. Yield"
+      "network": "Testnet",
+      "networkLabel": "Live on Stellar"
     },
     "arsenal": {
       "eyebrow": "The DukaPay Arsenal",
