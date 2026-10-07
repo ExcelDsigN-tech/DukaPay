@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, HandCoins, PiggyBank, SendHorizontal, User, Clock } from "lucide-react";
+import { LayoutDashboard, HandCoins, PiggyBank, Menu, Clock } from "lucide-react";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { useLocale } from "next-intl";
@@ -16,7 +16,7 @@ const navItems = [
   { name: "Loans", href: "/loans", icon: HandCoins },
   { name: "Lend", href: "/lend", icon: PiggyBank },
   { name: "Activity", href: "/activity", icon: Clock },
-  { name: "Profile", href: "/profile", icon: User },
+  { name: "More", href: "/more", icon: Menu },
 ];
 
 export function BottomNav() {

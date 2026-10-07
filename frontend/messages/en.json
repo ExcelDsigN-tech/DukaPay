@@ -100,7 +100,21 @@
     "activity": "Activity",
     "notifications": "Notifications",
     "liquidations": "Liquidations",
-    "adminDisputes": "Disputes"
+    "adminDisputes": "Disputes",
+    "more": "More",
+    "sendMoney": "Send money",
+    "wallet": "Wallet",
+    "kingdom": "Kingdom",
+    "agentDashboard": "Agent dashboard",
+    "settings": "Settings"
+  },
+  "MorePage": {
+    "title": "More",
+    "lending": "Lending",
+    "agent": "Agent",
+    "connected": "Connected",
+    "notConnected": "Wallet not connected",
+    "unknownNetwork": "Unknown network"
   },
   "Loans": {
     "title": "Loans",

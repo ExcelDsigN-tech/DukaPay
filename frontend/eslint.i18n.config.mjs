@@ -10,6 +10,7 @@ export const translatedFiles = [
   "src/app/[[]locale]/settings/page.tsx",
   "src/app/[[]locale]/wallet/page.tsx",
   "src/app/[[]locale]/lend/LendPageClient.tsx",
+  "src/app/[[]locale]/more/MoreClient.tsx",
   "src/app/[[]locale]/loans/LoansPageClient.tsx",
   "src/app/[[]locale]/loans/[[]loanId]/LoanDetailsPageClient.tsx",
   "src/app/[[]locale]/repay/[[]loanId]/page.tsx",

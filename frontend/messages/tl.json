@@ -100,7 +100,21 @@
     "activity": "Aktibidad",
     "notifications": "Mga Notification",
     "liquidations": "Mga Liquidasyon",
-    "adminDisputes": "Mga Dispute"
+    "adminDisputes": "Mga Dispute",
+    "more": "Higit pa",
+    "sendMoney": "Magpadala ng pera",
+    "wallet": "Wallet",
+    "kingdom": "Kaharian",
+    "agentDashboard": "Dashboard ng agent",
+    "settings": "Mga Setting"
+  },
+  "MorePage": {
+    "title": "Higit pa",
+    "lending": "Pagpapautang",
+    "agent": "Agent",
+    "connected": "Nakakonekta",
+    "notConnected": "Walang nakakonektang wallet",
+    "unknownNetwork": "Hindi kilalang network"
   },
   "Loans": {
     "title": "Mga Loan",
