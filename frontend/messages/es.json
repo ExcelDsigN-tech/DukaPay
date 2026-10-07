@@ -100,7 +100,21 @@
     "activity": "Actividad",
     "notifications": "Notificaciones",
     "liquidations": "Liquidaciones",
-    "adminDisputes": "Disputas"
+    "adminDisputes": "Disputas",
+    "more": "Más",
+    "sendMoney": "Enviar dinero",
+    "wallet": "Billetera",
+    "kingdom": "Reino",
+    "agentDashboard": "Panel de agente",
+    "settings": "Configuración"
+  },
+  "MorePage": {
+    "title": "Más",
+    "lending": "Préstamos",
+    "agent": "Agente",
+    "connected": "Conectada",
+    "notConnected": "Billetera no conectada",
+    "unknownNetwork": "Red desconocida"
   },
   "Loans": {
     "title": "Préstamos",

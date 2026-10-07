@@ -8,7 +8,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import { useRouter } from "next/navigation";
-import { Menu, Search, User, Wallet } from "lucide-react";
+import { Search, User, Wallet } from "lucide-react";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { ThemeToggle } from "../ui/ThemeToggle";
@@ -36,11 +36,10 @@ function truncateWalletAddress(address: string) {
 }
 
 interface HeaderProps {
-  onMenuClick?: () => void;
   className?: string;
 }
 
-export function Header({ onMenuClick, className }: HeaderProps) {
+export function Header({ className }: HeaderProps) {
   const router = useRouter();
   const locale = useLocale();
   const t = useTranslations("Navigation");
@@ -252,16 +251,6 @@ export function Header({ onMenuClick, className }: HeaderProps) {
       )}
     >
       <div className="flex items-center gap-4 lg:gap-0">
-        <button
-          type="button"
-          onClick={onMenuClick}
-          aria-label="Open navigation menu"
-          aria-haspopup="true"
-          className="p-2 text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-900 lg:hidden rounded-lg"
-        >
-          <Menu className="h-6 w-6" aria-hidden="true" />
-        </button>
-
         <div ref={wrapperRef} className="relative hidden lg:flex w-full max-w-xl">
           <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
             <Search className="h-4 w-4 text-zinc-400" aria-hidden="true" />

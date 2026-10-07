@@ -12,6 +12,8 @@ import {
   CreditCard,
   Clock,
   ShieldAlert,
+  Crown,
+  Store,
 } from "lucide-react";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
@@ -42,14 +44,21 @@ export function Sidebar({ onClose, className }: SidebarProps) {
   const user = useUserStore((state) => state.user);
   const isConnected = status === "connected";
   const isAdmin = user?.role === "admin";
+  // Mirrors the guard on the agent dashboard page, which turns away borrowers and lenders.
+  const canSeeAgentDashboard = user?.role !== "borrower" && user?.role !== "lender";
 
   const navItems = [
     { name: t("home"), href: `/${locale}`, icon: LayoutDashboard },
     { name: t("loans"), href: `/${locale}/loans`, icon: HandCoins },
+    { name: t("sendMoney"), href: `/${locale}/send-remittance`, icon: SendHorizontal },
     { name: "Lend", href: `/${locale}/lend`, icon: PiggyBank },
     { name: t("liquidations"), href: `/${locale}/liquidations`, icon: ShieldAlert },
     { name: t("activity"), href: `/${locale}/activity`, icon: Clock },
     { name: "Wallet", href: `/${locale}/wallet`, icon: CreditCard },
+    { name: t("kingdom"), href: `/${locale}/kingdom`, icon: Crown },
+    ...(canSeeAgentDashboard
+      ? [{ name: t("agentDashboard"), href: `/${locale}/agent/dashboard`, icon: Store }]
+      : []),
     ...(isAdmin
       ? [{ name: t("adminDisputes"), href: `/${locale}/admin/disputes`, icon: ShieldAlert }]
       : []),
