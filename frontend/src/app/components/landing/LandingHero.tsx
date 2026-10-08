@@ -7,6 +7,7 @@ import { WalletCards } from "lucide-react";
 import { ThemeToggle } from "../ui/ThemeToggle";
 import { HeroFloor } from "./HeroFloor";
 import { HeroNetwork } from "./HeroNetwork";
+import { LandingNavMenu } from "./LandingNavMenu";
 
 interface LandingHeroProps {
   onConnect: () => void;
@@ -34,85 +35,71 @@ export function LandingHero({ onConnect }: LandingHeroProps) {
     return () => io.disconnect();
   }, []);
 
-  const navLinks = [
-    { href: `/${locale}/loans`, label: t("nav.borrow") },
-    { href: `/${locale}/send-remittance`, label: t("nav.send") },
-    { href: `/${locale}/lend`, label: t("nav.lend") },
-    { href: `/${locale}/kingdom`, label: t("nav.kingdom") },
-  ];
-
   return (
-    <div className="relative isolate overflow-hidden bg-canvas text-fg">
-      <HeroFloor />
-      <div className="mx-auto max-w-[1440px] px-[clamp(16px,5vw,96px)]">
-        <header className="flex h-16 items-center justify-between gap-6 border-b border-line sm:h-[76px]">
-          <Link href={`/${locale}`} aria-label={t("nav.home")} className="block leading-none">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/brand/dukapay-logo-paper.svg" alt="" className="h-8 w-auto dark:hidden" />
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/brand/dukapay-logo-cobalt.svg"
-              alt=""
-              className="hidden h-8 w-auto dark:block"
-            />
-          </Link>
-          <nav aria-label={t("nav.label")} className="hidden gap-9 lg:flex">
-            {navLinks.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className="font-medium text-fg-muted transition-colors hover:text-fg"
+    <>
+      <div className="relative isolate overflow-hidden bg-canvas text-fg">
+        <HeroFloor />
+        <div className="mx-auto max-w-[1440px] px-[clamp(16px,5vw,96px)]">
+          <header className="flex h-16 items-center justify-between gap-6 border-b border-line sm:h-[76px]">
+            <Link href={`/${locale}`} aria-label={t("nav.home")} className="block leading-none">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/brand/dukapay-logo-paper.svg" alt="" className="h-8 w-auto dark:hidden" />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/brand/dukapay-logo-cobalt.svg"
+                alt=""
+                className="hidden h-8 w-auto dark:block"
+              />
+            </Link>
+            <LandingNavMenu />
+            <div className="flex items-center gap-2.5">
+              <ThemeToggle />
+              <button
+                type="button"
+                onClick={onConnect}
+                className={`${btnBase} h-10 rounded-[10px] border border-line-strong px-4 text-[15px] text-fg hover:border-fg-muted`}
               >
-                {link.label}
-              </Link>
-            ))}
-          </nav>
-          <div className="flex items-center gap-2.5">
-            <ThemeToggle />
-            <button
-              type="button"
-              onClick={onConnect}
-              className={`${btnBase} h-10 rounded-[10px] border border-line-strong px-4 text-[15px] text-fg hover:border-fg-muted`}
-            >
-              {t("nav.connect")}
-            </button>
-          </div>
-        </header>
-
-        <section
-          aria-labelledby="landing-hero-title"
-          className="grid grid-cols-1 items-center gap-[clamp(32px,4vw,64px)] pt-[clamp(40px,5vw,72px)] pb-[clamp(64px,9vw,128px)] lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]"
-        >
-          <div className="flex min-w-0 flex-col gap-7">
-            <h1
-              id="landing-hero-title"
-              className="m-0 font-display text-[clamp(38px,5.2vw,72px)] font-bold leading-[1.04] tracking-[-0.04em] text-balance text-fg"
-            >
-              {t("hero.title")}
-            </h1>
-            <p className="m-0 max-w-[34em] text-[clamp(17px,1.4vw,20px)] leading-relaxed text-fg-muted">
-              {t("hero.tagline")}
-            </p>
-            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-              <button ref={ctaRef} type="button" onClick={onConnect} className={btnPrimary}>
-                <WalletCards className="h-5 w-5" aria-hidden="true" />
-                {t("hero.cta")}
+                {t("nav.connect")}
               </button>
-              <a href="#how-it-works" className={btnGhost}>
-                {t("hero.howItWorks")}
-              </a>
             </div>
-            <span className="inline-flex items-center gap-2.5 text-[15px] text-fg">
-              <i aria-hidden="true" className="block h-2 w-2 rounded-full bg-ok" />
-              {t("hero.status")}
-            </span>
-          </div>
-          <HeroNetwork />
-        </section>
+          </header>
+
+          <section
+            aria-labelledby="landing-hero-title"
+            className="grid grid-cols-1 items-center gap-[clamp(32px,4vw,64px)] pt-[clamp(40px,5vw,72px)] pb-[clamp(64px,9vw,128px)] lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]"
+          >
+            <div className="flex min-w-0 flex-col gap-7">
+              <h1
+                id="landing-hero-title"
+                className="m-0 font-display text-[clamp(38px,5.2vw,72px)] font-bold leading-[1.04] tracking-[-0.04em] text-balance text-fg"
+              >
+                {t("hero.title")}
+              </h1>
+              <p className="m-0 max-w-[34em] text-[clamp(17px,1.4vw,20px)] leading-relaxed text-fg-muted">
+                {t("hero.tagline")}
+              </p>
+              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                <button ref={ctaRef} type="button" onClick={onConnect} className={btnPrimary}>
+                  <WalletCards className="h-5 w-5" aria-hidden="true" />
+                  {t("hero.cta")}
+                </button>
+                <a href="#how-it-works" className={btnGhost}>
+                  {t("hero.howItWorks")}
+                </a>
+              </div>
+              <span className="inline-flex items-center gap-2.5 text-[15px] text-fg">
+                <i aria-hidden="true" className="block h-2 w-2 rounded-full bg-ok" />
+                {t("hero.status")}
+              </span>
+            </div>
+            <HeroNetwork />
+          </section>
+        </div>
       </div>
 
+      {/* Outside the hero's isolated stacking context so the sections scroll under it. */}
       <div
-        className={`fixed inset-x-0 bottom-0 z-10 border-t border-line bg-canvas px-4 pt-3 pb-[calc(12px+env(safe-area-inset-bottom,0px))] transition-transform duration-250 sm:hidden ${
+        className={`fixed inset-x-0 bottom-0 z-50 border-t border-line bg-canvas px-4 pt-3 pb-[calc(12px+env(safe-area-inset-bottom,0px))] transition-transform duration-250 sm:hidden ${
           ctaVisible ? "translate-y-[120%]" : "translate-y-0"
         }`}
         aria-hidden={ctaVisible}
@@ -126,6 +113,6 @@ export function LandingHero({ onConnect }: LandingHeroProps) {
           {t("hero.mobileCta")}
         </button>
       </div>
-    </div>
+    </>
   );
 }
