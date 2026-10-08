@@ -79,31 +79,21 @@ export const createDsarDeletionRequest = asyncHandler(async (req: Request, res: 
     actor: req.user?.publicKey,
   });
 
-  // Start async deletion process
-  privacyService
-    .deleteUserData(publicKey)
-    .then(async (result) => {
-      await privacyService.getDsarRequest(dsar.id);
-      logger.withContext().info('DSAR deletion completed', {
-        dsarId: dsar.id,
-        recordsAnonymized: result.recordsAnonymized,
-      });
-    })
-    .catch((error) => {
-      logger.withContext().error('DSAR deletion failed', {
-        dsarId: dsar.id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    });
+  // Run inline so a failure surfaces as an error and the DSAR stays pending.
+  const result = await privacyService.deleteUserData(publicKey);
+  await privacyService.completeDsarRequest(dsar.id);
+  logger.withContext().info('DSAR deletion completed', {
+    dsarId: dsar.id,
+    recordsAnonymized: result.recordsAnonymized,
+  });
 
   res.status(201).json({
     success: true,
-    message:
-      'Data deletion request created. Your PII will be removed within 30 days. Financial records will be anonymized.',
+    message: 'Your PII has been deleted. Financial records have been anonymized.',
     dsar: {
       id: dsar.id,
       type: dsar.type,
-      status: dsar.status,
+      status: 'completed',
       createdAt: dsar.createdAt,
     },
   });
@@ -120,25 +110,17 @@ export const createAnonymizationRequest = asyncHandler(async (req: Request, res:
 
   const dsar = await privacyService.createDsarRequest(publicKey, 'anonymization', reason);
 
-  privacyService
-    .anonymizeUserData(publicKey)
-    .then(async () => {
-      logger.withContext().info('Anonymization completed', { dsarId: dsar.id });
-    })
-    .catch((error) => {
-      logger.withContext().error('Anonymization failed', {
-        dsarId: dsar.id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    });
+  await privacyService.anonymizeUserData(publicKey);
+  await privacyService.completeDsarRequest(dsar.id);
+  logger.withContext().info('Anonymization completed', { dsarId: dsar.id });
 
   res.status(201).json({
     success: true,
-    message: 'Data anonymization request created. Your data will be anonymized within 30 days.',
+    message: 'Your data has been anonymized.',
     dsar: {
       id: dsar.id,
       type: dsar.type,
-      status: dsar.status,
+      status: 'completed',
       createdAt: dsar.createdAt,
     },
   });
