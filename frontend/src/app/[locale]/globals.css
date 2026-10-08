@@ -19,6 +19,26 @@
   --brand-paper: #f5f7fa;
   /* Logo, wordmark "Pay" and hero moments only. Never on buttons or body text. */
   --brand-gradient: linear-gradient(135deg, #18d6b0 0%, #3b82f6 52%, #6366f1 100%);
+
+  /* ── App themes (Figma "DukaPay" variables). Paper is light, Cobalt is dark. ── */
+  --canvas: #f6f7f9;
+  --surface: #ffffff;
+  --subtle: #f1f3f6;
+  --nav-active: #e9edf3;
+  --line: #e3e7ee;
+  --line-strong: #cbd2dd;
+  --fg: #0b1020;
+  --fg-muted: #4f586c;
+  --link: #2f5bea;
+  --primary: #0b1020;
+  --primary-hover: #1e2740;
+  --on-primary: #f6f7f9;
+  --ok: #15803d;
+  --warning: #b45309;
+  --warning-bg: #fff7e6;
+  --warning-border: #f3d9a4;
+  --danger: #b91c1c;
+  --gold: #8f5b0e;
 }
 
 @theme inline {
@@ -34,6 +54,27 @@
   --color-brand-paper: var(--brand-paper);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-sora);
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-subtle: var(--subtle);
+  --color-nav-active: var(--nav-active);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-link: var(--link);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-on-primary: var(--on-primary);
+  /* Alias for components written shadcn-style (ConfirmTransactionDialog). */
+  --color-primary-foreground: var(--on-primary);
+  --color-ok: var(--ok);
+  --color-warning: var(--warning);
+  --color-warning-bg: var(--warning-bg);
+  --color-warning-border: var(--warning-border);
+  --color-danger: var(--danger);
+  --color-gold: var(--gold);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -46,11 +87,30 @@
   }
 }
 
-/* Class-based dark mode for manual toggle */
+/* Class-based dark mode for manual toggle. The head script in app/layout.tsx
+   resolves "system" to this class, so Cobalt follows the OS without a media query. */
 .dark {
   --background: #0a0a0a;
   --foreground: #ededed;
   --accent-text: #818cf8;
+  --canvas: #070b16;
+  --surface: #0f1526;
+  --subtle: #141b30;
+  --nav-active: #18213a;
+  --line: #1f2840;
+  --line-strong: #323d5c;
+  --fg: #eef2fa;
+  --fg-muted: #a1aac0;
+  --link: #7aa2ff;
+  --primary: #5b8cff;
+  --primary-hover: #7aa2ff;
+  --on-primary: #070b16;
+  --ok: #4ade80;
+  --warning: #fbbf24;
+  --warning-bg: #1e1a10;
+  --warning-border: #4a3b17;
+  --danger: #fca5a5;
+  --gold: #f2b84b;
 }
 
 /* ── Kingdom theme scope ─────────────────────────────────────────── */

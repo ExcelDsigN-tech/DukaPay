@@ -106,7 +106,13 @@
     "wallet": "Wallet",
     "kingdom": "Kaharian",
     "agentDashboard": "Dashboard ng agent",
-    "settings": "Mga Setting"
+    "settings": "Mga Setting",
+    "sectionLending": "Pagpapautang",
+    "sectionAgent": "Agent",
+    "sectionAdmin": "Admin",
+    "noWallet": "Walang wallet",
+    "walletConnected": "Nakakonekta",
+    "walletDisconnected": "Hindi nakakonekta"
   },
   "MorePage": {
     "title": "Higit pa",

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Sora } from "next/font/google";
 import "./[locale]/globals.css";
 import { QueryProvider } from "./components/providers/QueryProvider";
 import { WalletProvider } from "./components/providers/WalletProvider";
@@ -23,6 +23,12 @@ const geistSans = Geist({
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+});
+
+const sora = Sora({
+  variable: "--font-sora",
+  subsets: ["latin"],
+  weight: ["600", "700"],
 });
 
 export const metadata: Metadata = {
@@ -54,7 +60,7 @@ export default async function RootLayout({
           }}
         />
       </head>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+      <body className={`${geistSans.variable} ${geistMono.variable} ${sora.variable} antialiased`}>
         <NextIntlClientProvider locale={locale} messages={messages}>
           <QueryProvider>
             <WalletProvider>
