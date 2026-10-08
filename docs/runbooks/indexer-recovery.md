@@ -168,7 +168,7 @@ Use this after a hotfix deployment to clear the quarantine backlog.
 
 ## 6. Escalation Contacts
 
-For incidents that cannot be resolved with the steps above, escalate to the on-call platform maintainer.
+For incidents that cannot be resolved with the steps above, escalate to a maintainer.
 
 When escalating, include:
 

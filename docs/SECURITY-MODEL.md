@@ -237,7 +237,6 @@ reconstructed without exposing PII.
 | OWASP ASVS V6 (PII) | Field-level AES-256-GCM encryption, masking in UI, `piiMask` |
 | GDPR Art. 25 (DPA) | `docs/DPA_TEMPLATE.md`, PII inventory above, retention 90d–1y |
 | PCI-DSS 3.4 (if storing card data) | N/A — DukaPay stores no card data; Stellar assets only |
-| SOC 2 CC7 (monitoring) | Audit logging, Sentry, query-latency + security metrics |
 | NIST SP 800-53 AC-2 (access) | RBAC scopes per route, role resolution, API-key scoping |
 
 ---

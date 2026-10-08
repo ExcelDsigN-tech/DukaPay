@@ -98,7 +98,7 @@ Enforced **on-chain**:
 
 - **48-hour timelock** (`UPGRADE_TIMELOCK_SECONDS = 172_800`) between queue and
   execute — not overridable by the proposer.
-- **3-of-5 multi-sig** — DukaPay quorum is `[admin, security, ops, legal, community]`
+- **3-of-5 multi-sig** — DukaPay quorum is `[admin, security, ops, legal, community]` (signers not yet assigned)
   with `threshold = 3`.
 - **14-day TTL** — a queued-but-unexecuted upgrade expires and can be replaced.
 - **Single in-flight upgrade** — a new one cannot be queued while one is pending.

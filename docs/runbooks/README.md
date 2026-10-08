@@ -1,6 +1,6 @@
 # Runbooks
 
-Operational runbooks for on-call engineers working on the DukaPay platform.
+Operational runbooks for maintainers working on the DukaPay platform.
 
 ## Index
 

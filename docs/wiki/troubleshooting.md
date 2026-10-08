@@ -62,7 +62,7 @@ the oracle signer key (see key management).
 
 ## Emergency contacts
 
-- Pause authority (security council signers) for the CircuitBreaker.
+- Pause authority (governance signers, not yet assigned) for the CircuitBreaker.
 - Governance admins for `MultisigGovernance` upgrades.
 
 ## Log hygiene

@@ -22,7 +22,7 @@ npm install @dukapay/sdk
 import { DukaPayClient, FreighterAdapter } from '@dukapay/sdk';
 
 const client = new DukaPayClient({
-  baseUrl: 'https://api.dukapay.io',
+  baseUrl: 'https://your-backend.example',
   network: 'mainnet',
   wallet: new FreighterAdapter(),
 });
@@ -52,7 +52,7 @@ const wallet = new FreighterAdapter();
 
 function App() {
   return (
-    <DukaPayProvider baseUrl="https://api.dukapay.io" network="mainnet" wallet={wallet}>
+    <DukaPayProvider baseUrl="https://your-backend.example" network="mainnet" wallet={wallet}>
       <Dashboard />
     </DukaPayProvider>
   );
@@ -88,7 +88,7 @@ Domain types in `src/types.ts` are hand-maintained against
 with:
 
 ```bash
-npx openapi-typescript https://api.dukapay.io/openapi.json -o src/generated.ts
+npx openapi-typescript https://your-backend.example/openapi.json -o src/generated.ts
 ```
 
 ## Versioning

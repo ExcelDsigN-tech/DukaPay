@@ -177,8 +177,8 @@ TEST_ENV=staging|production
 LOAD_PROFILE=smoke|normal|stress|spike
 
 # API URLs
-STAGING_API_URL=https://api.staging.dukapay.io
-PROD_API_URL=https://api.dukapay.io
+STAGING_API_URL=https://your-staging-backend.example
+PROD_API_URL=https://your-backend.example
 
 # Authentication
 TEST_AUTH_TOKEN=your-test-token
@@ -288,7 +288,7 @@ Set these secrets in GitHub Actions:
 ```bash
 SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...
 LOAD_TEST_AUTH_TOKEN=your-test-token
-STAGING_API_URL=https://api.staging.dukapay.io
+STAGING_API_URL=https://your-staging-backend.example
 ```
 
 ## 📝 Writing Custom Scenarios
@@ -385,13 +385,11 @@ curl http://localhost:4000/health
 - [k6 Documentation](https://k6.io/docs/)
 - [Load Testing Best Practices](https://k6.io/docs/test-types/load-testing)
 - [Stellar Soroban Docs](https://soroban.stellar.org/docs)
-- [DukaPay API Docs](https://api.dukapay.io/docs)
 
 ## 📞 Support
 
 For questions or issues:
 - GitHub Issues: Report bugs or request features
-- Email: ops@dukapay.io
 
 ## 📄 License
 
