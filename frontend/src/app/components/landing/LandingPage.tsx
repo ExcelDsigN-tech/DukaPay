@@ -1,16 +1,8 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import {
-  FlaskConical,
-  HandCoins,
-  Landmark,
-  Send,
-  ShieldCheck,
-  Sparkles,
-  Trophy,
-  WalletCards,
-} from "lucide-react";
+import { LandingHero } from "./LandingHero";
+import { FlaskConical, HandCoins, Landmark, ShieldCheck, Trophy } from "lucide-react";
 
 interface LandingPageProps {
   onConnect: () => void;
@@ -21,74 +13,13 @@ export function LandingPage({ onConnect }: LandingPageProps) {
 
   return (
     <div className="overflow-hidden bg-[#0D0D12] text-[#F1F5F9]">
-      {/* ── Hero ─────────────────────────────────────────────── */}
-      <section
-        aria-labelledby="landing-hero-title"
-        className="relative isolate overflow-hidden px-6 pb-16 pt-14 sm:px-10 sm:pt-20"
-      >
-        {/* Glow backdrop */}
-        <div
-          aria-hidden="true"
-          className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_30%_20%,rgba(124,58,237,0.35),transparent_55%),radial-gradient(circle_at_80%_0%,rgba(14,207,207,0.28),transparent_50%)]"
-        />
-        <div
-          aria-hidden="true"
-          className="absolute inset-0 -z-10 opacity-40 [background-image:radial-gradient(rgba(241,245,249,0.12)_1px,transparent_1px)] [background-size:32px_32px] [mask-image:radial-gradient(ellipse_at_center,black_40%,transparent_75%)]"
-        />
-
-        <p className="inline-flex items-center gap-2 rounded-full border border-[#7C3AED]/40 bg-[#7C3AED]/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-[#18D6B0]">
-          <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
-          {t("hero.eyebrow")}
-        </p>
-
-        <h1
-          id="landing-hero-title"
-          className="mt-5 max-w-2xl text-4xl font-black leading-[1.05] tracking-tight sm:text-6xl"
-        >
-          {t("hero.title")}
-        </h1>
-        <p className="mt-4 max-w-xl text-base leading-relaxed text-[#9aa4b5] sm:text-lg">
-          {t("hero.tagline")}
-        </p>
-
-        {/* Network status. Real figures only: no marketing numbers while on testnet. */}
-        <dl aria-label="Network status" className="mt-8 flex max-w-md gap-8 sm:gap-12">
-          <div>
-            <dd className="text-3xl font-black tracking-tight text-white sm:text-4xl">
-              {t("hero.network")}
-            </dd>
-            <dt className="mt-1 text-xs font-medium uppercase tracking-wider text-[#9aa4b5]">
-              {t("hero.networkLabel")}
-            </dt>
-          </div>
-        </dl>
-
-        <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center">
-          <button
-            type="button"
-            onClick={onConnect}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#7C3AED] px-7 py-3.5 text-base font-bold text-white shadow-lg shadow-[#7C3AED]/30 transition-all hover:bg-[#6d28d9] hover:shadow-[#7C3AED]/40 focus-visible:ring-2 focus-visible:ring-[#18D6B0]"
-          >
-            <WalletCards className="h-5 w-5" aria-hidden="true" />
-            {t("hero.cta")}
-          </button>
-          <a
-            href={t("hero.telegramUrl")}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#18D6B0]/40 bg-[#18D6B0]/10 px-7 py-3.5 text-base font-bold text-[#18D6B0] transition-all hover:bg-[#18D6B0]/20 focus-visible:ring-2 focus-visible:ring-[#18D6B0]"
-          >
-            <Send className="h-5 w-5" aria-hidden="true" />
-            {t("hero.telegram")}
-          </a>
-          <span className="text-sm font-medium text-[#64748B]">{t("hero.subCta")}</span>
-        </div>
-      </section>
+      <LandingHero onConnect={onConnect} />
 
       {/* ── Arsenal ──────────────────────────────────────────── */}
       <section
+        id="how-it-works"
         aria-labelledby="landing-arsenal-title"
-        className="border-t border-white/10 bg-[#16161F] px-6 py-14 sm:px-10"
+        className="scroll-mt-4 border-t border-white/10 bg-[#16161F] px-6 py-14 sm:px-10"
       >
         <p className="text-xs font-semibold uppercase tracking-widest text-[#18D6B0]">
           {t("arsenal.eyebrow")}

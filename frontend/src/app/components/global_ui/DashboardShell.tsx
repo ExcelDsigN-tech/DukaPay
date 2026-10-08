@@ -1,6 +1,9 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { usePathname } from "next/navigation";
+import { useLocale } from "next-intl";
+import { useWalletStore, selectIsWalletConnected } from "../../stores/useWalletStore";
 import { Sidebar } from "./Sidebar";
 import { BottomNav } from "./BottomNav";
 import { Header } from "./Header";
@@ -13,6 +16,17 @@ interface DashboardShellProps {
 }
 
 export function DashboardShell({ children }: DashboardShellProps) {
+  const pathname = usePathname();
+  const locale = useLocale();
+  const isConnected = useWalletStore(selectIsWalletConnected);
+
+  // Signed-out visitors on the home route see the standalone landing page,
+  // which brings its own nav. The app chrome appears once a wallet connects.
+  const isLanding = !isConnected && (pathname === `/${locale}` || pathname === `/${locale}/`);
+  if (isLanding) {
+    return <>{children}</>;
+  }
+
   return (
     <div className="flex min-h-screen bg-canvas text-fg">
       <a

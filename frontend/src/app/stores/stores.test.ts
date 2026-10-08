@@ -240,11 +240,11 @@ describe("useUIStore", () => {
 // ─── useThemeStore ───────────────────────────────────────────────────────────
 
 describe("useThemeStore", () => {
-  it("uses the system preference on first visit when nothing is stored", () => {
+  it("defaults to the dark (Cobalt) theme on first visit, whatever the OS prefers", () => {
     Object.defineProperty(window, "matchMedia", {
       writable: true,
       value: jest.fn().mockImplementation(() => ({
-        matches: true,
+        matches: false,
         media: "(prefers-color-scheme: dark)",
         onchange: null,
         addEventListener: jest.fn(),
@@ -275,15 +275,34 @@ describe("useThemeStore", () => {
     expect(document.documentElement.classList.contains("dark")).toBe(true);
   });
 
-  it("cycles through light → dark → system → light when toggled", () => {
+  it("toggles between dark and light only", () => {
+    useThemeStore.setState({ theme: "dark", hydrated: true });
+
+    useThemeStore.getState().toggleTheme();
+    expect(useThemeStore.getState().theme).toBe("light");
+    expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBe("light");
+    expect(document.documentElement.classList.contains("dark")).toBe(false);
+
+    useThemeStore.getState().toggleTheme();
+    expect(useThemeStore.getState().theme).toBe("dark");
+    expect(document.documentElement.classList.contains("dark")).toBe(true);
+  });
+
+  it("toggles to the opposite of what a system theme currently shows", () => {
+    Object.defineProperty(window, "matchMedia", {
+      writable: true,
+      value: jest.fn().mockImplementation(() => ({
+        matches: true,
+        media: "(prefers-color-scheme: dark)",
+        addEventListener: jest.fn(),
+        removeEventListener: jest.fn(),
+      })),
+    });
     useThemeStore.setState({ theme: "system", hydrated: true });
 
     useThemeStore.getState().toggleTheme();
 
-    const { theme } = useThemeStore.getState();
-    expect(theme).toBe("light");
-    expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBe("light");
-    expect(document.documentElement.classList.contains("dark")).toBe(false);
+    expect(useThemeStore.getState().theme).toBe("light");
   });
 });
 
