@@ -122,6 +122,7 @@ describe('GET /api/loans/borrower/:borrower – filters', () => {
       expect(res.body.success).toBe(true);
       expect(res.body.data.loans).toHaveLength(1);
       expect(res.body.data.loans[0].status).toBe('active');
+      expect(res.body.data.loans[0].interestRateBps).toBe(1200);
     });
 
     it('returns 400 for an invalid status value', async () => {

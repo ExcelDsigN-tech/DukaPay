@@ -7,12 +7,12 @@ import {
   useWalletStore,
   selectIsWalletConnected,
   selectWalletAddress,
+  selectWalletBalances,
 } from "../stores/useWalletStore";
 import { useWalletConnectAction } from "../hooks/useWalletConnectAction";
 import {
-  useLoans,
+  useBorrowerLoans,
   useRemittances,
-  useUserBalance,
   useUserProfile,
   useCreditScoreHistory,
   useScoreBreakdown,
@@ -25,17 +25,17 @@ import { CreditScoreBreakdown } from "../components/ui/CreditScoreBreakdown";
 import { ErrorBoundary } from "../components/global_ui/ErrorBoundary";
 import { Tooltip } from "../components/ui/Tooltip";
 import React, { useMemo, useState, useEffect } from "react";
-import type { Loan } from "../hooks/useApi";
+import type { BorrowerLoan } from "../hooks/useApi";
 import { formatCurrency } from "../utils/formatLocale";
 
 const SEVENTY_TWO_HOURS_MS = 72 * 60 * 60 * 1000;
 const SESSION_BANNER_KEY = "repayment_banner_dismissed";
 
-function getLoanDueDate(loan: Loan): Date {
-  return new Date(new Date(loan.createdAt).getTime() + loan.termDays * 24 * 60 * 60 * 1000);
+function getLoanDueDate(loan: BorrowerLoan): Date {
+  return new Date(loan.nextPaymentDeadline);
 }
 
-function useRepaymentReminder(loans: Loan[] | undefined) {
+function useRepaymentReminder(loans: BorrowerLoan[] | undefined) {
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
@@ -68,7 +68,7 @@ function RepaymentReminderBanner({
   urgentLoans,
   onDismiss,
 }: {
-  urgentLoans: Loan[];
+  urgentLoans: BorrowerLoan[];
   onDismiss: () => void;
 }) {
   const router = useRouter();
@@ -101,7 +101,7 @@ function RepaymentReminderBanner({
           </p>
           <p className="mt-0.5 text-xs text-amber-700 dark:text-amber-400">
             {t("reminder.details", {
-              amount: formatCurrency(mostUrgent.amount, locale),
+              amount: formatCurrency(mostUrgent.totalOwed ?? mostUrgent.principal, locale),
               date: dueDate.toLocaleDateString(locale, {
                 month: "short",
                 day: "numeric",
@@ -139,19 +139,20 @@ export default function Home() {
   const address = useWalletStore(selectWalletAddress);
   const connectWithFeedback = useWalletConnectAction();
 
-  const { data: loans, isLoading: loansLoading } = useLoans({ enabled: isConnected });
+  const { loans, isLoading: loansLoading } = useBorrowerLoans(
+    isConnected ? (address ?? undefined) : undefined,
+  );
   const { data: remittances, isLoading: remittancesLoading } = useRemittances({
     enabled: isConnected,
   });
-  const { data: balance, isLoading: balanceLoading } = useUserBalance({
-    enabled: isConnected,
-  });
+  const balances = useWalletStore(selectWalletBalances);
+  const usdcBalance = Number(balances.find((b) => b.symbol === "USDC")?.amount ?? 0);
   const { data: userProfile } = useUserProfile({ enabled: isConnected });
   const { data: creditHistory } = useCreditScoreHistory(userProfile?.id, {
     enabled: isConnected && !!userProfile?.id,
   });
 
-  const isLoading = (loansLoading || remittancesLoading || balanceLoading) && isConnected;
+  const isLoading = (loansLoading || remittancesLoading) && isConnected;
 
   const { urgentLoans, dismissed, dismiss } = useRepaymentReminder(loans);
 
@@ -168,54 +169,49 @@ export default function Home() {
   const stats = useMemo(() => {
     if (!isConnected) {
       return {
-        netWorth: formatCurrency(0, locale),
+        walletBalance: formatCurrency(0, locale),
         activeLoans: "0",
         activeLoansSub: t("stats.pending", { count: 0 }),
         totalRemitted: formatCurrency(0, locale),
-        yieldApy: "0.0%",
+        totalOwed: formatCurrency(0, locale),
       };
     }
 
-    const activeLoans = loans?.filter((l) => l.status === "active") ?? [];
+    const activeLoans = loans.filter((l) => l.status === "active");
     const activeCount = activeLoans.length;
-    const pendingCount = loans?.filter((l) => l.status === "pending").length ?? 0;
+    const pendingCount = loans.filter((l) => l.status === "pending_indexing").length;
 
     const totalRemitted =
       remittances?.filter((r) => r.status === "completed").reduce((sum, r) => sum + r.amount, 0) ??
       0;
 
-    const netWorth = (balance?.available ?? 0) + (balance?.locked ?? 0);
-
-    const avgRate =
-      activeLoans.length > 0
-        ? activeLoans.reduce((sum, l) => sum + l.interestRate, 0) / activeLoans.length
-        : 0;
+    const totalOwed = activeLoans.reduce((sum, l) => sum + (l.totalOwed ?? l.principal), 0);
 
     return {
-      netWorth: formatCurrency(netWorth, locale),
+      walletBalance: formatCurrency(usdcBalance, locale),
       activeLoans: String(activeCount),
       activeLoansSub: t("stats.pending", { count: pendingCount }),
       totalRemitted: formatCurrency(totalRemitted, locale),
-      yieldApy: `${avgRate.toFixed(1)}%`,
+      totalOwed: formatCurrency(totalOwed, locale),
     };
-  }, [loans, remittances, balance, isConnected, t]);
+  }, [loans, remittances, usdcBalance, isConnected, t, locale]);
 
   const recentActivity = useMemo(() => {
     const loanEvents =
-      loans?.slice(0, 3).map((l) => ({
+      loans.slice(0, 3).map((l) => ({
         type:
           l.status === "active"
             ? t("activity.loanActive")
             : l.status === "repaid"
               ? t("activity.loanRepaid")
               : t("activity.loanRequest"),
-        desc: t("activity.loanDesc", { id: l.id, amount: formatCurrency(l.amount, locale) }),
+        desc: t("activity.loanDesc", { id: l.id, amount: formatCurrency(l.principal, locale) }),
         amount:
           l.status === "repaid"
-            ? `+${formatCurrency(l.amount, locale)}`
-            : formatCurrency(l.amount, locale),
-        timestamp: new Date(l.createdAt).getTime(),
-        time: new Date(l.createdAt).toLocaleDateString(locale),
+            ? `+${formatCurrency(l.principal, locale)}`
+            : formatCurrency(l.principal, locale),
+        timestamp: l.approvedAt ? new Date(l.approvedAt).getTime() : 0,
+        time: l.approvedAt ? new Date(l.approvedAt).toLocaleDateString(locale) : "",
         status: l.status === "repaid" ? "completed" : l.status,
       })) ?? [];
 
@@ -277,11 +273,9 @@ export default function Home() {
         >
           {[
             {
-              label: t("stats.netWorth"),
-              value: stats.netWorth,
-              change: balance
-                ? t("stats.available", { amount: formatCurrency(balance.available, locale) })
-                : "",
+              label: t("stats.walletBalance"),
+              value: stats.walletBalance,
+              change: "",
               icon: Activity,
               trend: "up" as const,
             },
@@ -300,8 +294,8 @@ export default function Home() {
               trend: "up" as const,
             },
             {
-              label: t("stats.yieldApy"),
-              value: stats.yieldApy,
+              label: t("stats.totalOwed"),
+              value: stats.totalOwed,
               change: "",
               icon: ArrowDownLeft,
               trend: "up" as const,
@@ -332,12 +326,7 @@ export default function Home() {
                 </div>
                 <div className="mt-4">
                   <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
-                    <span className="inline-flex items-center gap-1">
-                      {stat.label}
-                      {stat.label.toLowerCase().includes("apy") ? (
-                        <Tooltip content={t("stats.apyTooltip")} label={t("stats.apyInfo")} />
-                      ) : null}
-                    </span>
+                    {stat.label}
                   </p>
                   <h3 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
                     {stat.value}

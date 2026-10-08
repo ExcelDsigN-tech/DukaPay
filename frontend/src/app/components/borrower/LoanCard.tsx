@@ -81,7 +81,8 @@ export function LoanCard({ loan, variant = "compact" }: LoanCardProps) {
         : `${daysUntil} days remaining`;
 
   // ── Progress (detailed only) ───────────────────────────────────────────────
-  const totalForProgress = loan.principal + loan.accruedInterest;
+  // No interest has accrued while a loan is still being indexed.
+  const totalForProgress = loan.principal + (loan.accruedInterest ?? 0);
   const progress = totalForProgress > 0 ? (loan.totalRepaid / totalForProgress) * 100 : 0;
 
   return (
@@ -100,7 +101,9 @@ export function LoanCard({ loan, variant = "compact" }: LoanCardProps) {
         </div>
         <div className="text-right">
           <p className="text-sm text-gray-600">Total Owed</p>
-          <p className="text-2xl font-bold text-gray-900">{formatCurrency(loan.totalOwed)}</p>
+          <p className="text-2xl font-bold text-gray-900">
+            {formatCurrency(loan.totalOwed ?? loan.principal)}
+          </p>
         </div>
       </div>
 
@@ -143,7 +146,7 @@ export function LoanCard({ loan, variant = "compact" }: LoanCardProps) {
             {variant === "compact" ? "Accrued Interest" : "Interest"}
           </p>
           <p className="text-lg font-semibold text-orange-600">
-            {formatCurrency(loan.accruedInterest)}
+            {formatCurrency(loan.accruedInterest ?? 0)}
           </p>
         </div>
 

@@ -3,8 +3,12 @@
 import { useState, useMemo } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Clock, ArrowUpRight, ArrowDownLeft, ExternalLink } from "lucide-react";
-import { useWalletStore, selectIsWalletConnected } from "../../stores/useWalletStore";
-import { useLoans, useRemittances } from "../../hooks/useApi";
+import {
+  useWalletStore,
+  selectIsWalletConnected,
+  selectWalletAddress,
+} from "../../stores/useWalletStore";
+import { useBorrowerLoans, useRemittances } from "../../hooks/useApi";
 import { ErrorBoundary } from "../../components/global_ui/ErrorBoundary";
 import { StatusIndicator } from "../../components/ui/StatusIndicator";
 import { EmptyState } from "../../components/ui/EmptyState";
@@ -48,7 +52,10 @@ export default function ActivityPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [filterType, setFilterType] = useState<FilterType>("all");
 
-  const { data: loans = [], isLoading: loansLoading } = useLoans({ enabled: isConnected });
+  const address = useWalletStore(selectWalletAddress);
+  const { loans, isLoading: loansLoading } = useBorrowerLoans(
+    isConnected ? (address ?? undefined) : undefined,
+  );
   const { data: remittances = [], isLoading: remittancesLoading } = useRemittances({
     enabled: isConnected,
   });
@@ -62,9 +69,9 @@ export default function ActivityPage() {
       // When present, prioritize it so refinance/extension activity appears.
       id: `loan-${loan.id}`,
       type:
-        (loan as { latestEventType?: string }).latestEventType === "LoanExtended"
+        loan.latestEventType === "LoanExtended"
           ? "Loan Extended"
-          : (loan as { latestEventType?: string }).latestEventType === "LoanRefinanced"
+          : loan.latestEventType === "LoanRefinanced"
             ? "Loan Refinanced"
             : loan.status === "repaid"
               ? "Loan Repaid"
@@ -75,10 +82,10 @@ export default function ActivityPage() {
                   : loan.status === "active"
                     ? "Loan Active"
                     : "Loan Request",
-      description: `Loan #${loan.id} — ${loan.currency}`,
-      amount: `${loan.status === "repaid" ? "+" : "-"}${formatCurrency(loan.amount, locale)}`,
-      timestamp: new Date(loan.createdAt).toISOString(),
-      status: loan.status,
+      description: `Loan #${loan.id}`,
+      amount: `${loan.status === "repaid" ? "+" : "-"}${formatCurrency(loan.principal, locale)}`,
+      timestamp: loan.approvedAt ?? "",
+      status: loan.status === "pending_indexing" ? "pending" : loan.status,
       txHash: undefined,
     }));
 
@@ -104,10 +111,9 @@ export default function ActivityPage() {
       combined = combined.filter((item) => item.type === "Remittance");
     }
 
-    // Sort by timestamp descending
-    return combined.sort(
-      (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
-    );
+    // Sort by timestamp descending; undated items (still indexing) are newest.
+    const time = (ts: string) => new Date(ts).getTime() || Number.MAX_SAFE_INTEGER;
+    return combined.sort((a, b) => time(b.timestamp) - time(a.timestamp));
   }, [loans, remittances, filterType]);
 
   const totalPages = Math.ceil(allActivity.length / ITEMS_PER_PAGE);

@@ -54,7 +54,6 @@ export const queryKeys = {
   },
   user: {
     profile: () => ["user", "profile"] as const,
-    balance: () => ["user", "balance"] as const,
   },
   notifications: {
     all: () => ["notifications"] as const,
@@ -297,12 +296,6 @@ export interface AuthSession {
   valid: boolean;
 }
 
-export interface UserBalance {
-  available: number;
-  locked: number;
-  currency: string;
-}
-
 export interface CreditScoreHistory {
   date: string;
   score: number;
@@ -367,15 +360,21 @@ export interface YieldHistory {
 export interface BorrowerLoan {
   id: number;
   principal: number;
-  accruedInterest: number;
-  totalOwed: number;
+  /** null while the loan is still being indexed */
+  accruedInterest: number | null;
+  /** null while the loan is still being indexed */
+  totalOwed: number | null;
   totalRepaid: number;
+  interestRateBps: number;
   nextPaymentDeadline: string;
-  status: LoanStatus;
+  status: LoanStatus | "pending_indexing";
   borrower: string;
-  approvedAt?: string;
+  approvedAt: string | null;
   latestEventType?: string;
 }
+
+/** The API names the id `loanId`; the app uses `id`. */
+type RawBorrowerLoan = Omit<BorrowerLoan, "id"> & { loanId: number };
 
 export interface LoanEvent {
   type: string;
@@ -640,7 +639,7 @@ interface CursorListParams extends Record<string, unknown> {
 
 interface BorrowerLoansPageResponse {
   success?: boolean;
-  data: { borrower: string; loans: BorrowerLoan[] };
+  data: { borrower: string; loans: RawBorrowerLoan[] };
   page_info?: RawPageInfo;
   total_count?: number | null;
 }
@@ -750,7 +749,7 @@ async function fetchBorrowerLoansPage(
   );
 
   return {
-    items: response.data?.loans ?? [],
+    items: (response.data?.loans ?? []).map(({ loanId, ...loan }) => ({ ...loan, id: loanId })),
     pageInfo: normalizePageInfo(response.page_info, response.total_count),
   };
 }
@@ -1144,19 +1143,6 @@ export function useUpdateUserProfile() {
   });
 }
 
-/**
- * Fetches the current user's wallet balance.
- */
-export function useUserBalance(
-  options?: Omit<UseQueryOptions<UserBalance>, "queryKey" | "queryFn">,
-) {
-  return useQuery<UserBalance>({
-    queryKey: queryKeys.user.balance(),
-    queryFn: () => apiFetch<UserBalance>("/user/balance"),
-    ...options,
-  });
-}
-
 // ─── Chart data hooks ─────────────────────────────────────────────────────────
 
 /**
@@ -1426,7 +1412,7 @@ export function useBorrowerLoans(borrowerAddress: string | undefined) {
 
   const stats: LoanStats = {
     totalActive: activeLoans.length,
-    totalOwed: activeLoans.reduce((sum, l) => sum + l.totalOwed, 0),
+    totalOwed: activeLoans.reduce((sum, l) => sum + (l.totalOwed ?? l.principal), 0),
     nextPaymentDue: upcomingDeadlines[0]?.nextPaymentDeadline ?? null,
     overdueCount: overdueLoans.length,
   };

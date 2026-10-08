@@ -15,9 +15,13 @@ import { twMerge } from "tailwind-merge";
 import { ThemeToggle } from "../ui/ThemeToggle";
 import { NotificationDropdown } from "./NotificationDropdown";
 import { RecentTransactionsDrawer } from "../transaction/RecentTransactionsDrawer";
-import { useWalletStore, selectWalletNetwork } from "../../stores/useWalletStore";
+import {
+  useWalletStore,
+  selectWalletAddress,
+  selectWalletNetwork,
+} from "../../stores/useWalletStore";
 import { useWallet } from "../providers/WalletProvider";
-import { useLoans, useRemittances } from "../../hooks/useApi";
+import { useBorrowerLoans, useRemittances } from "../../hooks/useApi";
 import { useContractToast } from "../../hooks/useContractToast";
 import { useWalletConnectAction } from "../../hooks/useWalletConnectAction";
 import { useTranslations, useLocale } from "next-intl";
@@ -36,6 +40,7 @@ export function Header({ className }: HeaderProps) {
   const t = useTranslations("Navigation");
   const isConnected = useWalletStore((state) => state.status === "connected");
   const network = useWalletStore(selectWalletNetwork);
+  const address = useWalletStore(selectWalletAddress);
   const { disconnectWallet } = useWallet();
   const connectWithFeedback = useWalletConnectAction();
   const toast = useContractToast();
@@ -46,7 +51,7 @@ export function Header({ className }: HeaderProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const { data: loans = [] } = useLoans({ enabled: isConnected });
+  const { loans } = useBorrowerLoans(isConnected ? (address ?? undefined) : undefined);
   const { data: remittances = [] } = useRemittances({ enabled: isConnected });
 
   const pages = useMemo(
@@ -76,13 +81,13 @@ export function Header({ className }: HeaderProps) {
       .filter(
         (loan) =>
           loan.id.toString().toLowerCase().includes(term) ||
-          loan.borrowerId.toLowerCase().includes(term),
+          loan.borrower.toLowerCase().includes(term),
       )
       .slice(0, 5)
       .map((loan) => ({
         id: `loan-${loan.id}`,
         title: `Loan #${loan.id}`,
-        subtitle: loan.borrowerId,
+        subtitle: loan.borrower,
         category: "Loans" as const,
         href: `/${locale}/loans/${loan.id}`,
       }));

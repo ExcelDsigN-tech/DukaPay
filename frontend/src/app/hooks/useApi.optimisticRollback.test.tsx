@@ -72,9 +72,11 @@ const seedBorrowerLoans = (): BorrowerLoan[] => [
     accruedInterest: 50,
     totalOwed: 850,
     totalRepaid: 200,
+    interestRateBps: 500,
     nextPaymentDeadline: "2026-07-01",
     status: "active",
     borrower: BORROWER,
+    approvedAt: null,
   },
 ];
 
