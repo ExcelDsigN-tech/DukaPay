@@ -189,20 +189,6 @@ export interface Score {
   factors: ScoreFactors;
 }
 
-/** One row of `GET /score/leaderboard`. */
-export interface LeaderboardEntry {
-  userId: Address;
-  score: number;
-  band: CreditBand;
-}
-
-/** Response envelope for `GET /score/leaderboard`. */
-export interface Leaderboard {
-  success: boolean;
-  leaderboard: LeaderboardEntry[];
-  source: 'cache' | 'database';
-}
-
 // ── Remittance ────────────────────────────────────────────────────────────────
 
 export type RemittanceCurrency = 'USDC' | 'EURC' | 'PHP';

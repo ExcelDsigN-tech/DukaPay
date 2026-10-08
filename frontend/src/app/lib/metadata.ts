@@ -8,7 +8,8 @@ type PageMetadataInput = {
   description: string;
 };
 
-const DEFAULT_SITE_URL = "https://dukapay.com";
+// Production must set NEXT_PUBLIC_APP_URL; DukaPay has no public domain yet.
+const DEFAULT_SITE_URL = "http://localhost:3000";
 const SITE_NAME = "DukaPay";
 const OG_IMAGE_PATH = "/og-image.png";
 

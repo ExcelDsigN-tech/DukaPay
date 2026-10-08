@@ -22,9 +22,6 @@ export const CacheKeys = {
   // Credit-score breakdown (getScoreBreakdown)
   scoreBreakdown: (publicKey: string) => `score:breakdown:${publicKey}`,
 
-  // Leaderboard (getLeaderboard) - 60s TTL
-  leaderboard: () => 'score:leaderboard',
-
   // Pool & Protocol Analytics (getAnalytics) - 300s TTL
   analytics: () => 'pool:analytics',
 
@@ -54,7 +51,6 @@ export async function invalidateOnRepay(borrower: string, _loanId: number): Prom
     cacheService.delete(CacheKeys.poolStats()),
     cacheService.delete(CacheKeys.borrowerLoans(borrower)),
     cacheService.delete(CacheKeys.scoreBreakdown(borrower)),
-    cacheService.delete(CacheKeys.leaderboard()),
     cacheService.delete(CacheKeys.analytics()),
   ]);
 }

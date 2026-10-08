@@ -5,6 +5,10 @@ maintained automatically by semantic-release.
 
 ## 0.1.0 (unreleased)
 
+- Removed `scores.leaderboard()` and the `Leaderboard` / `LeaderboardEntry`
+  types. The backend no longer serves `GET /score/leaderboard`, which published
+  the top 50 wallet addresses with their credit scores.
+
 - Initial SDK: `DukaPayClient` with `auth`, `loans`, `pool`, `scores`,
   `remittance` resources.
 - Wallet adapters: `FreighterAdapter`, `AlbedoAdapter`, `WalletAdapter` interface.
@@ -31,9 +35,6 @@ breaking signature changes, made before 1.0:
 - `scores.get(address)` now calls `GET /score/{userId}` (the route is mounted at
   `/score`, singular) and returns `Score`
   (`{ success, userId, score, band, factors }`).
-- `scores.leaderboard()` now calls `GET /score/leaderboard` and returns
-  `Leaderboard` (`{ success, leaderboard, source }`). The endpoint takes no
-  parameters, so the `limit` argument was removed.
 - `remittance.list()` now calls `GET /remittances` (plural) with keyset
   pagination (`limit`/`cursor`/`status`/`from`/`to`/`q`) and returns
   `RemittanceList` (`{ success, data, page }`).

@@ -165,7 +165,7 @@ export const poolAnalyticsRateLimiter = createReadRateLimiter({
   message: 'Too many analytics requests, please try again later.',
 });
 
-/** Credit score reads: per wallet when authenticated, per IP for the public leaderboard (60/min). */
+/** Credit score reads: per wallet (60/min). */
 export const scoreReadRateLimiter = createReadRateLimiter({
   max: 60,
   message: 'Too many score requests, please try again later.',

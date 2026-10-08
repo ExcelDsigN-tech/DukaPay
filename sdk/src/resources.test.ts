@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { HttpClient } from './http.js';
-import type { Leaderboard, RemittanceList } from './types.js';
+import type { RemittanceList } from './types.js';
 import {
   AuthResource,
   LoansResource,
@@ -402,18 +402,5 @@ describe('ScoresResource', () => {
     await resource.get(VALID_ADDRESS);
 
     expect(get).toHaveBeenCalledWith(`/score/${VALID_ADDRESS}`);
-  });
-
-  it('reads the leaderboard from the singular /score route without a limit', async () => {
-    const response: Leaderboard = {
-      success: true,
-      leaderboard: [{ userId: VALID_ADDRESS, score: 750, band: 'Excellent' }],
-      source: 'database',
-    };
-    const get = vi.fn().mockResolvedValue(response);
-    const resource = new ScoresResource({ get } as unknown as HttpClient);
-
-    await expect(resource.leaderboard()).resolves.toBe(response);
-    expect(get).toHaveBeenCalledWith('/score/leaderboard', { anonymous: true });
   });
 });

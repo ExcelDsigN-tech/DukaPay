@@ -171,10 +171,6 @@ describe('public endpoints (per-IP limits)', () => {
   it('GET /api/pool/analytics: 60 per minute', async () => {
     await expectLimitOf('/api/pool/analytics', 60);
   });
-
-  it('GET /api/score/leaderboard: 60 per minute', async () => {
-    await expectLimitOf('/api/score/leaderboard', 60);
-  });
 });
 
 describe('credit score endpoints (per-wallet limits)', () => {

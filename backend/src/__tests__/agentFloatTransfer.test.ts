@@ -309,13 +309,31 @@ describe('Agent Float Transfer API (/api/agents/float-transfer)', () => {
         rows: [{ daily_limit: '150000', weekly_limit: '600000' }],
       });
 
-      const response = await request(app).get(
-        `/api/agents/float-transfer/limits?fromAgent=${AGENT_A}&toAgent=${AGENT_B}`,
-      );
+      const response = await request(app)
+        .get(`/api/agents/float-transfer/limits?fromAgent=${AGENT_A}&toAgent=${AGENT_B}`)
+        .set(bearer(AGENT_A));
 
       expect(response.status).toBe(200);
       expect(response.body.data.dailyLimit).toBe(150000);
       expect(response.body.data.weeklyLimit).toBe(600000);
+    });
+
+    it('rejects pair limit reads without a login', async () => {
+      const response = await request(app).get(
+        `/api/agents/float-transfer/limits?fromAgent=${AGENT_A}&toAgent=${AGENT_B}`,
+      );
+
+      expect(response.status).toBe(401);
+      expect(mockQuery).not.toHaveBeenCalled();
+    });
+
+    it('rejects pair limit reads by a wallet outside the pair', async () => {
+      const response = await request(app)
+        .get(`/api/agents/float-transfer/limits?fromAgent=${AGENT_A}&toAgent=${AGENT_B}`)
+        .set(bearer('GOUTSIDER123456789'));
+
+      expect(response.status).toBe(403);
+      expect(mockQuery).not.toHaveBeenCalled();
     });
 
     it('updates pair limits as admin', async () => {
