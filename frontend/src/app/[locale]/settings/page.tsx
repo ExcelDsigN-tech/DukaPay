@@ -22,8 +22,6 @@ import {
   useUpdateUserProfile,
 } from "../../hooks/useApi";
 import { COPY_FEEDBACK_RESET_MS } from "../../components/ui";
-import { useLocaleSwitcher } from "../../hooks/useLocaleSwitcher";
-import { LOCALES, LOCALE_LABELS } from "../../lib/locales";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface NotificationPrefs {
@@ -540,7 +538,6 @@ function SecuritySection() {
 
 function DisplaySection() {
   const t = useTranslations("Settings");
-  const { locale, switchLocale, isPending } = useLocaleSwitcher();
 
   const theme = useThemeStore((s) => s.theme);
   const hydrated = useThemeStore((s) => s.hydrated);
@@ -586,31 +583,6 @@ function DisplaySection() {
               );
             })}
           </div>
-        </div>
-
-        <div>
-          <label
-            htmlFor="settings-language"
-            className="text-sm font-medium text-zinc-900 dark:text-zinc-100 block mb-2"
-          >
-            {t("language")}
-          </label>
-          <select
-            id="settings-language"
-            value={locale}
-            disabled={isPending}
-            onChange={(e) => switchLocale(e.target.value)}
-            className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-indigo-500 focus:outline-none dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-50"
-          >
-            {LOCALES.map((code) => (
-              <option key={code} value={code} lang={code}>
-                {LOCALE_LABELS[code]}
-              </option>
-            ))}
-          </select>
-          <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-1.5">
-            {t("display.languageHelper")}
-          </p>
         </div>
       </CardContent>
     </Card>

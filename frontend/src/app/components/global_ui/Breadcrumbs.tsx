@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronRight, Home } from "lucide-react";
+import { LOCALES } from "../../lib/locales";
 
-const localeSegments = new Set(["en", "es", "tl"]);
+const localeSegments = new Set<string>(LOCALES);
 
 const segmentLabels: Record<string, string> = {
   activity: "Activity",
