@@ -4,15 +4,20 @@ import { LandingPage } from "./LandingPage";
 
 // Inline English catalog so the test asserts against real display text.
 const EN: Record<string, string> = {
-  "hero.eyebrow": "Borderless Finance",
-  "hero.title": "Enter the Citadel",
-  "hero.tagline": "Lend, borrow, and move value across borders on the Stellar Network.",
+  "hero.title": "Lend, borrow, and move value across borders on Stellar.",
+  "hero.tagline":
+    "Micro-loans backed by remittances. Every transaction is shown to you before you sign.",
   "hero.cta": "Enter the Citadel",
-  "hero.subCta": "Connect Wallet",
-  "hero.telegram": "Join our Telegram",
-  "hero.telegramUrl": "https://t.me/+eRqhka27TVo0NzM8",
-  "hero.network": "Testnet",
-  "hero.networkLabel": "Live on Stellar",
+  "hero.howItWorks": "How it works",
+  "hero.status": "Live on Stellar testnet",
+  "hero.mobileCta": "Enter the Citadel",
+  "nav.label": "Main",
+  "nav.home": "DukaPay home",
+  "nav.borrow": "Borrow",
+  "nav.send": "Send",
+  "nav.lend": "Lend",
+  "nav.kingdom": "Kingdom",
+  "nav.connect": "Connect Wallet",
   "arsenal.eyebrow": "The DukaPay Arsenal",
   "arsenal.title": "Everything You Need to Grow",
   "arsenal.subtitle": "One platform. Three ways to put your capital to work.",
@@ -35,6 +40,12 @@ const EN: Record<string, string> = {
   "gates.cta": "Claim Access",
 };
 
+// The canvas floor, the animated diagram and the header controls have their own concerns;
+// this suite covers the landing copy and its calls to action.
+jest.mock("./HeroFloor", () => ({ HeroFloor: () => null }));
+jest.mock("./HeroNetwork", () => ({ HeroNetwork: () => null }));
+jest.mock("../ui/ThemeToggle", () => ({ ThemeToggle: () => null }));
+
 jest.mock("next-intl", () => ({
   useLocale: () => "en",
   useTranslations: () => (key: string) => EN[key] ?? key,
@@ -47,15 +58,42 @@ describe("LandingPage", () => {
     jest.clearAllMocks();
   });
 
-  it("renders the hero with brand, tagline, and network status", () => {
+  it("renders the hero with headline, tagline, and network status", () => {
     render(<LandingPage onConnect={mockOnConnect} />);
 
-    expect(screen.getByRole("heading", { name: "Enter the Citadel" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: EN["hero.title"] })).toBeInTheDocument();
     expect(screen.getByText(EN["hero.tagline"])).toBeInTheDocument();
-    expect(screen.getByText("Testnet")).toBeInTheDocument();
-    expect(screen.getByText("Live on Stellar")).toBeInTheDocument();
+    expect(screen.getByText(EN["hero.status"])).toBeInTheDocument();
     // No marketing figures while the protocol runs on testnet.
     expect(screen.queryByText("$1.2B+")).not.toBeInTheDocument();
+  });
+
+  it("links the landing nav to the app routes for the current locale", () => {
+    render(<LandingPage onConnect={mockOnConnect} />);
+
+    const nav = screen.getByRole("navigation", { name: "Main" });
+    expect(nav.querySelector('a[href="/en/loans"]')).toHaveTextContent("Borrow");
+    expect(nav.querySelector('a[href="/en/send-remittance"]')).toHaveTextContent("Send");
+    expect(nav.querySelector('a[href="/en/lend"]')).toHaveTextContent("Lend");
+    expect(nav.querySelector('a[href="/en/kingdom"]')).toHaveTextContent("Kingdom");
+  });
+
+  it("calls onConnect from the header Connect Wallet button", () => {
+    render(<LandingPage onConnect={mockOnConnect} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Connect Wallet" }));
+
+    expect(mockOnConnect).toHaveBeenCalledTimes(1);
+  });
+
+  it("points How it works at the features section", () => {
+    render(<LandingPage onConnect={mockOnConnect} />);
+
+    expect(screen.getByRole("link", { name: "How it works" })).toHaveAttribute(
+      "href",
+      "#how-it-works",
+    );
+    expect(document.getElementById("how-it-works")).toBeInTheDocument();
   });
 
   it("calls onConnect when the hero CTA is pressed", () => {
@@ -114,11 +152,10 @@ describe("LandingPage", () => {
     expect(screen.getByRole("button", { name: "Claim Access" })).not.toBeDisabled();
   });
 
-  it("renders a Telegram community link pointing to the group", () => {
+  it("does not link to a Telegram group", () => {
     render(<LandingPage onConnect={mockOnConnect} />);
 
-    const telegram = screen.getByRole("link", { name: EN["hero.telegram"] });
-    expect(telegram).toHaveAttribute("href", EN["hero.telegramUrl"]);
-    expect(telegram).toHaveAttribute("target", "_blank");
+    expect(screen.queryByText(/telegram/i)).not.toBeInTheDocument();
+    expect(document.querySelector('a[href*="t.me"]')).toBeNull();
   });
 });

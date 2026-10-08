@@ -16,11 +16,10 @@ import { ThemeToggle } from "../ui/ThemeToggle";
 import { NotificationDropdown } from "./NotificationDropdown";
 import { RecentTransactionsDrawer } from "../transaction/RecentTransactionsDrawer";
 import { useWalletStore, selectWalletNetwork } from "../../stores/useWalletStore";
-import { useGamificationStore } from "../../stores/useGamificationStore";
 import { useWallet } from "../providers/WalletProvider";
 import { useLoans, useRemittances } from "../../hooks/useApi";
 import { useContractToast } from "../../hooks/useContractToast";
-import { LanguageSwitcher } from "./LanguageSwitcher";
+import { useWalletConnectAction } from "../../hooks/useWalletConnectAction";
 import { useTranslations, useLocale } from "next-intl";
 
 function cn(...inputs: ClassValue[]) {
@@ -37,8 +36,8 @@ export function Header({ className }: HeaderProps) {
   const t = useTranslations("Navigation");
   const isConnected = useWalletStore((state) => state.status === "connected");
   const network = useWalletStore(selectWalletNetwork);
-  const { connectWallet, disconnectWallet } = useWallet();
-  const gamificationStore = useGamificationStore();
+  const { disconnectWallet } = useWallet();
+  const connectWithFeedback = useWalletConnectAction();
   const toast = useContractToast();
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -214,16 +213,7 @@ export function Header({ className }: HeaderProps) {
       return;
     }
 
-    try {
-      await connectWallet();
-      gamificationStore.addXP(10, "Wallet connection");
-      toast.success("Wallet connected");
-    } catch (error) {
-      toast.error(
-        "Wallet connection failed",
-        error instanceof Error ? error.message : "Unable to connect to Freighter.",
-      );
-    }
+    await connectWithFeedback();
   };
 
   return (
@@ -363,10 +353,6 @@ export function Header({ className }: HeaderProps) {
         >
           <Wallet className="h-5 w-5" aria-hidden="true" />
         </button>
-
-        <div className="hidden sm:block">
-          <LanguageSwitcher />
-        </div>
 
         <ThemeToggle />
 

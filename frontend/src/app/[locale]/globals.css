@@ -39,6 +39,7 @@
   --warning-border: #f3d9a4;
   --danger: #b91c1c;
   --gold: #8f5b0e;
+  color-scheme: light;
 }
 
 @theme inline {
@@ -54,7 +55,7 @@
   --color-brand-paper: var(--brand-paper);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-  --font-display: var(--font-sora);
+  --font-display: var(--font-sora), var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --color-canvas: var(--canvas);
   --color-surface: var(--surface);
   --color-subtle: var(--subtle);
@@ -111,6 +112,7 @@
   --warning-border: #4a3b17;
   --danger: #fca5a5;
   --gold: #f2b84b;
+  color-scheme: dark;
 }
 
 /* ── Kingdom theme scope ─────────────────────────────────────────── */

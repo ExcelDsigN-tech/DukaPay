@@ -8,7 +8,7 @@ import {
   selectIsWalletConnected,
   selectWalletAddress,
 } from "../stores/useWalletStore";
-import { useWallet } from "../components/providers/WalletProvider";
+import { useWalletConnectAction } from "../hooks/useWalletConnectAction";
 import {
   useLoans,
   useRemittances,
@@ -137,7 +137,7 @@ export default function Home() {
   const router = useRouter();
   const isConnected = useWalletStore(selectIsWalletConnected);
   const address = useWalletStore(selectWalletAddress);
-  const { connectWallet } = useWallet();
+  const connectWithFeedback = useWalletConnectAction();
 
   const { data: loans, isLoading: loansLoading } = useLoans({ enabled: isConnected });
   const { data: remittances, isLoading: remittancesLoading } = useRemittances({
@@ -241,7 +241,7 @@ export default function Home() {
       <main className="min-h-screen" aria-label={t("landingLabel")}>
         <LandingPage
           onConnect={() => {
-            void connectWallet();
+            void connectWithFeedback();
           }}
         />
       </main>
