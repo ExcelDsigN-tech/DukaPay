@@ -10,7 +10,7 @@ import type { Session, SimulationResult } from './types.js';
 import { assertWallet, type StellarNetwork, type WalletAdapter } from './wallet/index.js';
 
 export interface DukaPayClientOptions {
-  /** API base URL, e.g. https://api.dukapay.io */
+  /** API base URL, e.g. https://your-backend.example */
   baseUrl: string;
   /** Stellar network the API is bound to. Defaults to 'testnet'. */
   network?: StellarNetwork;

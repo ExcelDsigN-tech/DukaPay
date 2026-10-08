@@ -139,11 +139,13 @@ All core Soroban contracts (`LendingPool`, `AgentVault`, `LoanManager`) inherit 
 | **Root KEK (Key 0)** | Master key wrapping per-record DEKs | Cloud KMS / HSM | 365 Days | Application KMS Role |
 | **Data Encryption Keys (DEKs)** | Ephemeral keys encrypting individual PII fields | Wrapped in DB payload | 90 Days (Automated) | `piiCrypto` Service |
 | **Deployer Wallets** | Stellar secret keys for smart contract deployment | Cloud HSM / MPC Vault | Per Deployment | CI/CD Pipeline Agent |
-| **Multisig Governance Keys** | 5 independent keys controlling governance & breaker | Hardware Wallets / MPC | Static (Key Ceremony) | 5 Named Executive Signers |
+| **Multisig Governance Keys** | 5 independent keys controlling governance & breaker | Hardware Wallets / MPC | Static (Key Ceremony) | 5 signers (not yet assigned) |
 
 ---
 
 ## 8. Incident Response Runbook
+
+> **Pre-mainnet:** these roles are not yet assigned to people. No on-call rotation exists yet.
 
 ### 8.1 Incident Severity Matrix
 

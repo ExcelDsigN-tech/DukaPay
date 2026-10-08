@@ -72,6 +72,8 @@ Prior to traffic switching in `scripts/deploy-blue-green.sh`, `scripts/smoke-tes
 
 Explicit authority is assigned to named operational roles to prevent ambiguity during high-stress incidents.
 
+> **Pre-mainnet:** these roles are not yet assigned to people. No on-call rotation exists yet. The 3-of-5 multisig signers are not yet assigned either.
+
 | Role | Assigned Authority | Actions Permitted | Target Response SLA |
 | :--- | :--- | :--- | :--- |
 | **Emergency Response Lead (On-Call)** | Immediate Breaker Trip | Trip `CircuitBreaker::pause_all()` or module-specific pause | **< 5 minutes** |

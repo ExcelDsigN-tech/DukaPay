@@ -49,7 +49,7 @@ This phase reads as a project moving from "feature-complete MVP" to "production-
 
 1. **`settlement-netter`**: named in ARCHITECTURE.md, doesn't exist as a contract. Decide: was this superseded by `agent_vault.settle_net`, or is it still-unbuilt scope? Update ARCHITECTURE.md either way.
 2. **`circuit_breaker` contract**: has source + tests but sits outside the Cargo workspace (`contracts/Cargo.toml` members list). Confirm whether it's deployed independently, mid-integration, or abandoned — then either add it to the workspace or document why it's separate.
-3. **`E2E_IMPLEMENTATION_SUMMARY.md`**: 0 bytes. Either fill it in or delete it — an empty root-level doc is worse than none.
+3. **`E2E_IMPLEMENTATION_SUMMARY.md`**: deleted, along with the other root-level implementation reports.
 4. **Two design languages** (neutral shell vs. Obsidian/Kingdom palette, see UI/UX brief): confirm whether they're meant to converge.
 5. **`lender` role's RLS coverage**: RBAC defines it, RLS policies don't have a distinct family for it — verify before building anything lender-facing that touches RLS-protected tables.
 6. **KYC/AML and audit-anchor enforcement are both off by default** (`KYC_ENFORCEMENT_ENABLED=false`, `AUDIT_ANCHOR_ENABLED=false`) — confirm target launch state before treating either as "done."
