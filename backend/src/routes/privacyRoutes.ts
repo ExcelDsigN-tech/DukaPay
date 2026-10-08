@@ -183,6 +183,21 @@ router.get(
   exportUserData,
 );
 
+// Registered before /dsar/:dsarId so 'pending' isn't captured as an id.
+/**
+ * @swagger
+ * /privacy/dsar/pending:
+ *   get:
+ *     summary: List pending DSAR requests (admin only)
+ *     tags: [Privacy]
+ *     security:
+ *       - ApiKeyAuth: []
+ *     responses:
+ *       200:
+ *         description: List of pending DSARs
+ */
+router.get('/dsar/pending', requireApiKey('admin:privacy'), getPendingDsars);
+
 /**
  * @swagger
  * /privacy/dsar/{dsarId}:
@@ -204,19 +219,5 @@ router.get(
  *         description: DSAR not found
  */
 router.get('/dsar/:dsarId', requireJwtAuth, getDsarStatus);
-
-/**
- * @swagger
- * /privacy/dsar/pending:
- *   get:
- *     summary: List pending DSAR requests (admin only)
- *     tags: [Privacy]
- *     security:
- *       - ApiKeyAuth: []
- *     responses:
- *       200:
- *         description: List of pending DSARs
- */
-router.get('/dsar/pending', requireApiKey('admin:privacy'), getPendingDsars);
 
 export default router;

@@ -266,6 +266,16 @@ export class PrivacyService {
   }
 
   /**
+   * Mark a DSAR request as completed.
+   */
+  async completeDsarRequest(id: string): Promise<void> {
+    await query(
+      "UPDATE dsar_requests SET status = 'completed', completed_at = NOW() WHERE id = $1",
+      [id],
+    );
+  }
+
+  /**
    * Get all pending DSAR requests (admin).
    */
   async getPendingDsars(): Promise<DsarRequest[]> {
