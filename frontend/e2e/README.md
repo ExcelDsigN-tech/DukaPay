@@ -313,8 +313,4 @@ CI=true
 
 ## 💬 Support
 
-Join our Telegram community for questions and discussions:
-
-- 💬 Telegram: https://t.me/+eRqhka27TVo0NzM8
-
-All official decisions happen on GitHub. Telegram is for informal discussion and peer support.
+Ask questions in [GitHub Issues](https://github.com/ExcelDsigN-tech/dukapay/issues).
