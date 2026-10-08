@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import dns from 'node:dns/promises';
+import net from 'node:net';
 import { query } from '../db/connection.js';
 import logger from '../utils/logger.js';
 import {
@@ -9,34 +10,48 @@ import {
   decryptField,
 } from './piiCrypto.js';
 
-/**
- * Returns true for IPs that must never be fetched at dispatch time.
- * Mirrors the hostname check in indexerController's isPrivateHost(), but
- * operates on resolved IP addresses to close the DNS-rebinding window.
- * (Registration-time hostname check is kept as defense-in-depth; this
- * runs at every dispatch to catch rebinding after registration.)
- */
+// Private, loopback, link-local, carrier-grade NAT and unspecified ranges.
+// BlockList also matches IPv4-mapped IPv6 (e.g. ::ffff:127.0.0.1).
+const BLOCKED_RANGES = new net.BlockList();
+for (const [address, prefix] of [
+  ['0.0.0.0', 8],
+  ['10.0.0.0', 8],
+  ['100.64.0.0', 10],
+  ['127.0.0.0', 8],
+  ['169.254.0.0', 16],
+  ['172.16.0.0', 12],
+  ['192.168.0.0', 16],
+] as const) {
+  BLOCKED_RANGES.addSubnet(address, prefix, 'ipv4');
+}
+for (const [address, prefix] of [
+  ['::', 128],
+  ['::1', 128],
+  ['fc00::', 7],
+  ['fe80::', 10],
+] as const) {
+  BLOCKED_RANGES.addSubnet(address, prefix, 'ipv6');
+}
+
+/** True for IP literals in a blocked range. Non-IP strings return false. */
 function isPrivateIp(ip: string): boolean {
-  // Strip IPv6 brackets
   const addr = ip.replace(/^\[|\]$/g, '');
+  const family = net.isIP(addr);
+  if (family === 0) return false;
+  return BLOCKED_RANGES.check(addr, family === 4 ? 'ipv4' : 'ipv6');
+}
 
-  // Loopback
-  if (addr === '::1' || addr === '127.0.0.1') return true;
-  if (/^127\./.test(addr)) return true;
-
-  // Link-local
-  if (/^169\.254\./.test(addr)) return true;
-  if (/^fe80:/i.test(addr)) return true;
-
-  // RFC 1918
-  if (/^10\./.test(addr)) return true;
-  if (/^172\.(1[6-9]|2\d|3[01])\./.test(addr)) return true;
-  if (/^192\.168\./.test(addr)) return true;
-
-  // Cloud metadata
-  if (addr === '169.254.169.254') return true;
-
-  return false;
+/**
+ * Registration-time check on a callback URL hostname (no DNS lookup).
+ * Dispatch re-checks the resolved addresses via assertCallbackUrlSafe.
+ */
+export function isPrivateHost(hostname: string): boolean {
+  const host = hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  if (host === 'localhost' || host.endsWith('.localhost')) return true;
+  if (host === 'metadata.google.internal') return true;
+  // Unqualified single-label hostnames (e.g. "internal", "db")
+  if (net.isIP(host) === 0 && !host.includes('.')) return true;
+  return isPrivateIp(host);
 }
 
 /** Thrown when a callback URL points at a private address; retrying won't help. */
@@ -57,8 +72,8 @@ async function assertCallbackUrlSafe(callbackUrl: string): Promise<void> {
   }
 
   // Skip resolution for IP literals — validate directly.
-  if (/^\[?[\da-fA-F:]+\]?$/.test(hostname) || /^[\d.]+$/.test(hostname)) {
-    const bare = hostname.replace(/^\[|\]$/g, '');
+  const bare = hostname.replace(/^\[|\]$/g, '');
+  if (net.isIP(bare) !== 0) {
     if (isPrivateIp(bare)) {
       logger.withContext().warn('Webhook dispatch blocked: callback URL resolves to private IP', {
         hostname,
@@ -461,6 +476,9 @@ async function postWebhook(
 ): Promise<Response> {
   // Re-validate the resolved IP at dispatch time to close the DNS-rebinding
   // window (registration-time hostname check alone is insufficient — see #641).
+  // ponytail: the checked IP isn't pinned, so a DNS answer that changes
+  // between this lookup and fetch() still gets through. Pin it with an undici
+  // Agent `connect.lookup` if webhook registration ever opens beyond admins.
   await assertCallbackUrlSafe(callbackUrl);
 
   const timeoutMs = getWebhookRequestTimeoutMs();
@@ -484,6 +502,8 @@ async function postWebhook(
       },
       body,
       signal: controller.signal,
+      // A redirect would skip the address check above; a 3xx counts as a failed delivery.
+      redirect: 'manual',
     });
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
