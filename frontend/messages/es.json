@@ -106,7 +106,13 @@
     "wallet": "Billetera",
     "kingdom": "Reino",
     "agentDashboard": "Panel de agente",
-    "settings": "Configuración"
+    "settings": "Configuración",
+    "sectionLending": "Prestar",
+    "sectionAgent": "Agente",
+    "sectionAdmin": "Administración",
+    "noWallet": "Sin billetera",
+    "walletConnected": "Conectada",
+    "walletDisconnected": "Desconectada"
   },
   "MorePage": {
     "title": "Más",

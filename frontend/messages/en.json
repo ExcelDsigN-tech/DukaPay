@@ -106,7 +106,13 @@
     "wallet": "Wallet",
     "kingdom": "Kingdom",
     "agentDashboard": "Agent dashboard",
-    "settings": "Settings"
+    "settings": "Settings",
+    "sectionLending": "Lending",
+    "sectionAgent": "Agent",
+    "sectionAdmin": "Admin",
+    "noWallet": "No wallet",
+    "walletConnected": "Connected",
+    "walletDisconnected": "Disconnected"
   },
   "MorePage": {
     "title": "More",

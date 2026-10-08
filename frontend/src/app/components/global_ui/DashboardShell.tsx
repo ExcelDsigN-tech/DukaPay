@@ -14,17 +14,17 @@ interface DashboardShellProps {
 
 export function DashboardShell({ children }: DashboardShellProps) {
   return (
-    <div className="flex min-h-screen bg-zinc-50 dark:bg-zinc-950">
+    <div className="flex min-h-screen bg-canvas text-fg">
       <a
         href="#main-content"
-        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 z-50 bg-white dark:bg-zinc-800 dark:text-white p-2 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 z-50 rounded-[10px] bg-surface p-2 text-fg focus:outline-none focus:ring-[3px] focus:ring-link"
       >
         Skip to main content
       </a>
       {/* Sidebar on desktop; mobile uses the bottom nav and its More tab */}
       <Sidebar className="hidden lg:flex" />
 
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex min-w-0 flex-1 flex-col">
         {/* Header */}
         <Header />
         <OfflineBanner />
@@ -34,7 +34,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
         <main
           id="main-content"
           tabIndex={-1}
-          className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 pb-20 lg:pb-8"
+          className="flex-1 px-4 pt-[18px] pb-24 lg:px-8 lg:pt-7 lg:pb-12"
         >
           <div className="mx-auto max-w-7xl">
             <Breadcrumbs />

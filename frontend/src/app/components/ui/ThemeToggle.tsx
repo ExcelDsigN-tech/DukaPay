@@ -19,7 +19,7 @@ export function ThemeToggle() {
   // Prevent hydration mismatch and flash of unstyled icon
   if (!hydrated) {
     return (
-      <button className="p-2 text-transparent" aria-hidden="true" disabled>
+      <button className="h-10 w-10 text-transparent" aria-hidden="true" disabled>
         <div className="h-5 w-5" />
       </button>
     );
@@ -32,7 +32,7 @@ export function ThemeToggle() {
   return (
     <button
       onClick={toggleTheme}
-      className="p-2 text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-900 rounded-lg transition-colors"
+      className="flex h-10 w-10 items-center justify-center rounded-[10px] border border-line text-fg transition-colors hover:bg-subtle"
       aria-label={`${label} active, switch to ${nextLabel} mode`}
       aria-live="polite"
       title={label}

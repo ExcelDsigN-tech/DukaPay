@@ -80,15 +80,12 @@ export function Breadcrumbs() {
   });
 
   return (
-    <nav
-      aria-label="Breadcrumb"
-      className="mb-4 overflow-x-auto rounded-2xl border border-zinc-200 bg-white/80 px-3 py-2 shadow-sm shadow-zinc-200/40 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/70 dark:shadow-none sm:mb-6 sm:px-4"
-    >
-      <ol className="flex min-w-max items-center gap-1 text-sm text-zinc-500 dark:text-zinc-400">
+    <nav aria-label="Breadcrumb" className="mb-4 overflow-x-auto sm:mb-6">
+      <ol className="flex min-w-max items-center gap-1 text-sm text-fg-muted">
         <li>
           <Link
             href={baseHref}
-            className="inline-flex items-center gap-2 rounded-full px-2 py-1 font-medium text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-900 dark:hover:text-zinc-50"
+            className="inline-flex items-center gap-2 rounded-md py-1 pr-2 font-medium text-fg-muted transition hover:text-fg"
           >
             <Home className="h-4 w-4" />
             <span className="hidden sm:inline">Dashboard</span>
@@ -96,18 +93,15 @@ export function Breadcrumbs() {
         </li>
         {items.map((item) => (
           <li key={item.href} className="flex items-center gap-1">
-            <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" />
+            <ChevronRight className="h-4 w-4 shrink-0 text-fg-muted" />
             {item.isCurrent ? (
-              <span
-                aria-current="page"
-                className="rounded-full bg-indigo-50 px-3 py-1 font-semibold text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300"
-              >
+              <span aria-current="page" className="px-2 py-1 font-semibold text-fg">
                 {item.label}
               </span>
             ) : (
               <Link
                 href={item.href}
-                className="rounded-full px-3 py-1 font-medium text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-900 dark:hover:text-zinc-50"
+                className="rounded-md px-2 py-1 font-medium text-fg-muted transition hover:text-fg"
               >
                 {item.label}
               </Link>

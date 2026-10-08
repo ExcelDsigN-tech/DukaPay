@@ -231,7 +231,7 @@ export function NotificationDropdown() {
         aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ""}`}
         aria-haspopup="true"
         aria-expanded={open}
-        className="relative p-2 text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-900 rounded-lg transition-colors"
+        className="relative flex h-10 w-10 items-center justify-center rounded-[10px] border border-line text-fg transition-colors hover:bg-subtle"
       >
         <Bell className="h-5 w-5" />
         <AnimatePresence>
@@ -243,8 +243,7 @@ export function NotificationDropdown() {
               exit={{ scale: 0 }}
               title={`${unreadCount} unread notification${unreadCount === 1 ? "" : "s"}`}
               className={cn(
-                "absolute top-1 right-1 flex items-center justify-center rounded-full border-2 border-white px-1 text-[9px] font-bold text-white dark:border-zinc-950",
-                unreadCount > 9 ? "h-4 min-w-4 bg-indigo-500" : "h-4 min-w-4 bg-indigo-500",
+                "absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full border-2 border-canvas bg-danger px-1 text-[9px] font-bold text-canvas",
               )}
             >
               {unreadCount > 9 ? "9+" : unreadCount}
