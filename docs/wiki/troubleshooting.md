@@ -64,7 +64,6 @@ the oracle signer key (see key management).
 
 - Pause authority (security council signers) for the CircuitBreaker.
 - Governance admins for `MultisigGovernance` upgrades.
-- On-call in the Telegram ops channel.
 
 ## Log hygiene
 

@@ -965,9 +965,7 @@
         "q": "What if I enter the wrong address?",
         "a": "Always verify the recipient address carefully before confirming. The transaction preview allows you to review the recipient address before sending. Once sent on the blockchain, transactions cannot be reversed."
       }
-    },
-    "needHelp": "Need help?",
-    "contactSupport": "Contact Support on Telegram"
+    }
   },
   "RepayLoan": {
     "eyebrow": "Borrower Portal",

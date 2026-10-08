@@ -80,6 +80,3 @@ cd contracts && cargo fmt --check && cargo clippy && cargo test
 
 <!-- Add screenshots or a short demo video link -->
 
----
-
-💬 **Questions?** Join the conversation on [Telegram](https://t.me/+eRqhka27TVo0NzM8) — fellow contributors and maintainers hang out there.

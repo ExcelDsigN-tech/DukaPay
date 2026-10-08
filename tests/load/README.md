@@ -391,7 +391,6 @@ curl http://localhost:4000/health
 
 For questions or issues:
 - GitHub Issues: Report bugs or request features
-- Telegram: https://t.me/+eRqhka27TVo0NzM8
 - Email: ops@dukapay.io
 
 ## 📄 License

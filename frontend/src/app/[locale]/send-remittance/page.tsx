@@ -92,21 +92,6 @@ export default function SendRemittancePage() {
             </div>
           </div>
         </ErrorBoundary>
-
-        {/* Footer Links */}
-        <div className="mt-12 pt-6 border-t border-zinc-200 dark:border-zinc-800 text-center">
-          <p className="text-sm text-zinc-600 dark:text-zinc-400">
-            {t("needHelp")}
-            <a
-              href="https://t.me/+eRqhka27TVo0NzM8"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="ml-1 text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 focus-visible:ring-2 focus-visible:ring-focus-ring rounded px-1"
-            >
-              {t("contactSupport")}
-            </a>
-          </p>
-        </div>
       </div>
     </div>
   );

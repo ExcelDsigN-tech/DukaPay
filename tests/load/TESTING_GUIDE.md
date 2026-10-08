@@ -638,6 +638,5 @@ export default function () {
 
 For questions or issues:
 - **GitHub Issues**: Report bugs
-- **Telegram**: https://t.me/+eRqhka27TVo0NzM8
 - **Email**: ops@dukapay.io
 - **Documentation**: https://docs.dukapay.io

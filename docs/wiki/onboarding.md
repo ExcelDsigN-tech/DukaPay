@@ -6,7 +6,6 @@ merged PR.
 ## 1. Accounts & access
 
 - [ ] GitHub access to `ExcelDsigN-tech/dukapay`
-- [ ] Joined the [Telegram community](https://t.me/+eRqhka27TVo0NzM8)
 - [ ] Read `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, and `SECURITY.md`
 - [ ] Read `ARCHITECTURE.md` and `docs/wiki/architecture.md`
 

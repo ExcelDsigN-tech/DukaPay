@@ -312,7 +312,6 @@ All requirements from issue #435 have been met:
 
 For questions or issues:
 - **GitHub Issues**: Report bugs
-- **Telegram**: https://t.me/+eRqhka27TVo0NzM8
 - **Email**: ops@dukapay.io
 
 ## 🏆 Next Steps

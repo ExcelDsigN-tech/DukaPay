@@ -104,7 +104,7 @@ See [SECURITY.md](SECURITY.md). Report vulnerabilities per the security policy.
 
 ## 💬 Community
 
-Join the [DukaPay Telegram community](https://t.me/+eRqhka27TVo0NzM8) for product updates, support, and discussion.
+Questions and discussion happen in [GitHub Issues](https://github.com/ExcelDsigN-tech/dukapay/issues).
 
 ## 🤝 Contributing
 

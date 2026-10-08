@@ -8,8 +8,6 @@ body:
       value: |
         **Welcome!** Before you begin, please review our [Contributing Guidelines](../../CONTRIBUTING.md).
 
-        💬 Connect with other contributors on [Telegram](https://t.me/+eRqhka27TVo0NzM8) — great for quick questions and informal discussion.
-
   - type: dropdown
     id: category
     attributes:

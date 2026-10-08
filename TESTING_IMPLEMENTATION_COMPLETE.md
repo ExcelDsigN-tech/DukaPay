@@ -456,7 +456,6 @@ npm run report
 ## 📞 Support & Resources
 
 - **GitHub Issues**: Report bugs or request features
-- **Telegram**: https://t.me/+eRqhka27TVo0NzM8
 - **Contributing**: See CONTRIBUTING.md
 - **Documentation**: All testing docs included
 

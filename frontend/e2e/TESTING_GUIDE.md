@@ -476,5 +476,4 @@ CI=true npx playwright test
 
 - Check existing tests for examples
 - Read the [E2E README](./README.md)
-- Ask in Telegram: https://t.me/+eRqhka27TVo0NzM8
 - Open GitHub Discussion for architecture questions
