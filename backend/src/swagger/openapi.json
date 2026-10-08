@@ -6458,6 +6458,24 @@
         }
       }
     },
+    "/privacy/dsar/pending": {
+      "get": {
+        "summary": "List pending DSAR requests (admin only)",
+        "tags": [
+          "Privacy"
+        ],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of pending DSARs"
+          }
+        }
+      }
+    },
     "/privacy/dsar/{dsarId}": {
       "get": {
         "summary": "Check DSAR request status",
@@ -6485,24 +6503,6 @@
           },
           "404": {
             "description": "DSAR not found"
-          }
-        }
-      }
-    },
-    "/privacy/dsar/pending": {
-      "get": {
-        "summary": "List pending DSAR requests (admin only)",
-        "tags": [
-          "Privacy"
-        ],
-        "security": [
-          {
-            "ApiKeyAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "List of pending DSARs"
           }
         }
       }
