@@ -112,6 +112,12 @@ export const createDsarDeletionRequest = asyncHandler(async (req: Request, res: 
 export const createAnonymizationRequest = asyncHandler(async (req: Request, res: Response) => {
   const { publicKey, reason } = req.body;
 
+  if (!publicKey) {
+    throw AppError.badRequest('publicKey is required');
+  }
+
+  authorizeDsar(req, publicKey);
+
   const dsar = await privacyService.createDsarRequest(publicKey, 'anonymization', reason);
 
   privacyService
@@ -167,6 +173,8 @@ export const getDsarStatus = asyncHandler(async (req: Request, res: Response) =>
   if (!dsar) {
     throw AppError.notFound('DSAR request not found');
   }
+
+  authorizeDsar(req, dsar.publicKey);
 
   res.json({
     success: true,
