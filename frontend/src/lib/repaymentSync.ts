@@ -76,7 +76,7 @@ export async function fetchCsrfToken(
   fetchImpl: typeof fetch,
 ): Promise<string | null> {
   try {
-    const res = await fetchImpl(`${apiUrl}/auth/csrf`, {
+    const res = await fetchImpl(`${apiUrl}/api/auth/csrf`, {
       method: "GET",
       credentials: "include",
       headers: { Accept: "application/json" },
@@ -109,7 +109,7 @@ async function submitRepayment(
   item: QueuedRepayment,
   csrfToken: string,
 ): Promise<Response> {
-  return fetchImpl(`${apiUrl}/loans/${item.loanId}/repay`, {
+  return fetchImpl(`${apiUrl}/api/loans/${item.loanId}/repay`, {
     method: "POST",
     credentials: "include",
     headers: {

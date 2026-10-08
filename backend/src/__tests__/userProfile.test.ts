@@ -175,4 +175,14 @@ describe('/user/profile', () => {
     expect(response.status).toBe(401);
     expect(queryMock).not.toHaveBeenCalled();
   });
+
+  it.each(['/api/user/profile', '/api/v1/user/profile'])(
+    'serves the profile under the %s prefix used by the frontend',
+    async (path) => {
+      const response = await request(app).get(path);
+
+      expect(response.status).toBe(401);
+      expect(queryMock).not.toHaveBeenCalled();
+    },
+  );
 });

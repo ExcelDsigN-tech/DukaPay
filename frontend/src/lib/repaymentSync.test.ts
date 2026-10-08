@@ -129,7 +129,7 @@ describe("replayQueuedRepayments", () => {
     const repay = calls.find((call) => call.method === "POST");
     expect(repay).toBeDefined();
     // Not a relative path that would land back on the Next.js origin.
-    expect(repay?.url).toBe(`${API_URL}/loans/42/repay`);
+    expect(repay?.url).toBe(`${API_URL}/api/loans/42/repay`);
     expect(repay?.credentials).toBe("include");
     expect(repay?.headers["x-csrf-token"]).toBe(CSRF_TOKEN);
     expect(repay?.headers["idempotency-key"]).toEqual(expect.any(String));

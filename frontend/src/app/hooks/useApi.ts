@@ -191,7 +191,7 @@ export async function getCsrfToken(): Promise<string | null> {
   }
 
   try {
-    await fetch(`${API_URL}/auth/csrf`, {
+    await fetch(`${API_URL}/api/auth/csrf`, {
       method: "GET",
       credentials: "include",
       headers: { Accept: "application/json" },
@@ -224,7 +224,7 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
     }
   }
 
-  const response = await fetch(`${API_URL}${path}`, {
+  const response = await fetch(`${API_URL}/api${path}`, {
     ...options,
     headers,
     credentials: "include",
