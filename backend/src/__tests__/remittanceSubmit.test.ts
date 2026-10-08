@@ -45,8 +45,9 @@ jest.unstable_mockModule('../services/sorobanService.js', () => ({
   sorobanService: { submitSignedTx: mockSubmitSignedTx },
 }));
 
+const mockCreateNotification = jest.fn(async () => undefined);
 jest.unstable_mockModule('../services/notificationService.js', () => ({
-  notificationService: { createNotification: jest.fn(async () => undefined) },
+  notificationService: { createNotification: mockCreateNotification },
 }));
 
 jest.unstable_mockModule('../services/cacheService.js', () => ({
@@ -163,6 +164,56 @@ describe('POST /api/remittances/:id/submit (#670)', () => {
       'tx_bad_seq',
       'processing',
     );
+  });
+
+  it('marks failed when the transaction fails on-chain', async () => {
+    mockSubmitSignedTx.mockRejectedValue(
+      new AppError(
+        'Transaction did not succeed on the Stellar network (FAILED)',
+        400,
+        true,
+        undefined,
+        undefined,
+        {
+          txHash: 'hash-failed',
+          txStatus: 'FAILED',
+        },
+      ),
+    );
+
+    const res = await submit(SENDER);
+
+    expect(res.status).toBe(400);
+    expect(mockUpdateStatus).toHaveBeenLastCalledWith(
+      'remittance-1',
+      'failed',
+      undefined,
+      'Transaction did not succeed on the Stellar network (FAILED)',
+      'processing',
+    );
+    expect(mockCreateNotification).not.toHaveBeenCalled();
+  });
+
+  it('leaves the remittance processing when the transaction is not confirmed yet', async () => {
+    mockSubmitSignedTx.mockRejectedValue(
+      new AppError('Transaction not confirmed yet', 503, true, undefined, undefined, {
+        txHash: 'hash-pending',
+        txStatus: 'NOT_FOUND',
+      }),
+    );
+
+    const res = await submit(SENDER);
+
+    expect(res.status).toBe(503);
+    expect(mockUpdateStatus).toHaveBeenCalledTimes(1);
+    expect(mockUpdateStatus).toHaveBeenCalledWith(
+      'remittance-1',
+      'processing',
+      undefined,
+      undefined,
+      'pending',
+    );
+    expect(mockCreateNotification).not.toHaveBeenCalled();
   });
 
   it('completes with the transaction hash on success', async () => {

@@ -258,6 +258,12 @@ export const submitRemittanceTransaction = asyncHandler(async (req: Request, res
   } catch (error) {
     logger.withContext().error('Error submitting remittance transaction:', error);
 
+    // An unconfirmed transaction may still land, so it stays processing.
+    // ponytail: nothing reconciles these yet; add a job that re-polls the tx hash.
+    if (error instanceof AppError && error.details?.txStatus === 'NOT_FOUND') {
+      throw error;
+    }
+
     // Only a failed submission marks the remittance failed, and only from the
     // state this request put it in.
     await remittanceService.updateRemittanceStatus(
