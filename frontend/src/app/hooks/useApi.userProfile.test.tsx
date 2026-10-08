@@ -60,7 +60,7 @@ describe("useUpdateUserProfile", () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "http://localhost:3001/user/profile",
+      "http://localhost:3001/api/user/profile",
       expect.objectContaining({
         method: "PATCH",
         body: JSON.stringify({ displayName: "New name", email: "new@example.com" }),

@@ -405,6 +405,8 @@ app.use('/api/v1/privacy', privacyRoutes);
 app.use('/api/v1/agents', agentFloatRoutes);
 app.use('/api/v1/audit', auditRoutes);
 app.use('/user', userRoutes);
+app.use('/api/user', userRoutes);
+app.use('/api/v1/user', userRoutes);
 
 mountSwaggerDocs(app);
 
