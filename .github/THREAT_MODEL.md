@@ -7,7 +7,7 @@ This threat model documents the trust boundaries, threat surface, potential atta
 ## 1. Scope and System Data Flow
 
 - **Feature or Change**: Core DukaPay Platform Threat Model (Smart Contracts, Backend API, PII Encryption, Agent Float Multisig, Governance)
-- **Owner**: Security Champion & Lead System Architect
+- **Owner**: Maintainers
 - **Components and Trust Boundaries**:
   - **Client Applications / Web Frontends**: Browser & Mobile UI (Untrusted boundary)
   - **Backend API Gateway (Express Node.js)**: Public REST endpoints, JWT auth, rate limiters (Semi-trusted boundary)
@@ -68,5 +68,5 @@ This threat model documents the trust boundaries, threat surface, potential atta
 
 - [x] Threat model covers every changed trust boundary.
 - [x] Security-sensitive assumptions have tests (`piiCrypto.test.ts`, `agentFloatService.test.ts`, `agentRbac.test.ts`).
-- [x] Security champion reviewed and validated this model.
+- [ ] A maintainer reviewed and validated this model.
 - [x] Follow-up items tracked in project milestone issues.

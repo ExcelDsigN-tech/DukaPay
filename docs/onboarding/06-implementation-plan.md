@@ -32,7 +32,7 @@ A concentrated, clearly deliberate hardening pass, referencing a formal issue-tr
 - **Row-Level Security + RBAC for tenant isolation (#490)** — most recent major merge before current HEAD
 - Agent-to-agent float transfer feature (#479), immediately followed by a CI cleanup fix (#491)
 
-This phase reads as a project moving from "feature-complete MVP" to "production-hardening for real money," consistent with the bug bounty program and annual pentest commitments in `SECURITY.md`.
+This phase reads as a project moving from "feature-complete MVP" to "production-hardening for real money."
 
 ## Current Build Order (for a new contributor setting up locally)
 
