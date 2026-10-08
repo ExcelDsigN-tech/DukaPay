@@ -39,7 +39,10 @@ export function formatCurrency(amount: number, locale: string = FALLBACK_LOCALE)
  */
 export function formatDate(iso: string, locale: string = FALLBACK_LOCALE): string {
   const resolvedLocale = resolveLocale(locale);
-  return new Date(iso).toLocaleDateString(resolvedLocale, {
+  const date = new Date(iso);
+  // Undated items (e.g. a loan still being indexed) render blank, not "Invalid Date".
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString(resolvedLocale, {
     month: "short",
     day: "numeric",
     year: "numeric",

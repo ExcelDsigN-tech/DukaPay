@@ -94,7 +94,10 @@ export function LoansPageClient() {
     return dueAt >= now && dueAt <= now + sevenDays;
   }).length;
 
-  const totalOwed = displayedLoans.reduce((sum, loan) => sum + loan.totalOwed, 0);
+  const totalOwed = displayedLoans.reduce(
+    (sum, loan) => sum + (loan.totalOwed ?? loan.principal),
+    0,
+  );
   const overdueCount = displayedLoans.filter((loan) => loan.displayStatus === "defaulted").length;
   const portfolioHealth =
     overdueCount === 0
@@ -223,7 +226,7 @@ export function LoansPageClient() {
                     <div className="flex flex-wrap items-center gap-3 text-sm">
                       <LoanStatusBadge status={loan.displayStatus} />
                       <span className="text-zinc-600 dark:text-zinc-400">
-                        {formatCurrency(loan.totalOwed, locale)}
+                        {formatCurrency(loan.totalOwed ?? loan.principal, locale)}
                       </span>
                       <span className="text-zinc-600 dark:text-zinc-400">
                         {t("due", {

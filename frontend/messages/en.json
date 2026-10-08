@@ -5,17 +5,14 @@
     "getStarted": "Get Started",
     "learnMore": "Learn More",
     "stats": {
-      "netWorth": "Net Worth",
+      "walletBalance": "Wallet balance (USDC)",
       "activeLoans": "Active Loans",
       "totalRemitted": "Total Remitted",
-      "yieldApy": "Yield (APY)",
+      "totalOwed": "Total owed",
       "label": "Portfolio Statistics",
-      "available": "{amount} available",
       "pending": "{count} pending",
       "transfers": "{count} transfers",
-      "change": "Change: {change}",
-      "apyTooltip": "APY (Annual Percentage Yield): The estimated yearly return on your deposits, including compounding. This may change over time.",
-      "apyInfo": "APY info"
+      "change": "Change: {change}"
     },
     "activity": {
       "title": "Recent Activity",

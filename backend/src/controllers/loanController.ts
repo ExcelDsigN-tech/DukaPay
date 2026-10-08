@@ -257,6 +257,8 @@ type BorrowerLoan = {
   accruedInterest: number | null;
   totalRepaid: number;
   totalOwed: number | null;
+  /** Approved rate, or the configured default when the event lacks one. */
+  interestRateBps: number;
   nextPaymentDeadline: string;
   status: 'active' | 'repaid' | 'defaulted' | 'pending_indexing';
   borrower: string;
@@ -615,6 +617,7 @@ export const getBorrowerLoans = asyncHandler(async (req: Request, res: Response)
         : Number.parseFloat((row.accrued_interest as string) || '0'),
       totalRepaid: Number.parseFloat((row.total_repaid as string) || '0'),
       totalOwed: isPending ? null : Number.parseFloat((row.total_owed as string) || '0'),
+      interestRateBps: Number(row.effective_rate_bps),
       nextPaymentDeadline: new Date(row.next_payment_deadline as string).toISOString(),
       status: row.status as 'active' | 'repaid' | 'defaulted' | 'pending_indexing',
       borrower: row.address as string,
