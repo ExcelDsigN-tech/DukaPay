@@ -2,11 +2,9 @@ import type { ReactElement, ReactNode } from "react";
 import { render, type RenderOptions } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import en from "../../messages/en.json";
-import es from "../../messages/es.json";
-import tl from "../../messages/tl.json";
 import type { Locale } from "../app/lib/locales";
 
-export const MESSAGES = { en, es, tl } as const;
+export const MESSAGES = { en } as const;
 
 export function IntlWrapper({ locale = "en", children }: { locale?: Locale; children: ReactNode }) {
   return (

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { LOCALES } from "./locales";
 
 type PageMetadataInput = {
   locale: string;
@@ -7,7 +8,6 @@ type PageMetadataInput = {
   description: string;
 };
 
-const LOCALES = ["en", "es", "tl"] as const;
 const DEFAULT_SITE_URL = "https://dukapay.com";
 const SITE_NAME = "DukaPay";
 const OG_IMAGE_PATH = "/og-image.png";

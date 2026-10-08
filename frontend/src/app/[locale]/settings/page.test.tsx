@@ -1,7 +1,7 @@
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import SettingsPage from "./page";
-import { IntlWrapper, renderWithIntl } from "../../../test-utils/intl";
+import { renderWithIntl } from "../../../test-utils/intl";
 
 const mockReplace = jest.fn();
 const mockUpdateUserProfile = jest.fn();
@@ -111,68 +111,10 @@ describe("SettingsPage profile saving", () => {
   });
 });
 
-describe("SettingsPage language selector", () => {
-  beforeEach(() => {
-    mockReplace.mockClear();
-    document.cookie = "NEXT_LOCALE=; max-age=0; path=/";
-  });
-
-  async function openDisplay() {
-    const user = userEvent.setup();
-    await user.click(screen.getByRole("tab", { name: /display|pantalla/i }));
-    return user;
-  }
-
-  it("only offers locales that have message files", async () => {
-    renderWithIntl(<SettingsPage />);
-    await openDisplay();
-
-    const options = screen.getAllByRole("option").map((o) => (o as HTMLOptionElement).value);
-    expect(options).toEqual(["en", "es", "tl"]);
-    expect(screen.getByLabelText("Language")).toHaveValue("en");
-  });
-
-  it("switches the locale segment, remembers the choice and updates the UI", async () => {
-    const { rerender } = render(
-      <IntlWrapper locale="en">
-        <SettingsPage />
-      </IntlWrapper>,
-    );
-    const user = await openDisplay();
-
-    expect(screen.getByRole("heading", { level: 1, name: "Settings" })).toBeInTheDocument();
-
-    await user.selectOptions(screen.getByLabelText("Language"), "es");
-
-    expect(mockReplace).toHaveBeenCalledWith("/es/settings");
-    expect(document.cookie).toContain("NEXT_LOCALE=es");
-
-    // The router moves to /es/settings, which renders with the Spanish messages.
-    rerender(
-      <IntlWrapper locale="es">
-        <SettingsPage />
-      </IntlWrapper>,
-    );
-
-    expect(screen.getByRole("heading", { level: 1, name: "Configuración" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Perfil" })).toBeInTheDocument();
-    expect(screen.getByLabelText("Idioma")).toHaveValue("es");
-  });
-
-  it("does nothing when the current locale is selected again", async () => {
-    renderWithIntl(<SettingsPage />);
-    const user = await openDisplay();
-
-    await user.selectOptions(screen.getByLabelText("Language"), "en");
-
-    expect(mockReplace).not.toHaveBeenCalled();
-  });
-});
-
 describe("SettingsPage translations", () => {
   const sections = ["profile", "wallet", "notifications", "security", "display"] as const;
 
-  it.each(["en", "es", "tl"] as const)(
+  it.each(["en"] as const)(
     "renders every section in %s without missing messages",
     async (locale) => {
       const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});

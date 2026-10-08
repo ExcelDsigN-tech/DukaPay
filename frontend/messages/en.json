@@ -297,8 +297,6 @@
     }
   },
   "Settings": {
-    "language": "Language",
-    "selectLanguage": "Select Language",
     "eyebrow": "Account",
     "title": "Settings",
     "description": "Manage your profile, wallet, notifications, and preferences.",
@@ -390,15 +388,14 @@
     },
     "display": {
       "title": "Display",
-      "description": "Appearance and language preferences.",
+      "description": "Appearance preferences.",
       "theme": "Theme",
       "themeHelper": "Choose a preference: Light / Dark / System",
       "themes": {
         "light": "Light",
         "dark": "Dark",
         "system": "System"
-      },
-      "languageHelper": "Changes the language across DukaPay and remembers it for your next visit."
+      }
     }
   },
   "LoanDetails": {
