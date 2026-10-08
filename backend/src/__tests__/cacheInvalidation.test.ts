@@ -66,9 +66,9 @@ describe('cacheKeys helpers', () => {
       expect(deletedKeys).toContain(CacheKeys.scoreBreakdown(BORROWER));
     });
 
-    it('calls delete exactly 5 times', async () => {
+    it('calls delete exactly 4 times', async () => {
       await invalidateOnRepay(BORROWER, LOAN_ID);
-      expect(mockDelete).toHaveBeenCalledTimes(5);
+      expect(mockDelete).toHaveBeenCalledTimes(4);
     });
   });
 

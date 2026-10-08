@@ -3,6 +3,7 @@ import { agentFloatService } from '../services/agentFloatService.js';
 import { requireJwtAuth } from '../middleware/jwtAuth.js';
 import { requireRole } from '../middleware/rbac.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import { AppError } from '../errors/AppError.js';
 
 const router = Router();
 
@@ -77,9 +78,16 @@ router.post(
  */
 router.get(
   '/float-transfer/limits',
+  requireJwtAuth,
   asyncHandler(async (req: Request, res: Response) => {
     const fromAgent = req.query.fromAgent as string;
     const toAgent = req.query.toAgent as string;
+    const publicKey = (req as { user?: { publicKey?: string } }).user?.publicKey;
+    const role = (req as { user?: { role?: string } }).user?.role;
+
+    if (role !== 'admin' && publicKey !== fromAgent && publicKey !== toAgent) {
+      throw AppError.forbidden('Only the two agents in the pair or an admin can view these limits');
+    }
 
     const result = await agentFloatService.getPairLimits(fromAgent, toAgent);
 

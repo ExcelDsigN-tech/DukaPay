@@ -4,7 +4,6 @@ import type {
   BorrowerLoans,
   Challenge,
   DepositorPortfolio,
-  Leaderboard,
   Loan,
   LoanConfig,
   PoolAnalyticsResponse,
@@ -177,11 +176,6 @@ export class ScoresResource {
   get(address: string): Promise<Score> {
     validateStellarAddress(address, 'address');
     return this.http.get(`/score/${address}`);
-  }
-
-  /** Public leaderboard. The endpoint takes no parameters. */
-  leaderboard(): Promise<Leaderboard> {
-    return this.http.get('/score/leaderboard', { anonymous: true });
   }
 }
 

@@ -120,9 +120,9 @@ export const updateScore = asyncHandler(async (req: Request, res: Response) => {
   const newScore = result.rows[0].score ?? result.rows[0].current_score;
   const band = getCreditBand(newScore);
 
-  // Invalidate score cache and leaderboard
+  // Invalidate score cache
   const cacheKey = `score:userId:${userId}`;
-  await Promise.all([cacheService.delete(cacheKey), cacheService.delete('score:leaderboard')]);
+  await cacheService.delete(cacheKey);
 
   res.json({
     success: true,
@@ -393,38 +393,4 @@ export const getRemittanceNft = asyncHandler(async (req: Request, res: Response)
   await cacheService.set(cacheKey, response, 60);
 
   res.json({ success: true, walletAddress, nft });
-});
-
-/**
- * GET /api/score/leaderboard
- *
- * Retrieves the credit score leaderboard showing top credit scores.
- * Cached for 60 seconds (cache-aside pattern with TTL).
- */
-export const getLeaderboard = asyncHandler(async (_req: Request, res: Response) => {
-  const cacheKey = 'score:leaderboard';
-  const cached =
-    await cacheService.get<Array<{ userId: string; score: number; band: string }>>(cacheKey);
-
-  if (cached) {
-    res.json({ success: true, leaderboard: cached, source: 'cache' });
-    return;
-  }
-
-  const result = await query(
-    `SELECT borrower, score 
-     FROM scores 
-     ORDER BY score DESC, updated_at DESC 
-     LIMIT 50`,
-  );
-
-  const leaderboard = result.rows.map((row) => ({
-    userId: row.borrower ?? row.user_id,
-    score: parseInt(row.score || row.current_score || '500', 10),
-    band: getCreditBand(parseInt(row.score || row.current_score || '500', 10)),
-  }));
-
-  await cacheService.set(cacheKey, leaderboard, 60); // 60 seconds TTL
-
-  res.json({ success: true, leaderboard, source: 'database' });
 });

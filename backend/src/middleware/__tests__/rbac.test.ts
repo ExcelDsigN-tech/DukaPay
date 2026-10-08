@@ -284,11 +284,22 @@ describe('RBAC middleware (#411 / #412)', () => {
       expect(styleError(error).statusCode).toBe(401);
     });
 
+    it('uses the agentAddress path param over a ?wallet= query', async () => {
+      const req = user({ publicKey: AGENT_PK, role: 'agent' });
+      mockQuery.mockResolvedValue({ rows: [], rowCount: 0 });
+      req.params = { agentAddress: OTHER };
+      req.query = { wallet: AGENT_PK };
+      const { error } = await runAsync(requireTenantAccess, req as Request);
+      expect(error).toBeTruthy();
+      expect(styleError(error).statusCode).toBe(403);
+    });
+
     it('resolves the target from alternate path/body/query shapes', async () => {
       const shapes: Array<[Partial<Request>]> = [
         [{ params: { userId: OWNER } }],
         [{ params: { walletAddress: OWNER } }],
         [{ params: { address: OWNER } }],
+        [{ params: { agentAddress: OWNER } }],
         [{ body: { wallet: OWNER } }],
         [{ body: { borrowerPublicKey: OWNER } }],
         [{ query: { wallet: OWNER } }],

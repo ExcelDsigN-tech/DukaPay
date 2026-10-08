@@ -125,7 +125,6 @@ describe('SDK paths against the backend OpenAPI spec', () => {
     await pool.buildWithdraw({ token: ADDRESS, shares: '50', from: ADDRESS });
 
     await scores.get(ADDRESS);
-    await scores.leaderboard();
 
     await remittance.list({ status: 'pending', limit: 10 });
     await remittance.get('remittance-id');
@@ -139,7 +138,7 @@ describe('SDK paths against the backend OpenAPI spec', () => {
 
     // Sanity check on the fixture itself: a renamed SDK method would otherwise
     // silently stop being exercised.
-    expect(calls.length).toBeGreaterThanOrEqual(23);
+    expect(calls.length).toBeGreaterThanOrEqual(22);
 
     const mismatches = calls
       .map((call) => {

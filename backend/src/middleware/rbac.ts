@@ -151,6 +151,7 @@ export function resolveRequestedWallet(req: Request): string | undefined {
     req.params?.userId ??
     req.params?.walletAddress ??
     req.params?.address ??
+    req.params?.agentAddress ??
     req.body?.wallet ??
     req.body?.borrowerPublicKey ??
     req.body?.publicKey ??
