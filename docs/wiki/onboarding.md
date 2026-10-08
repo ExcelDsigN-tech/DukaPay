@@ -64,7 +64,7 @@ cd backend  && npm run lint && npm run test
 
 For auth, payments, secrets, or contract changes: complete the STRIDE
 analysis in `.github/THREAT_MODEL.md`, run `pre-commit run --all-files`, and
-request a security-champion review.
+request a maintainer review.
 
 ## 8. Verify before pushing
 

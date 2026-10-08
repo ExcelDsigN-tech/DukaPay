@@ -245,8 +245,8 @@ reconstructed without exposing PII.
 ## Incident response playbook
 
 1. **Detect** — Sentry alerts, audit-log anomaly checks, DAST/CodeQL findings
-   (`.github/workflows/dast.yml`, `codeql.yml`), bug-bounty reports
-   (`docs/BUG_BOUNTY_PROGRAM.md`).
+   (`.github/workflows/dast.yml`, `codeql.yml`), private vulnerability reports
+   (see `SECURITY.md`).
 2. **Verify** — reproduce and classify severity (SEV-1 PII/oracle/funds,
    SEV-2 availability, SEV-3 low). Use `request_id` links from the audit log to
    trace impact without exposing PII.
@@ -258,8 +258,7 @@ reconstructed without exposing PII.
 5. **Eradicate & recover** — apply patch behind the single-commit policy in
    `SECURITY.md`, validate with e2e + contract fuzz where relevant.
 6. **Postmortem** — update `docs/SECURITY-MODEL.md`, threat model
-   (`.github/THREAT_MODEL.md`), and Red Team schedule
-   (`docs/RED_TEAM_SCHEDULE.md`); publish a summary to maintainers + Telegram.
+   (`.github/THREAT_MODEL.md`); publish a summary to maintainers.
 
 ---
 
@@ -268,7 +267,6 @@ reconstructed without exposing PII.
 - [SECURITY.md](../SECURITY.md) — responsible disclosure + hardening policy
 - `.github/THREAT_MODEL.md` — threat model
 - `docs/DPA_TEMPLATE.md` — data-processing agreement template
-- `docs/BUG_BOUNTY_PROGRAM.md` — bounty scope + rules
 - `wiki/jwt-revocation.md` — token revocation procedure
 - `docs/ENVIRONMENT.md` — env-var reference (`JWT_SECRET`, `INTERNAL_API_KEY`,
   `PII_ENCRYPTION_KEK`, rate-limit and CSRF knobs)

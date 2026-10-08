@@ -2,8 +2,7 @@
 
 Staging validation for the Prometheus/Grafana/Alertmanager stack
 (`ops/monitoring/`) and the incident-response runbooks
-(`ops/incident-response/`). Run before mainnet; repeat in the Q4
-infrastructure week per `SECURITY.md` and `docs/RED_TEAM_SCHEDULE.md`.
+(`ops/incident-response/`). Run before mainnet.
 
 ## 1. Monitoring verification (reuse `tests/load/` — no new tooling)
 
@@ -46,8 +45,6 @@ No cluster mutation happens under `--dry-run`. The `data-breach` and
   (`security-oncall`, `engineering-leads`, `legal`, `executive`,
   `communications`) and routed via Alertmanager to `#dukapay-critical` /
   `#dukapay-warnings` plus PagerDuty (`PAGERDUTY_SERVICE_KEY`).
-- Human ownership: the security champion team triages within 24h
-  (`SECURITY.md` Incident Response); individual contacts stay in the private
-  roster per `.github/SECURITY_CHAMPIONS.md` and are never committed.
-- Cadence: Q4 incident-response drill yearly at minimum
-  (`docs/RED_TEAM_SCHEDULE.md` Day 4–5), plus this pre-mainnet dry-run.
+- Human ownership: the maintainers triage security alerts. Individual
+  contacts are never committed.
+- Cadence: this pre-mainnet dry-run.
