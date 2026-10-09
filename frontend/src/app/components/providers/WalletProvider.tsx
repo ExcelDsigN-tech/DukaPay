@@ -210,6 +210,12 @@ export function WalletProvider({ children }: WalletProviderProps) {
       const walletNetwork = mapWalletNetwork(networkResult.network);
       const nextStatus: WalletStatus = walletNetwork.isSupported ? "connected" : "error";
 
+      // Sign in before marking the wallet connected: connected pages fire
+      // authenticated requests at once, and a 401 logs the user out.
+      if (interactive && walletNetwork.isSupported) {
+        await signIn(addressResult.address, walletNetwork.name);
+      }
+
       setConnected(addressResult.address, walletNetwork);
       setNetwork(walletNetwork);
       setStatus(nextStatus);
@@ -268,11 +274,10 @@ export function WalletProvider({ children }: WalletProviderProps) {
    * Signs the backend's challenge with Freighter and exchanges it for the
    * httpOnly session cookie that authenticated API calls need.
    */
-  async function signIn(publicKey: string) {
+  async function signIn(publicKey: string, networkName: string) {
     const { message } = await postAuth<{ message: string }>("challenge", { publicKey });
 
     const api = (await loadFreighterApi()) as unknown as ExtendedFreighterApi;
-    const networkName = useWalletStore.getState().network?.name ?? "TESTNET";
     const result = await api.signMessage(message, {
       address: publicKey,
       networkPassphrase: NETWORK_PASSPHRASES[networkName] ?? NETWORK_PASSPHRASES.TESTNET,
@@ -294,17 +299,6 @@ export function WalletProvider({ children }: WalletProviderProps) {
     setStatus("connecting");
     setError(null, "connecting");
     await syncWallet(true);
-
-    const connectedAddress = useWalletStore.getState().address;
-    if (!connectedAddress) return;
-
-    try {
-      await signIn(connectedAddress);
-    } catch (error) {
-      disconnect();
-      setError(normalizeWalletError(error), "error");
-      throw error;
-    }
   }
 
   function disconnectWallet() {

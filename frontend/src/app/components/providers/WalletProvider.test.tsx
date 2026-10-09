@@ -30,6 +30,7 @@ async function renderWallet() {
 
 describe("WalletProvider sign-in", () => {
   let fetchMock: jest.Mock;
+  let addressAtLogin: string | null | undefined;
 
   beforeEach(() => {
     useWalletStore.getState().disconnect();
@@ -49,6 +50,7 @@ describe("WalletProvider sign-in", () => {
         return jsonResponse(200, { success: true, data: { message: CHALLENGE } });
       }
       if (url.endsWith("/api/auth/login")) {
+        addressAtLogin = useWalletStore.getState().address;
         return jsonResponse(200, { success: true, data: { publicKey: ADDRESS } });
       }
       return jsonResponse(200, { balances: [] });
@@ -73,6 +75,9 @@ describe("WalletProvider sign-in", () => {
       message: CHALLENGE,
       signature: "c2lnbmF0dXJl",
     });
+    // Connected pages fire authenticated requests, so the wallet must not be
+    // marked connected until the session cookie exists.
+    expect(addressAtLogin).toBeNull();
     expect(useWalletStore.getState().address).toBe(ADDRESS);
   });
 
