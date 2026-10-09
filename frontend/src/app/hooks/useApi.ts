@@ -1991,6 +1991,22 @@ export async function buildRepaymentTx(
   });
 }
 
+/**
+ * Builds an unsigned `request_loan(borrower, amount, term)` transaction on the
+ * backend (POST /loans/request). Sign it in the wallet, then send it with
+ * `submitLoanTransaction`.
+ */
+export async function buildLoanRequestTx(
+  amount: number,
+  borrowerPublicKey: string,
+  termLedgers: number,
+) {
+  return apiFetch<{ unsignedTxXdr: string; networkPassphrase?: string }>("/loans/request", {
+    method: "POST",
+    body: JSON.stringify({ amount, borrowerPublicKey, termLedgers }),
+  });
+}
+
 export async function submitLoanTransaction(signedTxXdr: string) {
   return apiFetch<{ txHash: string; status: string; resultXdr?: string }>("/loans/submit", {
     method: "POST",

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useLocale } from "next-intl";
 import { PenLine, CircleAlert, CheckCircle2, Loader2 } from "lucide-react";
 import { Button } from "../ui/Button";
@@ -11,18 +11,16 @@ import {
   type TransactionStatusState,
 } from "../ui/TransactionStatusTracker";
 import { useTransactionPreview } from "../../hooks/useTransactionPreview";
-import { useCreateLoan } from "../../hooks/useApi";
+import { buildLoanRequestTx, submitLoanTransaction } from "../../hooks/useApi";
+import { useWallet } from "../providers/WalletProvider";
 import { useContractToast } from "../../hooks/useContractToast";
-import { buildUnsignedLoanRequestXdr } from "../../utils/soroban";
-import {
-  mapTransactionError,
-  pollTransactionStatus,
-  type TransactionErrorDetails,
-} from "../../utils/transactionErrors";
+import { mapTransactionError, type TransactionErrorDetails } from "../../utils/transactionErrors";
 import type { LoanWizardData } from "./LoanApplicationWizard";
 import { formatCurrency, formatDateObj } from "../../utils/formatLocale";
 
 const ANNUAL_RATE_PERCENT = 12;
+/** Soroban ledgers close about every 5 seconds: 17,280 per day. */
+const LEDGERS_PER_DAY = 17280;
 
 function addDays(date: Date, days: number): Date {
   const result = new Date(date);
@@ -54,63 +52,15 @@ export function StepFinalSignature({
   const [trackerTxHash, setTrackerTxHash] = useState<string | null>(null);
   const [lastErrorDetails, setLastErrorDetails] = useState<TransactionErrorDetails | null>(null);
 
-  const pollingAbortControllerRef = useRef<AbortController | null>(null);
-
   const txPreview = useTransactionPreview();
-  const createLoan = useCreateLoan();
+  const { signTransaction } = useWallet();
   const toast = useContractToast();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const principal = Number(data.amount || "0");
   const estimatedInterest = (principal * ANNUAL_RATE_PERCENT * data.termDays) / (365 * 100);
   const totalRepayment = principal + estimatedInterest;
   const dueDate = addDays(new Date(), data.termDays);
-
-  // Pre-build the XDR so the user can see it in the summary.
-  // All setState calls happen inside an async IIFE to satisfy react-hooks/set-state-in-effect.
-  useEffect(() => {
-    if (!borrowerAddress || principal <= 0) return;
-
-    let cancelled = false;
-
-    void (async () => {
-      const managerContractId = process.env.NEXT_PUBLIC_MANAGER_CONTRACT_ID;
-      if (!managerContractId) {
-        if (!cancelled) setXdrError("Missing NEXT_PUBLIC_MANAGER_CONTRACT_ID configuration.");
-        return;
-      }
-
-      if (!cancelled) {
-        setIsBuildingXdr(true);
-        setXdrError(null);
-      }
-
-      try {
-        const xdr = await buildUnsignedLoanRequestXdr({
-          borrower: borrowerAddress,
-          amount: principal,
-          term: data.termDays * 17280,
-          contractId: managerContractId,
-        });
-        if (!cancelled) setUnsignedXdr(xdr);
-      } catch (err) {
-        if (!cancelled)
-          setXdrError(err instanceof Error ? err.message : "Failed to build unsigned XDR.");
-      } finally {
-        if (!cancelled) setIsBuildingXdr(false);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [borrowerAddress, principal]);
-
-  useEffect(() => {
-    return () => {
-      pollingAbortControllerRef.current?.abort();
-      pollingAbortControllerRef.current = null;
-    };
-  }, []);
 
   const resetTracker = () => {
     setTrackerState("idle");
@@ -122,22 +72,36 @@ export function StepFinalSignature({
   };
 
   const cancelTracking = () => {
-    pollingAbortControllerRef.current?.abort();
-    pollingAbortControllerRef.current = null;
     setTrackerState("cancelled");
     setTrackerTitle("Status tracking cancelled");
     setTrackerMessage("You cancelled this transaction flow.");
     setTrackerGuidance("If needed, you can retry submission.");
   };
 
-  const handleSignAndSubmit = () => {
-    const managerContractId = process.env.NEXT_PUBLIC_MANAGER_CONTRACT_ID;
-    if (!managerContractId) {
-      setXdrError("Missing NEXT_PUBLIC_MANAGER_CONTRACT_ID configuration.");
-      return;
-    }
-
+  const handleSignAndSubmit = async () => {
     resetTracker();
+    setXdrError(null);
+    setIsBuildingXdr(true);
+
+    // Built by the backend (POST /loans/request), which checks the wallet and
+    // pool liquidity. The same XDR is shown here and in the review dialog.
+    let xdr: string;
+    try {
+      const built = await buildLoanRequestTx(
+        Math.floor(principal),
+        borrowerAddress,
+        data.termDays * LEDGERS_PER_DAY,
+      );
+      xdr = built.unsignedTxXdr;
+      setUnsignedXdr(xdr);
+    } catch (error) {
+      const mapped = mapTransactionError(error);
+      setXdrError(mapped.message);
+      toast.error(mapped.title, mapped.message);
+      return;
+    } finally {
+      setIsBuildingXdr(false);
+    }
 
     txPreview.show(
       {
@@ -152,121 +116,47 @@ export function StepFinalSignature({
               "Interest Rate (APR)": `${ANNUAL_RATE_PERCENT}%`,
               "Estimated Due Date": dueDate.toLocaleDateString(),
               Term: `${data.termDays} days`,
-              ...(unsignedXdr && {
-                "Unsigned XDR": `${unsignedXdr.slice(0, 16)}...${unsignedXdr.slice(-16)}`,
-              }),
+              "Unsigned XDR": `${xdr.slice(0, 16)}...${xdr.slice(-16)}`,
             },
           },
         ],
         balanceChanges: [{ token: data.asset, change: `${principal}`, isPositive: true }],
         estimatedGasFee: "0.00001",
         network: "Stellar Testnet",
-        contractAddress: managerContractId,
+        contractAddress: process.env.NEXT_PUBLIC_MANAGER_CONTRACT_ID,
       },
       async () => {
         let toastId: string | number | null = null;
-
-        setTrackerState("signing");
-        setTrackerTitle("Waiting for wallet signature");
-        setTrackerMessage("Approve the transaction in your wallet to continue.");
+        setIsSubmitting(true);
 
         try {
+          setTrackerState("signing");
+          setTrackerTitle("Waiting for wallet signature");
+          setTrackerMessage("Approve the transaction in your wallet to continue.");
+          const signedTxXdr = await signTransaction(xdr);
+
           setTrackerState("submitting");
           setTrackerTitle("Submitting transaction");
           setTrackerMessage("Sending your loan request to the network.");
           toastId = toast.showPending("Transaction submitted");
 
-          const loan = await createLoan.mutateAsync({
-            amount: principal,
-            currency: data.asset,
-            interestRate: ANNUAL_RATE_PERCENT,
-            termDays: data.termDays,
-            borrowerId: borrowerAddress,
+          // Resolves only when the network reports SUCCESS; throws otherwise.
+          const result = await submitLoanTransaction(signedTxXdr);
+
+          setTrackerTxHash(result.txHash);
+          setTrackerState("success");
+          setTrackerTitle("Transaction confirmed");
+          setTrackerMessage("Your loan request is confirmed on-chain.");
+          setTrackerGuidance("You can monitor approval status from your loans dashboard.");
+          toast.showSuccess(toastId, {
+            successMessage: "Loan request confirmed on-chain",
+            txHash: result.txHash,
           });
-
-          if (!loan.txHash) {
-            setTrackerState("success");
-            setTrackerTitle("Loan request submitted");
-            setTrackerMessage("Your request was accepted and recorded.");
-            setTrackerGuidance("You can monitor approval status from your loans dashboard.");
-            if (toastId !== null) {
-              toast.showSuccess(toastId, {
-                successMessage: "Loan request submitted successfully",
-              });
-            } else {
-              toast.success("Loan request submitted successfully");
-            }
-            onSuccess(loan.id);
-            return;
-          }
-
-          setTrackerTxHash(loan.txHash);
-          setTrackerState("polling");
-          setTrackerTitle("Waiting for on-chain confirmation");
-          setTrackerMessage("Tracking transaction status on Stellar testnet.");
-
-          const controller = new AbortController();
-          pollingAbortControllerRef.current = controller;
-
-          const pollResult = await pollTransactionStatus(loan.txHash, {
-            signal: controller.signal,
-          });
-
-          pollingAbortControllerRef.current = null;
-
-          if (pollResult.status === "success") {
-            setTrackerState("success");
-            setTrackerTitle("Transaction confirmed");
-            setTrackerMessage("Your loan request is confirmed on-chain.");
-            setTrackerGuidance("You can monitor approval status from your loans dashboard.");
-            if (toastId !== null) {
-              toast.showSuccess(toastId, {
-                successMessage: "Loan request confirmed on-chain",
-                txHash: loan.txHash,
-              });
-            }
-            onSuccess(loan.id);
-            return;
-          }
-
-          if (pollResult.status === "cancelled") {
-            setTrackerState("cancelled");
-            setTrackerTitle("Status tracking cancelled");
-            setTrackerMessage(pollResult.message);
-            setTrackerGuidance("You can retry tracking or submit again.");
-            return;
-          }
-
-          const pollError = mapTransactionError(
-            pollResult.status === "failed"
-              ? "Transaction failed on-chain"
-              : "Network timeout while polling status",
-          );
-
-          if (toastId !== null) {
-            toast.showError(toastId, {
-              errorMessage: pollError.title,
-              retryAction: retrySubmission,
-            });
-          } else {
-            toast.error(pollError.title, pollResult.message);
-          }
-
-          setLastErrorDetails(pollError);
-          setTrackerState("error");
-          setTrackerTitle(pollError.title);
-          setTrackerMessage(pollResult.message);
-          setTrackerGuidance(pollError.guidance);
+          onSuccess(result.txHash);
         } catch (error) {
           const mapped = mapTransactionError(error);
           setLastErrorDetails(mapped);
-
-          if (mapped.cancelledByUser) {
-            setTrackerState("cancelled");
-          } else {
-            setTrackerState("error");
-          }
-
+          setTrackerState(mapped.cancelledByUser ? "cancelled" : "error");
           setTrackerTitle(mapped.title);
           setTrackerMessage(mapped.message);
           setTrackerGuidance(mapped.guidance);
@@ -281,6 +171,8 @@ export function StepFinalSignature({
           }
 
           throw error;
+        } finally {
+          setIsSubmitting(false);
         }
       },
     );
@@ -288,7 +180,7 @@ export function StepFinalSignature({
 
   const retrySubmission = () => {
     txPreview.close();
-    handleSignAndSubmit();
+    void handleSignAndSubmit();
   };
 
   return (
@@ -369,7 +261,7 @@ export function StepFinalSignature({
             {xdrError && (
               <div className="mt-2 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-700 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
                 <CircleAlert className="mt-0.5 h-3 w-3 shrink-0" />
-                {xdrError} (XDR preview unavailable — you may still proceed)
+                {xdrError}
               </div>
             )}
             {unsignedXdr && !isBuildingXdr && (
@@ -399,7 +291,7 @@ export function StepFinalSignature({
                   : retrySubmission
                 : undefined
             }
-            disabled={createLoan.isPending || txPreview.isLoading}
+            disabled={isSubmitting || txPreview.isLoading}
           />
 
           <div className="flex gap-3">
@@ -407,9 +299,9 @@ export function StepFinalSignature({
               Back
             </Button>
             <Button
-              onClick={handleSignAndSubmit}
-              isLoading={createLoan.isPending}
-              disabled={isBuildingXdr}
+              onClick={() => void handleSignAndSubmit()}
+              isLoading={isBuildingXdr || isSubmitting}
+              disabled={isBuildingXdr || isSubmitting}
               className="w-full"
               leftIcon={<CheckCircle2 className="h-4 w-4" />}
             >
@@ -425,7 +317,7 @@ export function StepFinalSignature({
           onClose={txPreview.close}
           onConfirm={txPreview.confirm}
           data={txPreview.data}
-          isLoading={txPreview.isLoading || createLoan.isPending}
+          isLoading={txPreview.isLoading || isSubmitting}
         />
       )}
     </div>
