@@ -1069,6 +1069,7 @@ dependencies = [
 name = "remittance_nft"
 version = "0.0.1"
 dependencies = [
+ "money",
  "soroban-sdk",
 ]
 
