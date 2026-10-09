@@ -946,16 +946,17 @@ export function useLoanEvents(
         ledger_closed_at: string;
         tx_hash?: string;
       }
+      // Shape of GET /loans/:loanId/events (indexerController.getLoanEvents).
       interface LoanEventsResponse {
         success: boolean;
         data: {
           loanId: number;
-          events: RawEvent[];
+          items: RawEvent[];
         };
       }
       const response = await apiFetch<LoanEventsResponse>(`/loans/${loanId}/events`);
-      if (response?.success && response.data?.events) {
-        return response.data.events.map((e) => ({
+      if (response?.success && response.data?.items) {
+        return response.data.items.map((e) => ({
           type: e.event_type,
           amount: e.amount,
           timestamp: e.ledger_closed_at,

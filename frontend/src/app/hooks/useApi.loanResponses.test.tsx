@@ -1,10 +1,11 @@
 import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
-import { useBorrowerLoans, useCreditScoreHistory, useLoan } from "./useApi";
+import { useBorrowerLoans, useCreditScoreHistory, useLoan, useLoanEvents } from "./useApi";
 
 // Response bodies below mirror backend/src/controllers/loanController.ts
-// (getLoanDetails and getBorrowerLoans) and scoreController.ts
+// (getLoanDetails and getBorrowerLoans), indexerController.ts (getLoanEvents)
+// and scoreController.ts
 // (getOnChainScoreHistory), so a shape drift fails here.
 
 function renderWithClient<T>(hook: () => T) {
@@ -118,6 +119,47 @@ describe("loan API response mapping", () => {
     expect(result.current.loans).toHaveLength(1);
     expect(result.current.loans[0]).toMatchObject({ id: 42, interestRateBps: 1200 });
     expect(result.current.loans[0]).not.toHaveProperty("loanId");
+  });
+});
+
+describe("loan events response mapping", () => {
+  const originalFetch = global.fetch;
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
+
+  it("useLoanEvents reads events from `data.items`", async () => {
+    mockFetchOnce({
+      success: true,
+      data: {
+        loanId: 42,
+        items: [
+          {
+            event_id: "evt-1",
+            event_type: "LoanRequested",
+            loan_id: 42,
+            address: "GABC",
+            amount: "1000",
+            ledger: 100,
+            ledger_closed_at: "2026-01-01T00:00:00.000Z",
+            tx_hash: "tx-request",
+          },
+        ],
+      },
+      page: { next_cursor: null, snapshot_seq: "1", total_at_snapshot: 1, limit: 50 },
+    });
+
+    const { result } = renderWithClient(() => useLoanEvents("42"));
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(result.current.data).toEqual([
+      {
+        type: "LoanRequested",
+        amount: "1000",
+        timestamp: "2026-01-01T00:00:00.000Z",
+        txHash: "tx-request",
+      },
+    ]);
   });
 });
 
