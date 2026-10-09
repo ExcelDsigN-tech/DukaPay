@@ -224,7 +224,7 @@ describe('POST /api/loans/request', () => {
   it('should reject unauthenticated requests', async () => {
     const response = await request(app)
       .post('/api/loans/request')
-      .send({ amount: 1000, borrowerPublicKey: TEST_BORROWER });
+      .send({ amount: 1000, borrowerPublicKey: TEST_BORROWER, termLedgers: 518400 });
     expect(response.status).toBe(401);
   });
 
@@ -233,7 +233,7 @@ describe('POST /api/loans/request', () => {
     const response = await request(app)
       .post('/api/loans/request')
       .set(bearer(TEST_BORROWER))
-      .send({ amount: 1000, borrowerPublicKey: otherBorrower });
+      .send({ amount: 1000, borrowerPublicKey: otherBorrower, termLedgers: 518400 });
     expect(response.status).toBe(403);
   });
 
@@ -246,12 +246,36 @@ describe('POST /api/loans/request', () => {
     const response = await request(app)
       .post('/api/loans/request')
       .set(bearer(TEST_BORROWER))
-      .send({ amount: 1000, borrowerPublicKey: TEST_BORROWER });
+      .send({ amount: 1000, borrowerPublicKey: TEST_BORROWER, termLedgers: 518400 });
 
     expect(response.status).toBe(200);
     expect(response.body.success).toBe(true);
     expect(response.body.unsignedTxXdr).toBe('AAAA...base64xdr');
     expect(response.body.networkPassphrase).toBeDefined();
+  });
+
+  it('passes the term to the contract call builder', async () => {
+    mockBuildRequestLoanTx.mockResolvedValueOnce({
+      unsignedTxXdr: 'AAAA...base64xdr',
+      networkPassphrase: 'Test SDF Network ; September 2015',
+    });
+
+    const response = await request(app)
+      .post('/api/loans/request')
+      .set(bearer(TEST_BORROWER))
+      .send({ amount: 2000, borrowerPublicKey: TEST_BORROWER, termLedgers: 1036800 });
+
+    expect(response.status).toBe(200);
+    expect(mockBuildRequestLoanTx).toHaveBeenCalledWith(TEST_BORROWER, 2000, 1036800);
+  });
+
+  it('rejects a request without a term (request_loan requires one)', async () => {
+    const response = await request(app)
+      .post('/api/loans/request')
+      .set(bearer(TEST_BORROWER))
+      .send({ amount: 1000, borrowerPublicKey: TEST_BORROWER });
+
+    expect(response.status).toBe(400);
   });
 
   it('should reject missing amount', async () => {

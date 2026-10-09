@@ -841,9 +841,10 @@ export const getLoanAmortizationSchedule = asyncHandler(async (req: Request, res
  * POST /api/loans/request
  */
 export const requestLoan = asyncHandler(async (req: Request, res: Response) => {
-  const { amount, borrowerPublicKey } = req.body as {
+  const { amount, borrowerPublicKey, termLedgers } = req.body as {
     amount: number;
     borrowerPublicKey: string;
+    termLedgers: number;
   };
 
   if (borrowerPublicKey !== req.user?.publicKey) {
@@ -870,8 +871,8 @@ export const requestLoan = asyncHandler(async (req: Request, res: Response) => {
     }
   }
 
-  // Idempotency: return existing unsigned tx if recently built for this borrower/amount
-  const cacheKey = `pending_loan_tx:${borrowerPublicKey}:${amount}`;
+  // Idempotency: return existing unsigned tx if recently built for this borrower/amount/term
+  const cacheKey = `pending_loan_tx:${borrowerPublicKey}:${amount}:${termLedgers}`;
   const cachedTx = await cacheService.get<{
     unsignedTxXdr: string;
     networkPassphrase: string;
@@ -890,7 +891,7 @@ export const requestLoan = asyncHandler(async (req: Request, res: Response) => {
     return;
   }
 
-  const result = await sorobanService.buildRequestLoanTx(borrowerPublicKey, amount);
+  const result = await sorobanService.buildRequestLoanTx(borrowerPublicKey, amount, termLedgers);
 
   // Cache for 60 seconds to prevent sequence number collisions from rapid requests
   await cacheService.set(cacheKey, result, 60);
