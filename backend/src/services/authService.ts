@@ -199,6 +199,8 @@ export function generateChallenge(publicKey: string): ChallengeMessage {
   };
 }
 
+const SEP53_PREFIX = Buffer.from('Stellar Signed Message:\n', 'utf-8');
+
 export function verifySignature(publicKey: string, message: string, signature: string): boolean {
   if (!StrKey.isValidEd25519PublicKey(publicKey)) {
     return false;
@@ -215,8 +217,19 @@ export function verifySignature(publicKey: string, message: string, signature: s
     }
 
     const messageBytes = Buffer.from(message, 'utf-8');
+    const keypair = Keypair.fromPublicKey(publicKey);
 
-    return Keypair.fromPublicKey(publicKey).verify(messageBytes, signatureBytes);
+    // Accept a raw Ed25519 signature over the message, or a SEP-53 signature
+    // (what Freighter's signMessage returns) over
+    // sha256("Stellar Signed Message:\n" + message).
+    const sep53Digest = crypto
+      .createHash('sha256')
+      .update(Buffer.concat([SEP53_PREFIX, messageBytes]))
+      .digest();
+
+    return (
+      keypair.verify(messageBytes, signatureBytes) || keypair.verify(sep53Digest, signatureBytes)
+    );
   } catch {
     return false;
   }
