@@ -7,6 +7,8 @@ import {
     nativeToScVal,
     xdr,
     StrKey,
+    Contract,
+    hash,
 } from '@stellar/stellar-sdk';
 import { createHash } from 'crypto';
 import * as fs from 'fs-extra';
@@ -28,25 +30,26 @@ function contractSalt(name: string): Buffer {
     return createHash('sha256').update(`dukapay:${name}`).digest();
 }
 
-// Extract the newly created contract ID from transaction result metadata.
-function extractContractId(resultMeta: xdr.TransactionMeta): string {
-    const v3 = resultMeta.v3();
-    for (const opMeta of v3.operations()) {
-        for (const change of opMeta.changes()) {
-            if (change.switch().name !== 'ledgerEntryCreated') continue;
-            const data = change.created().data();
-            if (data.switch().name !== 'contractData') continue;
-            const cd = data.contractData();
-            if (cd.key().switch().name !== 'scvLedgerKeyContractInstance') continue;
-            const contract = cd.contract();
-            if (contract.switch().name === 'scAddressTypeContract') {
-                return StrKey.encodeContract(
-                    Buffer.from(contract.contractId() as unknown as Uint8Array),
-                );
-            }
-        }
-    }
-    throw new Error('Could not extract contract ID from transaction metadata');
+// The address a contract gets when `deployer` creates it with `salt`. It is
+// fixed by those inputs, so a re-run can find a contract an earlier run made.
+function expectedContractId(deployer: string, salt: Buffer, networkPassphrase: string): string {
+    const preimage = xdr.HashIdPreimage.envelopeTypeContractId(
+        new xdr.HashIdPreimageContractId({
+            networkId: hash(Buffer.from(networkPassphrase)),
+            contractIdPreimage: xdr.ContractIdPreimage.contractIdPreimageFromAddress(
+                new xdr.ContractIdPreimageFromAddress({
+                    address: Address.fromString(deployer).toScAddress(),
+                    salt,
+                }),
+            ),
+        }),
+    );
+    return StrKey.encodeContract(hash(preimage.toXDR()));
+}
+
+async function contractExists(server: Rpc.Server, contractId: string): Promise<boolean> {
+    const { entries } = await server.getLedgerEntries(new Contract(contractId).getFootprint());
+    return entries.length > 0;
 }
 
 async function sendTx(
@@ -106,7 +109,8 @@ async function uploadWasm(
     return wasmHash;
 }
 
-// Instantiate a contract from an uploaded WASM hash. Returns the new contract ID.
+// Instantiate a contract from an uploaded WASM hash. Returns the contract ID.
+// If an earlier run already created it, reuse it instead of failing.
 async function createInstance(
     server: Rpc.Server,
     wasmHash: Buffer,
@@ -114,6 +118,12 @@ async function createInstance(
     account: Keypair,
     networkPassphrase: string,
 ): Promise<string> {
+    const contractId = expectedContractId(account.publicKey(), salt, networkPassphrase);
+    if (await contractExists(server, contractId)) {
+        console.log('    already exists from an earlier run, reusing');
+        return contractId;
+    }
+
     const source = await server.getAccount(account.publicKey());
     const tx = new TransactionBuilder(source, { fee: '100000', networkPassphrase })
         .addOperation(
@@ -127,7 +137,12 @@ async function createInstance(
         .build();
 
     const result = await sendTx(server, tx, account);
-    return extractContractId(result.resultMetaXdr);
+    // createCustomContract returns the new contract's address.
+    const created = result.returnValue ? Address.fromScVal(result.returnValue).toString() : null;
+    if (created !== contractId) {
+        throw new Error(`Created contract ${created} but expected ${contractId}`);
+    }
+    return contractId;
 }
 
 // Convert an argument to ScVal. Public-key / contract-address strings
@@ -140,6 +155,12 @@ function toContractScVal(arg: unknown): xdr.ScVal {
         (StrKey.isValidEd25519PublicKey(arg) || StrKey.isValidContract(arg))
     ) {
         return Address.fromString(arg).toScVal();
+    }
+    // { type, value } is a type hint (u32, i128, ...). nativeToScVal does not
+    // read it from the object itself; passed whole it becomes a map.
+    if (arg !== null && typeof arg === 'object' && 'type' in arg && 'value' in arg) {
+        const { type, value } = arg as { type: string; value: unknown };
+        return nativeToScVal(value, { type });
     }
     return nativeToScVal(arg);
 }
@@ -171,6 +192,22 @@ async function invoke(
         .build();
 
     await sendTx(server, tx, account);
+}
+
+// Run an initializer, treating the contract's AlreadyInitialized error as done
+// so a deploy that stopped half way can simply be run again.
+async function initOnce(label: string, alreadyInitializedCode: number, run: () => Promise<unknown>) {
+    console.log(`  ${label}`);
+    try {
+        await run();
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (message.includes(`Error(Contract, #${alreadyInitializedCode})`)) {
+            console.log('    already initialized by an earlier run, skipping');
+            return;
+        }
+        throw error;
+    }
 }
 
 async function main() {
@@ -274,26 +311,31 @@ async function main() {
     console.log('\n[3/4] Initializing contracts…');
 
     // NFT
-    console.log('  NFT.initialize');
-    await invoke(server, nftContractId, 'initialize', [adminAddr], account, passphrase);
+    await initOnce('NFT.initialize', 1, () =>
+        invoke(server, nftContractId, 'initialize', [adminAddr], account, passphrase),
+    );
 
     // Authorize LoanManager as minter BEFORE LoanManager.initialize checks for it.
     console.log('  NFT.authorize_minter(LoanManager)');
     await invoke(server, nftContractId, 'authorize_minter', [managerContractId], account, passphrase);
 
     // LendingPool
-    console.log('  LendingPool.initialize');
-    await invoke(server, poolContractId, 'initialize', [config.token, adminAddr], account, passphrase);
+    // initialize(admin): the pool takes the token per call, not at setup.
+    await initOnce('LendingPool.initialize', 1, () =>
+        invoke(server, poolContractId, 'initialize', [adminAddr], account, passphrase),
+    );
 
     // LoanManager — validates minter authorization on-chain during this call.
-    console.log('  LoanManager.initialize');
-    await invoke(
-        server,
-        managerContractId,
-        'initialize',
-        [nftContractId, poolContractId, config.token, adminAddr],
-        account,
-        passphrase,
+    // initialize(nft, pool, token, admin, governance)
+    await initOnce('LoanManager.initialize', 1, () =>
+        invoke(
+            server,
+            managerContractId,
+            'initialize',
+            [nftContractId, poolContractId, config.token, adminAddr, govContractId],
+            account,
+            passphrase,
+        ),
     );
 
     // Let the pool accept yield/loss accounting updates only from this manager.
@@ -301,46 +343,59 @@ async function main() {
     await invoke(server, poolContractId, 'set_loan_manager', [managerContractId], account, passphrase);
 
     // Governance — target is LoanManager (the core protocol contract).
-    console.log('  Governance.initialize(target=LoanManager)');
-    await invoke(server, govContractId, 'initialize', [adminAddr, managerContractId], account, passphrase);
+    await initOnce('Governance.initialize(target=LoanManager)', 4001, () =>
+        invoke(server, govContractId, 'initialize', [adminAddr, managerContractId], account, passphrase),
+    );
 
     // AgentRegistry — no cross-contract deps. Deployer acts as operator for now.
-    console.log('  AgentRegistry.init(owner=admin, operator=admin)');
-    await invoke(server, registryContractId, 'init', [adminAddr, adminAddr], account, passphrase);
+    await initOnce('AgentRegistry.init(owner=admin, operator=admin)', 1, () =>
+        invoke(server, registryContractId, 'init', [adminAddr, adminAddr], account, passphrase),
+    );
 
     // AgentVault — USDC collateral vault backing agent float.
-    console.log('  AgentVault.init(owner=admin, operator=admin, token, max_haircut, min_collateral)');
-    await invoke(
-        server,
-        vaultContractId,
-        'init',
-        [
-            adminAddr,
-            adminAddr,
-            config.token,
-            { type: 'u32', value: config.contracts.agent_vault.max_haircut_bps },
-            { type: 'i128', value: config.contracts.agent_vault.min_collateral },
-        ],
-        account,
-        passphrase,
+    await initOnce('AgentVault.init(owner=admin, operator=admin, token, max_haircut, min_collateral)', 1, () =>
+        invoke(
+            server,
+            vaultContractId,
+            'init',
+            [
+                adminAddr,
+                adminAddr,
+                config.token,
+                { type: 'u32', value: config.contracts.agent_vault.max_haircut_bps },
+                { type: 'i128', value: config.contracts.agent_vault.min_collateral },
+            ],
+            account,
+            passphrase,
+        ),
     );
 
     // ── 4. Persist contract IDs ─────────────────────────────────────────────────
     console.log('\n[4/4] Writing contract addresses to .env files…');
 
-    const envBlock = [
-        ``,
-        `# DukaPay contracts — ${network} — ${new Date().toISOString()}`,
+    // Variable names each app reads (docs/ENVIRONMENT.md).
+    const header = `\n# DukaPay contracts — ${network} — ${new Date().toISOString()}`;
+    const frontendEnv = [
+        header,
         `NEXT_PUBLIC_NFT_CONTRACT_ID=${nftContractId}`,
-        `NEXT_PUBLIC_POOL_CONTRACT_ID=${poolContractId}`,
+        `NEXT_PUBLIC_LOAN_MANAGER_CONTRACT_ID=${managerContractId}`,
         `NEXT_PUBLIC_MANAGER_CONTRACT_ID=${managerContractId}`,
-        `NEXT_PUBLIC_GOVERNANCE_CONTRACT_ID=${govContractId}`,
+        '',
+    ].join('\n');
+    const backendEnv = [
+        header,
+        `REMITTANCE_NFT_CONTRACT_ID=${nftContractId}`,
+        `LENDING_POOL_CONTRACT_ID=${poolContractId}`,
+        `LOAN_MANAGER_CONTRACT_ID=${managerContractId}`,
+        `MULTISIG_GOVERNANCE_CONTRACT_ID=${govContractId}`,
         `AGENT_REGISTRY_CONTRACT_ID=${registryContractId}`,
         `AGENT_VAULT_CONTRACT_ID=${vaultContractId}`,
+        `POOL_TOKEN_ADDRESS=${config.token}`,
+        '',
     ].join('\n');
 
-    await fs.appendFile(path.join(__dirname, '../frontend/.env.local'), envBlock);
-    await fs.appendFile(path.join(__dirname, '../backend/.env'), envBlock);
+    await fs.appendFile(path.join(__dirname, '../frontend/.env.local'), frontendEnv);
+    await fs.appendFile(path.join(__dirname, '../backend/.env'), backendEnv);
 
     console.log('\nDeployment complete.');
     console.log(`  RemittanceNFT  : ${nftContractId}`);

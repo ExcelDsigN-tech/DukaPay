@@ -3,25 +3,25 @@
     "networkPassphrase": "Test SDF Network ; September 2015",
     "rpcUrl": "https://soroban-testnet.stellar.org",
     "admin": "YOUR_ADMIN_PUBLIC_KEY",
-    "token": "CAS3J7GYCCXG7W35XU4643F2M3T63BGCV2X4D6C4V7G4X6C4V7G4X6C4",
+    "token": "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA",
     "contracts": {
       "remittance_nft": {
-        "wasm": "../contracts/target/wasm32-unknown-unknown/release/remittance_nft.wasm"
+        "wasm": "../contracts/target/wasm32v1-none/release/remittance_nft.wasm"
       },
       "lending_pool": {
-        "wasm": "../contracts/target/wasm32-unknown-unknown/release/lending_pool.wasm"
+        "wasm": "../contracts/target/wasm32v1-none/release/lending_pool.wasm"
       },
       "loan_manager": {
-        "wasm": "../contracts/target/wasm32-unknown-unknown/release/loan_manager.wasm"
+        "wasm": "../contracts/target/wasm32v1-none/release/loan_manager.wasm"
       },
       "multisig_governance": {
-        "wasm": "../contracts/target/wasm32-unknown-unknown/release/multisig_governance.wasm"
+        "wasm": "../contracts/target/wasm32v1-none/release/multisig_governance.wasm"
       },
       "agent_registry": {
-        "wasm": "../contracts/target/wasm32-unknown-unknown/release/agent_registry.wasm"
+        "wasm": "../contracts/target/wasm32v1-none/release/agent_registry.wasm"
       },
       "agent_vault": {
-        "wasm": "../contracts/target/wasm32-unknown-unknown/release/agent_vault.wasm",
+        "wasm": "../contracts/target/wasm32v1-none/release/agent_vault.wasm",
         "max_haircut_bps": 8000,
         "min_collateral": 1000000000
       }
@@ -34,22 +34,22 @@
     "token": "YOUR_MAINNET_POOL_TOKEN_ADDRESS",
     "contracts": {
       "remittance_nft": {
-        "wasm": "../contracts/target/wasm32-unknown-unknown/release/remittance_nft.wasm"
+        "wasm": "../contracts/target/wasm32v1-none/release/remittance_nft.wasm"
       },
       "lending_pool": {
-        "wasm": "../contracts/target/wasm32-unknown-unknown/release/lending_pool.wasm"
+        "wasm": "../contracts/target/wasm32v1-none/release/lending_pool.wasm"
       },
       "loan_manager": {
-        "wasm": "../contracts/target/wasm32-unknown-unknown/release/loan_manager.wasm"
+        "wasm": "../contracts/target/wasm32v1-none/release/loan_manager.wasm"
       },
       "multisig_governance": {
-        "wasm": "../contracts/target/wasm32-unknown-unknown/release/multisig_governance.wasm"
+        "wasm": "../contracts/target/wasm32v1-none/release/multisig_governance.wasm"
       },
       "agent_registry": {
-        "wasm": "../contracts/target/wasm32-unknown-unknown/release/agent_registry.wasm"
+        "wasm": "../contracts/target/wasm32v1-none/release/agent_registry.wasm"
       },
       "agent_vault": {
-        "wasm": "../contracts/target/wasm32-unknown-unknown/release/agent_vault.wasm",
+        "wasm": "../contracts/target/wasm32v1-none/release/agent_vault.wasm",
         "max_haircut_bps": 8000,
         "min_collateral": 1000000000
       }
