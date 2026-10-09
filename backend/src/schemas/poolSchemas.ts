@@ -1,16 +1,16 @@
 import { z } from 'zod';
-import { stellarAddressSchema } from './stellarSchemas.js';
+import { contractAddressSchema, stellarAddressSchema } from './stellarSchemas.js';
 import { submitTxSchema, positiveAmountSchema } from './loanSchemas.js';
 
 export const buildPoolTransactionSchema = z.object({
   depositorPublicKey: stellarAddressSchema,
-  token: stellarAddressSchema,
+  token: contractAddressSchema,
   amount: positiveAmountSchema,
 });
 
 export const emergencyWithdrawSchema = z.object({
   depositorPublicKey: stellarAddressSchema,
-  token: stellarAddressSchema,
+  token: contractAddressSchema,
   shares: positiveAmountSchema,
 });
 
@@ -26,7 +26,7 @@ export const getDepositorYieldHistorySchema = z.object({
         message: 'days must be 7, 30, or 90',
       })
       .optional(),
-    token: stellarAddressSchema.optional(),
+    token: contractAddressSchema.optional(),
   }),
 });
 

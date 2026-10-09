@@ -4,12 +4,14 @@ import { describe, it, expect, jest } from '@jest/globals';
 import type { Request, Response } from 'express';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
-import { Keypair } from '@stellar/stellar-sdk';
+import crypto from 'crypto';
+import { Keypair, StrKey } from '@stellar/stellar-sdk';
 
 const LENDER_KEY = Keypair.random().publicKey();
 const AGENT_KEY = Keypair.random().publicKey();
 const BORROWER_KEY = Keypair.random().publicKey();
-const TOKEN_KEY = Keypair.random().publicKey();
+// Tokens are contracts (C...), e.g. the USDC Stellar Asset Contract.
+const TOKEN_KEY = StrKey.encodeContract(crypto.randomBytes(32));
 
 const mockPoolHandler = (_req: Request, res: Response) => res.status(200).json({ success: true });
 
@@ -117,6 +119,17 @@ describe('Pool write route authorization', () => {
         expect(res.status).toBe(200);
       });
     }
+  });
+
+  describe('token validation', () => {
+    it('rejects a wallet address (G...) as the token', async () => {
+      const res = await request(app)
+        .post('/api/pool/build-deposit')
+        .set('Authorization', `Bearer ${lenderToken}`)
+        .send({ depositorPublicKey: LENDER_KEY, token: Keypair.random().publicKey(), amount: 100 });
+
+      expect(res.status).toBe(400);
+    });
   });
 
   describe('agent JWT (has write:pool)', () => {
