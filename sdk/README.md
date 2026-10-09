@@ -34,7 +34,7 @@ await client.loginWithWallet();
 const me = await client.address();
 const { loans } = await client.loans.list({ borrower: me! });
 
-// Build + sign + submit a repayment (amount is a positive integer in base units)
+// Build + sign + submit a repayment (amount in whole tokens, e.g. 250.5 USDC)
 const unsigned = await client.loans.buildRepay(loans[0].loanId, 25, me!);
 await client.signAndSubmit(
   { xdr: unsigned.unsignedTxXdr },

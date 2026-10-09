@@ -87,7 +87,7 @@ export function StepFinalSignature({
     let xdr: string;
     try {
       const built = await buildLoanRequestTx(
-        Math.floor(principal),
+        principal,
         borrowerAddress,
         data.termDays * LEDGERS_PER_DAY,
       );

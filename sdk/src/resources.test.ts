@@ -247,7 +247,21 @@ describe('LoansResource', () => {
     const resource = new LoansResource({ post: vi.fn() } as unknown as HttpClient);
 
     expect(() => resource.buildRepay(1, 0, VALID_ADDRESS)).toThrow(ValidationError);
-    expect(() => resource.buildRepay(1, 1.5, VALID_ADDRESS)).toThrow(ValidationError);
+    expect(() => resource.buildRepay(1, -5, VALID_ADDRESS)).toThrow(ValidationError);
+    // More than 7 decimal places is finer than one stroop.
+    expect(() => resource.buildRepay(1, 1.12345678, VALID_ADDRESS)).toThrow(ValidationError);
+  });
+
+  it('accepts a decimal amount in whole tokens in buildRepay', async () => {
+    const post = vi.fn().mockResolvedValue({ success: true, unsignedTxXdr: 'test-xdr' });
+    const resource = new LoansResource({ post } as unknown as HttpClient);
+
+    await resource.buildRepay(1, 1.5, VALID_ADDRESS);
+
+    expect(post).toHaveBeenCalledWith('/loans/1/repay', {
+      amount: 1.5,
+      borrowerPublicKey: VALID_ADDRESS,
+    });
   });
 
   it('throws ValidationError when borrowerPublicKey is invalid in buildRepay', () => {

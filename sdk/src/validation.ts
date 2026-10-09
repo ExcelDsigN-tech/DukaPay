@@ -50,6 +50,29 @@ export function validateAmount(amount: unknown, fieldName = 'amount'): asserts a
 }
 
 /**
+ * Validates a token amount in whole units (e.g. 250.5 USDC): a positive
+ * number with at most 7 decimal places (one stroop), as the API accepts.
+ */
+export function isValidTokenAmount(value: unknown): boolean {
+  return (
+    typeof value === 'number' &&
+    Number.isFinite(value) &&
+    value > 0 &&
+    value < 1e15 &&
+    Number(value.toFixed(7)) === value
+  );
+}
+
+/**
+ * Throws ValidationError if the value is not a valid whole-unit token amount.
+ */
+export function validateTokenAmount(value: unknown, fieldName = 'amount'): asserts value is number {
+  if (!isValidTokenAmount(value)) {
+    throw new ValidationError(`Invalid ${fieldName}: must be a positive number with at most 7 decimal places`);
+  }
+}
+
+/**
  * Throws ValidationError if the loan ID is not a positive integer.
  */
 export function validatePositiveInt(value: unknown, fieldName = 'id'): asserts value is number | string {

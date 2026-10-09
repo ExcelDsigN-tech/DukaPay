@@ -23,6 +23,7 @@ import {
   validateStellarAddress,
   validateAmount,
   validatePositiveInt,
+  validateTokenAmount,
 } from './validation.js';
 
 export class AuthResource {
@@ -97,8 +98,9 @@ export class LoansResource {
    * Returns the unsigned repayment XDR for a loan, to be signed by the
    * borrower's wallet and then passed to {@link LoansResource.submit}.
    *
-   * `amount` is a positive integer in the asset's base units, and
-   * `borrowerPublicKey` must match the authenticated wallet.
+   * `amount` is in whole tokens (e.g. `250.5` USDC, up to 7 decimal places);
+   * the API converts it to stroops. `borrowerPublicKey` must match the
+   * authenticated wallet.
    */
   buildRepay(
     loanId: number | string,
@@ -106,7 +108,7 @@ export class LoansResource {
     borrowerPublicKey: string,
   ): Promise<RepayTransaction> {
     validatePositiveInt(loanId, 'loanId');
-    validatePositiveInt(amount, 'amount');
+    validateTokenAmount(amount, 'amount');
     validateStellarAddress(borrowerPublicKey, 'borrowerPublicKey');
     return this.http.post(`/loans/${loanId}/repay`, { amount, borrowerPublicKey });
   }

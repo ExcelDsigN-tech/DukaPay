@@ -100,11 +100,8 @@ export default function RepayLoanPage() {
       const contractId = process.env.NEXT_PUBLIC_LOAN_MANAGER_CONTRACT_ID;
 
       // Built by the backend, which checks that this wallet owns the loan.
-      const { unsignedTxXdr: xdr } = await buildRepaymentTx(
-        loanId,
-        Math.floor(amountNumber),
-        walletAddress,
-      );
+      // The API takes whole USDC with up to 7 decimals (checked above).
+      const { unsignedTxXdr: xdr } = await buildRepaymentTx(loanId, amountNumber, walletAddress);
 
       txPreview.show(
         {
