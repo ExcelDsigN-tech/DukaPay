@@ -69,7 +69,7 @@ export function LoanDetailsPageClient() {
           {t("notFound.description", { id: loanId })}
         </p>
         <Link
-          href="/loans"
+          href={`/${locale}/loans`}
           className="mt-6 inline-flex items-center gap-2 rounded-full bg-zinc-900 px-5 py-2.5 text-sm font-semibold text-white dark:bg-zinc-100 dark:text-zinc-900"
         >
           {t("notFound.back")}
@@ -110,7 +110,10 @@ export function LoanDetailsPageClient() {
           {t("breadcrumb.home")}
         </Link>
         <ChevronRight className="h-3.5 w-3.5" />
-        <Link href="/loans" className="hover:text-zinc-900 dark:hover:text-zinc-100 transition">
+        <Link
+          href={`/${locale}/loans`}
+          className="hover:text-zinc-900 dark:hover:text-zinc-100 transition"
+        >
           {t("breadcrumb.loans")}
         </Link>
         <ChevronRight className="h-3.5 w-3.5" />
