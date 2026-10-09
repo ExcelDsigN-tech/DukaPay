@@ -383,12 +383,48 @@ export interface LoanEvent {
   txHash?: string;
 }
 
+/** Raw `GET /loans/:loanId` response: the loan sits under `summary`. */
+interface LoanDetailsResponse {
+  loanId: number;
+  summary: {
+    principal: number;
+    /** null while the loan is still being indexed */
+    accruedInterest: number | null;
+    totalRepaid: number;
+    /** null while the loan is still being indexed */
+    totalOwed: number | null;
+    /** Fraction, e.g. 0.12 for 12% */
+    interestRate: number;
+    status: LoanDetails["status"] | "pending_indexing";
+    requestedAt?: string;
+    approvedAt?: string;
+    events: { type: string; amount: string | number; timestamp: string; tx?: string }[];
+  };
+}
+
+function toLoanDetails({ loanId, summary }: LoanDetailsResponse): LoanDetails {
+  return {
+    loanId,
+    principal: summary.principal,
+    // Nothing has accrued before indexing finishes, so owed is the principal.
+    accruedInterest: summary.accruedInterest ?? 0,
+    totalRepaid: summary.totalRepaid,
+    totalOwed: summary.totalOwed ?? summary.principal,
+    interestRate: summary.interestRate * 100,
+    status: summary.status === "pending_indexing" ? "pending" : summary.status,
+    requestedAt: summary.requestedAt,
+    approvedAt: summary.approvedAt,
+    events: summary.events.map(({ tx, ...event }) => ({ ...event, txHash: tx })),
+  };
+}
+
 export interface LoanDetails {
   loanId: number;
   principal: number;
   accruedInterest: number;
   totalRepaid: number;
   totalOwed: number;
+  /** Percent, e.g. 12 for 12% */
   interestRate: number;
   status: "active" | "repaid" | "defaulted" | "pending" | "liquidated";
   requestedAt?: string;
@@ -798,20 +834,7 @@ export function useLoan(
 ) {
   return useQuery<LoanDetails>({
     queryKey: queryKeys.loans.detail(id ?? ""),
-    queryFn: async () => {
-      const response = await apiFetch<LoanDetails | { success: boolean; data: LoanDetails }>(
-        `/loans/${id}`,
-      );
-      if (
-        typeof response === "object" &&
-        response !== null &&
-        "success" in response &&
-        "data" in response
-      ) {
-        return response.data;
-      }
-      return response;
-    },
+    queryFn: async () => toLoanDetails(await apiFetch<LoanDetailsResponse>(`/loans/${id}`)),
     enabled: !!id,
     ...options,
   });
