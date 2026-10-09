@@ -188,6 +188,22 @@ async function invoke(
     await sendTx(server, tx, account);
 }
 
+// Run an initializer, treating the contract's AlreadyInitialized error as done
+// so a deploy that stopped half way can simply be run again.
+async function initOnce(label: string, alreadyInitializedCode: number, run: () => Promise<unknown>) {
+    console.log(`  ${label}`);
+    try {
+        await run();
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (message.includes(`Error(Contract, #${alreadyInitializedCode})`)) {
+            console.log('    already initialized by an earlier run, skipping');
+            return;
+        }
+        throw error;
+    }
+}
+
 async function main() {
     const network = process.argv[2] || 'testnet';
     const config = (await fs.readJson(CONFIG_PATH))[network];
@@ -289,26 +305,31 @@ async function main() {
     console.log('\n[3/4] Initializing contracts…');
 
     // NFT
-    console.log('  NFT.initialize');
-    await invoke(server, nftContractId, 'initialize', [adminAddr], account, passphrase);
+    await initOnce('NFT.initialize', 1, () =>
+        invoke(server, nftContractId, 'initialize', [adminAddr], account, passphrase),
+    );
 
     // Authorize LoanManager as minter BEFORE LoanManager.initialize checks for it.
     console.log('  NFT.authorize_minter(LoanManager)');
     await invoke(server, nftContractId, 'authorize_minter', [managerContractId], account, passphrase);
 
     // LendingPool
-    console.log('  LendingPool.initialize');
-    await invoke(server, poolContractId, 'initialize', [config.token, adminAddr], account, passphrase);
+    // initialize(admin): the pool takes the token per call, not at setup.
+    await initOnce('LendingPool.initialize', 1, () =>
+        invoke(server, poolContractId, 'initialize', [adminAddr], account, passphrase),
+    );
 
     // LoanManager — validates minter authorization on-chain during this call.
-    console.log('  LoanManager.initialize');
-    await invoke(
-        server,
-        managerContractId,
-        'initialize',
-        [nftContractId, poolContractId, config.token, adminAddr],
-        account,
-        passphrase,
+    // initialize(nft, pool, token, admin, governance)
+    await initOnce('LoanManager.initialize', 1, () =>
+        invoke(
+            server,
+            managerContractId,
+            'initialize',
+            [nftContractId, poolContractId, config.token, adminAddr, govContractId],
+            account,
+            passphrase,
+        ),
     );
 
     // Let the pool accept yield/loss accounting updates only from this manager.
@@ -316,46 +337,59 @@ async function main() {
     await invoke(server, poolContractId, 'set_loan_manager', [managerContractId], account, passphrase);
 
     // Governance — target is LoanManager (the core protocol contract).
-    console.log('  Governance.initialize(target=LoanManager)');
-    await invoke(server, govContractId, 'initialize', [adminAddr, managerContractId], account, passphrase);
+    await initOnce('Governance.initialize(target=LoanManager)', 4001, () =>
+        invoke(server, govContractId, 'initialize', [adminAddr, managerContractId], account, passphrase),
+    );
 
     // AgentRegistry — no cross-contract deps. Deployer acts as operator for now.
-    console.log('  AgentRegistry.init(owner=admin, operator=admin)');
-    await invoke(server, registryContractId, 'init', [adminAddr, adminAddr], account, passphrase);
+    await initOnce('AgentRegistry.init(owner=admin, operator=admin)', 1, () =>
+        invoke(server, registryContractId, 'init', [adminAddr, adminAddr], account, passphrase),
+    );
 
     // AgentVault — USDC collateral vault backing agent float.
-    console.log('  AgentVault.init(owner=admin, operator=admin, token, max_haircut, min_collateral)');
-    await invoke(
-        server,
-        vaultContractId,
-        'init',
-        [
-            adminAddr,
-            adminAddr,
-            config.token,
-            { type: 'u32', value: config.contracts.agent_vault.max_haircut_bps },
-            { type: 'i128', value: config.contracts.agent_vault.min_collateral },
-        ],
-        account,
-        passphrase,
+    await initOnce('AgentVault.init(owner=admin, operator=admin, token, max_haircut, min_collateral)', 1, () =>
+        invoke(
+            server,
+            vaultContractId,
+            'init',
+            [
+                adminAddr,
+                adminAddr,
+                config.token,
+                { type: 'u32', value: config.contracts.agent_vault.max_haircut_bps },
+                { type: 'i128', value: config.contracts.agent_vault.min_collateral },
+            ],
+            account,
+            passphrase,
+        ),
     );
 
     // ── 4. Persist contract IDs ─────────────────────────────────────────────────
     console.log('\n[4/4] Writing contract addresses to .env files…');
 
-    const envBlock = [
-        ``,
-        `# DukaPay contracts — ${network} — ${new Date().toISOString()}`,
+    // Variable names each app reads (docs/ENVIRONMENT.md).
+    const header = `\n# DukaPay contracts — ${network} — ${new Date().toISOString()}`;
+    const frontendEnv = [
+        header,
         `NEXT_PUBLIC_NFT_CONTRACT_ID=${nftContractId}`,
-        `NEXT_PUBLIC_POOL_CONTRACT_ID=${poolContractId}`,
+        `NEXT_PUBLIC_LOAN_MANAGER_CONTRACT_ID=${managerContractId}`,
         `NEXT_PUBLIC_MANAGER_CONTRACT_ID=${managerContractId}`,
-        `NEXT_PUBLIC_GOVERNANCE_CONTRACT_ID=${govContractId}`,
+        '',
+    ].join('\n');
+    const backendEnv = [
+        header,
+        `REMITTANCE_NFT_CONTRACT_ID=${nftContractId}`,
+        `LENDING_POOL_CONTRACT_ID=${poolContractId}`,
+        `LOAN_MANAGER_CONTRACT_ID=${managerContractId}`,
+        `MULTISIG_GOVERNANCE_CONTRACT_ID=${govContractId}`,
         `AGENT_REGISTRY_CONTRACT_ID=${registryContractId}`,
         `AGENT_VAULT_CONTRACT_ID=${vaultContractId}`,
+        `POOL_TOKEN_ADDRESS=${config.token}`,
+        '',
     ].join('\n');
 
-    await fs.appendFile(path.join(__dirname, '../frontend/.env.local'), envBlock);
-    await fs.appendFile(path.join(__dirname, '../backend/.env'), envBlock);
+    await fs.appendFile(path.join(__dirname, '../frontend/.env.local'), frontendEnv);
+    await fs.appendFile(path.join(__dirname, '../backend/.env'), backendEnv);
 
     console.log('\nDeployment complete.');
     console.log(`  RemittanceNFT  : ${nftContractId}`);
