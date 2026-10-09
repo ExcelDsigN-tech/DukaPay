@@ -562,7 +562,8 @@
       "termDays": "{days} days",
       "view": "View",
       "emptyTitle": "No active pool-funded loans yet",
-      "emptyDescription": "Active loans funded by the pool will appear here once borrowers draw against available liquidity."
+      "emptyDescription": "Active loans funded by the pool will appear here once borrowers draw against available liquidity.",
+      "unavailable": "Pool loans can't be shown right now. Deposits and withdrawals still work."
     },
     "yield": {
       "emptyTitle": "No yield history yet",
