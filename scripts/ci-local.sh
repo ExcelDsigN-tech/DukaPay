@@ -153,6 +153,7 @@ guards() {
   step guards "env docs";            node scripts/check-env-docs.mjs
   step guards "prod flags";          node scripts/check-prod-flags.mjs
   step guards "error code mappings"; node scripts/check-error-code-mappings.mjs
+  step guards "migrations unchanged"; node scripts/check-migrations-immutable.mjs
   step guards "i18n parity";         node scripts/check-i18n-parity.mjs
 }
 

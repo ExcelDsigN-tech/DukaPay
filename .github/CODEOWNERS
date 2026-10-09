@@ -6,3 +6,9 @@
 /backend/src/money/         @ExcelDsigN-tech
 /.github/workflows/         @ExcelDsigN-tech
 /.github/CODEOWNERS         @ExcelDsigN-tech
+
+# Dependency manifests and lockfiles: new dependencies need maintainer review.
+package.json                @ExcelDsigN-tech
+package-lock.json           @ExcelDsigN-tech
+Cargo.toml                  @ExcelDsigN-tech
+Cargo.lock                  @ExcelDsigN-tech

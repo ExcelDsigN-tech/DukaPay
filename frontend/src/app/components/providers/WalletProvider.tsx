@@ -336,7 +336,9 @@ export function WalletProvider({ children }: WalletProviderProps) {
         console.error("Disconnect cleanup unexpected error:", err);
         try {
           window.location.reload();
-        } catch {}
+        } catch (reloadErr) {
+          console.error("Reload after disconnect failed:", reloadErr);
+        }
       }
     })();
   }
