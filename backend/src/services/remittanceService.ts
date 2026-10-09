@@ -12,6 +12,7 @@ import { withTransaction } from '../db/transaction.js';
 import { AppError } from '../errors/AppError.js';
 import logger from '../utils/logger.js';
 import { complianceService } from './complianceService.js';
+import { toRemittance } from './remittanceMapper.js';
 
 export interface CreateRemittancePayload {
   recipientAddress: string;
@@ -267,20 +268,7 @@ export const remittanceService = {
       const hasNext = result.rows.length > limit;
       const trimmed = hasNext ? result.rows.slice(0, limit) : result.rows;
 
-      const remittances = trimmed.map((r) => ({
-        id: r.id,
-        senderId: r.sender_id,
-        recipientAddress: r.recipient_address,
-        amount: parseFloat(r.amount),
-        fromCurrency: r.from_currency,
-        toCurrency: r.to_currency,
-        memo: r.memo,
-        status: r.status,
-        transactionHash: r.transaction_hash,
-        xdr: r.xdr,
-        createdAt: r.created_at.toISOString(),
-        updatedAt: r.updated_at.toISOString(),
-      }));
+      const remittances = trimmed.map(toRemittance);
 
       const lastRemittance =
         remittances.length > 0 ? remittances[remittances.length - 1] : undefined;
@@ -308,22 +296,7 @@ export const remittanceService = {
 
       if (!result.rows[0]) throw AppError.notFound('Remittance not found');
 
-      const r = result.rows[0];
-
-      return {
-        id: r.id,
-        senderId: r.sender_id,
-        recipientAddress: r.recipient_address,
-        amount: parseFloat(r.amount),
-        fromCurrency: r.from_currency,
-        toCurrency: r.to_currency,
-        memo: r.memo,
-        status: r.status,
-        transactionHash: r.transaction_hash,
-        xdr: r.xdr,
-        createdAt: r.created_at.toISOString(),
-        updatedAt: r.updated_at.toISOString(),
-      };
+      return toRemittance(result.rows[0]);
     } catch (error) {
       logger.withContext().error('Error fetching remittance:', error);
 
@@ -384,22 +357,7 @@ export const remittanceService = {
         throw AppError.notFound('Remittance not found');
       }
 
-      const r = result.rows[0];
-
-      return {
-        id: r.id,
-        senderId: r.sender_id,
-        recipientAddress: r.recipient_address,
-        amount: parseFloat(r.amount),
-        fromCurrency: r.from_currency,
-        toCurrency: r.to_currency,
-        memo: r.memo,
-        status: r.status,
-        transactionHash: r.transaction_hash,
-        xdr: r.xdr,
-        createdAt: r.created_at.toISOString(),
-        updatedAt: r.updated_at.toISOString(),
-      };
+      return toRemittance(result.rows[0]);
     } catch (error) {
       logger.withContext().error('Error updating remittance:', error);
 

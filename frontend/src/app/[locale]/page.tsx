@@ -13,7 +13,6 @@ import { useWalletConnectAction } from "../hooks/useWalletConnectAction";
 import {
   useBorrowerLoans,
   useRemittances,
-  useUserProfile,
   useCreditScoreHistory,
   useScoreBreakdown,
 } from "../hooks/useApi";
@@ -114,7 +113,7 @@ function RepaymentReminderBanner({
       </div>
       <div className="flex items-center gap-2 shrink-0">
         <button
-          onClick={() => router.push(`/repay/${mostUrgent.id}`)}
+          onClick={() => router.push(`/${locale}/repay/${mostUrgent.id}`)}
           className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700 transition-colors"
         >
           {t("reminder.repayNow")}
@@ -147,9 +146,8 @@ export default function Home() {
   });
   const balances = useWalletStore(selectWalletBalances);
   const usdcBalance = Number(balances.find((b) => b.symbol === "USDC")?.amount ?? 0);
-  const { data: userProfile } = useUserProfile({ enabled: isConnected });
-  const { data: creditHistory } = useCreditScoreHistory(userProfile?.id, {
-    enabled: isConnected && !!userProfile?.id,
+  const { data: creditHistory } = useCreditScoreHistory(address ?? undefined, {
+    enabled: isConnected && !!address,
   });
 
   const isLoading = (loansLoading || remittancesLoading) && isConnected;

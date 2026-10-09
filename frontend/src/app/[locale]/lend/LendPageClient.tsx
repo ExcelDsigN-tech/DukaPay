@@ -166,7 +166,9 @@ export function LendPageClient() {
     );
   }
 
-  if (poolError || depositorError || loansError || historyError) {
+  // The pool-wide loans list (GET /api/loans) is optional: its failure only
+  // affects the loans section, so deposit and withdraw stay usable.
+  if (poolError || depositorError || historyError) {
     return (
       <section className="rounded-3xl border border-red-200 bg-red-50 p-6 text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">
         {t("loadError")}
@@ -174,7 +176,7 @@ export function LendPageClient() {
     );
   }
 
-  const isLoading = poolLoading || depositorLoading || loansLoading || historyLoading;
+  const isLoading = poolLoading || depositorLoading || historyLoading;
 
   return (
     <main className="space-y-6">
@@ -470,14 +472,21 @@ export function LendPageClient() {
           </p>
 
           <div className="mt-4 space-y-3">
-            {isLoading && (
+            {(isLoading || loansLoading) && (
               <>
                 <Skeleton className="h-[76px] w-full rounded-2xl" />
                 <Skeleton className="h-[76px] w-full rounded-2xl" />
                 <Skeleton className="h-[76px] w-full rounded-2xl" />
               </>
             )}
+            {!isLoading && !loansLoading && loansError && (
+              <p className="rounded-2xl border border-zinc-200 p-4 text-sm text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+                {t("portfolio.unavailable")}
+              </p>
+            )}
             {!isLoading &&
+              !loansLoading &&
+              !loansError &&
               (loans ?? [])
                 .filter((loan) => loan.status === "active")
                 .slice(0, 8)
@@ -510,6 +519,8 @@ export function LendPageClient() {
                 ))}
 
             {!isLoading &&
+              !loansLoading &&
+              !loansError &&
               (loans ?? []).filter((loan) => loan.status === "active").length === 0 && (
                 <EmptyState
                   icon={PiggyBank}

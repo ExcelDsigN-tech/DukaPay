@@ -8,6 +8,7 @@ import { Button } from "../../components/ui/Button";
 import { ConnectWalletButton } from "../../components/ui/ConnectWalletButton";
 import { Input } from "../../components/ui/Input";
 import { useLogout } from "../../hooks/useLogout";
+import { useWallet } from "../../components/providers/WalletProvider";
 import { GamificationSettings } from "../../components/gamification/GamificationSettings";
 import { useThemeStore } from "../../stores/useThemeStore";
 import {
@@ -211,7 +212,8 @@ function WalletSection() {
   const t = useTranslations("Settings.wallet");
   const address = useWalletStore(selectWalletAddress);
   const network = useWalletStore(selectWalletNetwork);
-  const disconnect = useWalletStore((s) => s.disconnect);
+  // Same full cleanup as the header button (service workers, caches, wallet storage).
+  const { disconnectWallet } = useWallet();
   const { logout } = useLogout();
 
   return (
@@ -259,7 +261,7 @@ function WalletSection() {
             <div className="pt-2 border-t border-zinc-200 dark:border-zinc-800 flex flex-col gap-2 sm:flex-row">
               <Button
                 variant="outline"
-                onClick={() => disconnect()}
+                onClick={() => disconnectWallet()}
                 leftIcon={<LogOut className="h-4 w-4" />}
                 className="text-amber-600 border-amber-200 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-900/50 dark:hover:bg-amber-950/20"
               >

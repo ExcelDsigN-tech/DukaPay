@@ -562,7 +562,8 @@
       "termDays": "{days} days",
       "view": "View",
       "emptyTitle": "No active pool-funded loans yet",
-      "emptyDescription": "Active loans funded by the pool will appear here once borrowers draw against available liquidity."
+      "emptyDescription": "Active loans funded by the pool will appear here once borrowers draw against available liquidity.",
+      "unavailable": "Pool loans can't be shown right now. Deposits and withdrawals still work."
     },
     "yield": {
       "emptyTitle": "No yield history yet",
@@ -979,6 +980,8 @@
     "description": "Real-time blockchain settlement for your loan repayments.",
     "amountLabel": "Repayment amount",
     "decimalsHelper": "Up to {decimals} decimal places supported.",
+    "owed": "Outstanding balance: {amount}",
+    "exceedsOwed": "Amount is more than the outstanding balance of {amount}.",
     "submit": "Review & Repay",
     "preview": {
       "operation": "Repay Loan",

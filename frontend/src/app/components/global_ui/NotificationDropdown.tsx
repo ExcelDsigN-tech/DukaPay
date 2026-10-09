@@ -218,7 +218,7 @@ export function NotificationDropdown() {
   };
 
   const handleNavigate = (path: string) => {
-    router.push(path);
+    router.push(`/${locale}${path}`);
     setOpen(false);
   };
 

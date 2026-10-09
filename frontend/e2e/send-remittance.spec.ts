@@ -2,7 +2,7 @@
 import { test, expect, type Page, type Route } from "@playwright/test";
 
 const MOCK_SENDER_ADDRESS = "GCJPBXSE6WCQDCEYZW6C3YVZCSSCHC4AE72L5KWKCYL2CLLL7NH5VSCI";
-const VALID_RECIPIENT = "GADR4OJZ2A6Q7V4YHLQED7XN3YXC2B5S6T7U8A9B0C1D2E3F4G5H6J7K8L9M";
+const VALID_RECIPIENT = "GDVEU3DD4KOFECV66VIHWEZOYX4ZKR3WV27L464SIIPOU2IUI3JCZA57";
 
 function seedConnectedWallet(state: { status: string; address: string }) {
   return {
@@ -80,7 +80,7 @@ test.describe("Send Remittance Flow", () => {
     await setupMocks(page);
     await page.goto("/en/send-remittance");
 
-    await expect(page.locator("text=Send Remittance")).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Send Remittance" })).toBeVisible();
 
     await page.fill("#recipientAddress", "invalid-address");
     await page.fill("#amount", "100");
@@ -117,18 +117,19 @@ test.describe("Send Remittance Flow", () => {
 
     await page.goto("/en/send-remittance");
 
-    await expect(page.locator("text=Send Remittance")).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Send Remittance" })).toBeVisible();
 
     await page.fill("#recipientAddress", VALID_RECIPIENT);
     await page.fill("#amount", "250");
 
     await page.getByRole("button", { name: /Review & Send/i }).click();
 
-    const confirmBtn = page.getByRole("button", { name: /Confirm|Send/i }).first();
-    await expect(confirmBtn).toBeVisible({ timeout: 5000 });
-    await confirmBtn.click();
+    const review = page.getByRole("dialog", { name: "Review Transaction" });
+    await expect(review).toBeVisible({ timeout: 5000 });
+    await review.getByRole("checkbox").check();
+    await review.getByRole("button", { name: "Sign Transaction" }).click();
 
-    await expect(page.locator("text=Remittance sent successfully")).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText(/^✓ Remittance sent successfully/)).toBeVisible({ timeout: 10000 });
 
     await page.waitForURL("**/remittances", { timeout: 5000 });
   });
