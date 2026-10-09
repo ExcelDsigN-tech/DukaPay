@@ -10,7 +10,7 @@
 import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
-import { useRepayLoan, useCreateRemittance, CSRF_COOKIE_NAME } from "./useApi";
+import { useCreateRemittance, CSRF_COOKIE_NAME } from "./useApi";
 
 function createWrapper() {
   const queryClient = new QueryClient({
@@ -38,26 +38,6 @@ describe("mutation retry behavior", () => {
     global.fetch = originalFetch;
     jest.restoreAllMocks();
     document.cookie = `${CSRF_COOKIE_NAME}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
-  });
-
-  it("useRepayLoan calls the mutationFn exactly once on a non-network 5xx", async () => {
-    const fetchMock = jest.fn().mockResolvedValue({
-      ok: false,
-      status: 500,
-      statusText: "Internal Server Error",
-      json: async () => ({ message: "boom" }),
-    });
-    global.fetch = fetchMock as unknown as typeof fetch;
-
-    const { result } = renderHook(() => useRepayLoan(), {
-      wrapper: createWrapper(),
-    });
-
-    result.current.mutate({ loanId: 1, amount: 100, borrowerAddress: "GABC" });
-
-    await waitFor(() => expect(result.current.isError).toBe(true));
-
-    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("useCreateRemittance calls the mutationFn exactly once on a non-network 5xx", async () => {

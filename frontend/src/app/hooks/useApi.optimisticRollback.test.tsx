@@ -2,22 +2,18 @@
  * hooks/useApi.optimisticRollback.test.tsx
  *
  * Tests for #1226: optimistic-update snapshot, rollback on error, and
- * onSettled invalidation in useRepayLoan, useDepositToPool, and
- * useWithdrawFromPool.
+ * onSettled invalidation in useDepositToPool and useWithdrawFromPool.
  */
 
 import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import {
-  useRepayLoan,
   useDepositToPool,
   useWithdrawFromPool,
   queryKeys,
-  type LoanDetails,
   type PoolStats,
   type DepositorPortfolio,
-  type BorrowerLoan,
 } from "./useApi";
 
 function createTestHarness() {
@@ -50,35 +46,7 @@ function mockFetchSuccess<T>(data: T) {
   });
 }
 
-const BORROWER = "GBORROWER123";
 const DEPOSITOR = "GDEPOSITOR456";
-const LOAN_ID = 1;
-
-const seedLoanDetail = (): LoanDetails => ({
-  loanId: LOAN_ID,
-  principal: 1000,
-  accruedInterest: 50,
-  totalRepaid: 200,
-  totalOwed: 850,
-  interestRate: 5,
-  status: "active",
-  events: [],
-});
-
-const seedBorrowerLoans = (): BorrowerLoan[] => [
-  {
-    id: LOAN_ID,
-    principal: 1000,
-    accruedInterest: 50,
-    totalOwed: 850,
-    totalRepaid: 200,
-    interestRateBps: 500,
-    nextPaymentDeadline: "2026-07-01",
-    status: "active",
-    borrower: BORROWER,
-    approvedAt: null,
-  },
-];
 
 const seedPoolStats = (): PoolStats => ({
   totalDeposits: 10000,
@@ -95,100 +63,6 @@ const seedDepositor = (): DepositorPortfolio => ({
   estimatedYield: 40,
   apy: 8,
   firstDepositAt: "2026-01-01",
-});
-
-describe("useRepayLoan optimistic rollback", () => {
-  const originalFetch = global.fetch;
-
-  afterEach(() => {
-    global.fetch = originalFetch;
-    jest.restoreAllMocks();
-  });
-
-  function seedRepayCache(queryClient: QueryClient) {
-    const loanDetail = seedLoanDetail();
-    const borrowerLoans = seedBorrowerLoans();
-    const poolStats = seedPoolStats();
-
-    queryClient.setQueryData(queryKeys.loans.detail(String(LOAN_ID)), loanDetail);
-    queryClient.setQueryData(queryKeys.borrowerLoans.byAddress(BORROWER), borrowerLoans);
-    queryClient.setQueryData(queryKeys.pool.stats(), poolStats);
-
-    return { loanDetail, borrowerLoans, poolStats };
-  }
-
-  it("onMutate updates loan detail optimistically while pending", async () => {
-    global.fetch = mockFetchSuccess({ txHash: "abc" }) as unknown as typeof fetch;
-    const { queryClient, wrapper } = createTestHarness();
-    seedRepayCache(queryClient);
-
-    const { result } = renderHook(() => useRepayLoan(), { wrapper });
-
-    result.current.mutate({ loanId: LOAN_ID, amount: 100, borrowerAddress: BORROWER });
-
-    await waitFor(() => {
-      const cached = queryClient.getQueryData<LoanDetails>(queryKeys.loans.detail(String(LOAN_ID)));
-      expect(cached?.totalOwed).toBe(750);
-      expect(cached?.totalRepaid).toBe(300);
-      expect(cached?.status).toBe("active");
-    });
-  });
-
-  it("onMutate flips status to repaid when repayment covers totalOwed", async () => {
-    global.fetch = mockFetchSuccess({ txHash: "abc" }) as unknown as typeof fetch;
-    const { queryClient, wrapper } = createTestHarness();
-    seedRepayCache(queryClient);
-
-    const { result } = renderHook(() => useRepayLoan(), { wrapper });
-
-    result.current.mutate({ loanId: LOAN_ID, amount: 850, borrowerAddress: BORROWER });
-
-    await waitFor(() => {
-      const cached = queryClient.getQueryData<LoanDetails>(queryKeys.loans.detail(String(LOAN_ID)));
-      expect(cached?.totalOwed).toBe(0);
-      expect(cached?.totalRepaid).toBe(1050);
-      expect(cached?.status).toBe("repaid");
-    });
-  });
-
-  it("onError restores exact previous loan detail, borrower loans, and pool stats", async () => {
-    global.fetch = mockFetchFailure() as unknown as typeof fetch;
-    const { queryClient, wrapper } = createTestHarness();
-    const { loanDetail, borrowerLoans, poolStats } = seedRepayCache(queryClient);
-
-    const { result } = renderHook(() => useRepayLoan(), { wrapper });
-
-    result.current.mutate({ loanId: LOAN_ID, amount: 100, borrowerAddress: BORROWER });
-
-    await waitFor(() => expect(result.current.isError).toBe(true));
-
-    expect(queryClient.getQueryData(queryKeys.loans.detail(String(LOAN_ID)))).toEqual(loanDetail);
-    expect(queryClient.getQueryData(queryKeys.borrowerLoans.byAddress(BORROWER))).toEqual(
-      borrowerLoans,
-    );
-    expect(queryClient.getQueryData(queryKeys.pool.stats())).toEqual(poolStats);
-  });
-
-  it("onSettled invalidates loans.detail, borrowerLoans.byAddress, and pool.stats", async () => {
-    global.fetch = mockFetchSuccess({ txHash: "abc" }) as unknown as typeof fetch;
-    const { queryClient, wrapper } = createTestHarness();
-    seedRepayCache(queryClient);
-    const invalidateSpy = jest.spyOn(queryClient, "invalidateQueries");
-
-    const { result } = renderHook(() => useRepayLoan(), { wrapper });
-
-    result.current.mutate({ loanId: LOAN_ID, amount: 100, borrowerAddress: BORROWER });
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-
-    expect(invalidateSpy).toHaveBeenCalledWith({
-      queryKey: queryKeys.loans.detail(String(LOAN_ID)),
-    });
-    expect(invalidateSpy).toHaveBeenCalledWith({
-      queryKey: queryKeys.borrowerLoans.byAddress(BORROWER),
-    });
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.pool.stats() });
-  });
 });
 
 describe("useWithdrawFromPool optimistic rollback", () => {

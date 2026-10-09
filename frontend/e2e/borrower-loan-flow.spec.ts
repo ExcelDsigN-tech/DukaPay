@@ -97,6 +97,11 @@ async function requestLoan(page: Page): Promise<unknown> {
 
   await page.goto("/en/request-loan");
 
+  // The APR comes from GET /loans/config (interestRatePercent: 8), not a hard-coded value.
+  await expect(
+    page.getByText("APR", { exact: true }).locator("xpath=following-sibling::p[1]"),
+  ).toHaveText("8%");
+
   // Step 1: Amount & asset
   await page.getByLabel(/Amount \(USDC\)/).fill("1000");
   await page.getByRole("button", { name: "30 days" }).click();

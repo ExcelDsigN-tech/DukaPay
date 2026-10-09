@@ -59,7 +59,7 @@ export default function KingdomClient() {
   } = useRemittanceNft(address ?? undefined, { enabled: isConnected && Boolean(address) });
 
   return (
-    <main className="min-h-screen p-8 lg:p-12 max-w-7xl mx-auto space-y-8">
+    <div className="min-h-screen p-8 lg:p-12 max-w-7xl mx-auto space-y-8">
       <header>
         <div className="flex items-center gap-3 mb-2">
           <Crown className="h-8 w-8 text-purple-600 dark:text-purple-400" />
@@ -210,6 +210,6 @@ export default function KingdomClient() {
       <Suspense fallback={<SkeletonCard />}>
         <GamificationSettings />
       </Suspense>
-    </main>
+    </div>
   );
 }

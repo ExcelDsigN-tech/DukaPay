@@ -118,11 +118,15 @@ export default function RequestLoanPage() {
   const isCheckingEligibility =
     isWalletConnected && (isLoadingConfig || (isLoadingScore && !!borrowerAddress));
 
-  const hasEligibilityError = Boolean(configError || scoreError);
+  // The rate comes from the loan config; without it the wizard can't quote terms.
+  const interestRatePercent = minScoreConfig?.interestRatePercent;
+  const hasEligibilityError = Boolean(
+    configError || scoreError || (!isLoadingConfig && interestRatePercent === undefined),
+  );
 
   if (successLoanId) {
     return (
-      <main className="mx-auto max-w-3xl space-y-6 p-8">
+      <div className="mx-auto max-w-3xl space-y-6 p-8">
         <Card>
           <CardContent className="space-y-4 p-8 text-center">
             <CheckCircle2 className="mx-auto h-12 w-12 text-green-500" />
@@ -143,12 +147,12 @@ export default function RequestLoanPage() {
             </div>
           </CardContent>
         </Card>
-      </main>
+      </div>
     );
   }
 
   return (
-    <main className="mx-auto max-w-4xl space-y-8 p-8">
+    <div className="mx-auto max-w-4xl space-y-8 p-8">
       <header className="space-y-2">
         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-indigo-600">
           Borrower Portal
@@ -243,11 +247,12 @@ export default function RequestLoanPage() {
               borrowerAddress={borrowerAddress!}
               creditScore={resolvedCreditScore}
               maxAmount={maxAmount}
+              interestRatePercent={interestRatePercent!}
               onSuccess={setSuccessLoanId}
             />
           </Suspense>
         </div>
       )}
-    </main>
+    </div>
   );
 }

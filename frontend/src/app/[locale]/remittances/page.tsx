@@ -60,7 +60,7 @@ const PAGE_SIZE = 20;
 
 function ConnectWalletPrompt() {
   return (
-    <main className="flex min-h-[60vh] flex-col items-center justify-center gap-6 p-8">
+    <div className="flex min-h-[60vh] flex-col items-center justify-center gap-6 p-8">
       <div className="rounded-2xl bg-zinc-50 p-6 dark:bg-zinc-900">
         <SendHorizontal className="h-12 w-12 text-indigo-600 dark:text-indigo-400" />
       </div>
@@ -70,7 +70,7 @@ function ConnectWalletPrompt() {
           Connect your wallet to view your cross-border transfer history.
         </p>
       </div>
-    </main>
+    </div>
   );
 }
 
@@ -139,7 +139,7 @@ export default function RemittancesPage() {
   }
 
   return (
-    <main className="mx-auto min-h-screen max-w-7xl space-y-8 p-8 lg:p-12">
+    <div className="mx-auto min-h-screen max-w-7xl space-y-8 p-8 lg:p-12">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-sm font-semibold uppercase tracking-widest text-indigo-600">
@@ -464,6 +464,6 @@ export default function RemittancesPage() {
           summary={`Showing ${remittances.length} remittances on page ${page}`}
         />
       )}
-    </main>
+    </div>
   );
 }

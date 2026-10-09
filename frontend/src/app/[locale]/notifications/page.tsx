@@ -160,7 +160,7 @@ export default function NotificationsPage() {
   };
 
   return (
-    <main className="mx-auto min-h-screen max-w-6xl space-y-6 p-8 lg:p-12">
+    <div className="mx-auto min-h-screen max-w-6xl space-y-6 p-8 lg:p-12">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-indigo-600 dark:text-indigo-400">
@@ -286,6 +286,6 @@ export default function NotificationsPage() {
           </>
         )}
       </section>
-    </main>
+    </div>
   );
 }
