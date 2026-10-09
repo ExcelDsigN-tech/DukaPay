@@ -121,30 +121,40 @@ test("Lend: Deposit funds → View updated pool stats", async ({ page }: { page:
 
 test("Remittance: View history", async ({ page }: { page: Page }) => {
   // Mock remittances list
-  await page.route("**/api/remittances", async (route: Route) => {
+  // The page requests /api/remittances?limit=...; match the query string too.
+  // Shape matches GET /api/remittances in the backend (data + page).
+  await page.route(/\/api\/remittances(\?.*)?$/, async (route: Route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify([
-        {
-          id: "rem_1",
-          amount: 250,
-          fromCurrency: "USDC",
-          toCurrency: "NGN",
-          status: "completed",
-          createdAt: new Date().toISOString(),
-          recipientAddress: "0x123...",
-        },
-      ]),
+      body: JSON.stringify({
+        success: true,
+        data: [
+          {
+            id: "rem_1",
+            senderId: MOCK_ADDRESS,
+            amount: 250,
+            fromCurrency: "USDC",
+            toCurrency: "NGN",
+            status: "completed",
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            recipientAddress: "GDVEU3DD4KOFECV66VIHWEZOYX4ZKR3WV27L464SIIPOU2IUI3JCZA57",
+          },
+        ],
+        page: { next_cursor: null, snapshot_seq: "1", total_at_snapshot: 1, limit: 20 },
+      }),
     });
   });
 
   await page.goto("/en/remittances");
 
-  await expect(page.locator("text=History")).toBeVisible();
-  await expect(page.locator("text=$250.00")).toBeVisible(); // formatting might vary
-  await expect(page.locator("text=NGN")).toBeVisible();
-  await expect(page.locator("text=Completed")).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Remittance History" })).toBeVisible();
+  // Scope to the list; the summary cards show the same totals.
+  const history = page.getByLabel("Remittance history");
+  await expect(history.getByText("$250.00")).toBeVisible();
+  await expect(history.getByText(/NGN/)).toBeVisible();
+  await expect(history.getByText("Completed")).toBeVisible();
 });
 
 // ─── Flow 5: Settings & Logout ────────────────────────────────────────────────
@@ -162,9 +172,10 @@ test("Account: Settings update → logout → redirect to login", async ({ page 
   await page.click('button:has-text("Save Profile")');
   await expect(page.locator("text=Saved!")).toBeVisible();
 
-  // Logout flow
-  const logoutBtn = page.getByRole("button", { name: /Disconnect Wallet/i });
-  await logoutBtn.scrollIntoViewIfNeeded();
+  // Logout flow: Sign Out (useLogout) ends the session and redirects.
+  // Disconnect Wallet is covered by wallet-disconnect.spec.ts.
+  await page.getByRole("tab", { name: "Wallet" }).click();
+  const logoutBtn = page.getByRole("tabpanel").getByRole("button", { name: "Sign Out" });
   await logoutBtn.click();
 
   // Redirection check (after logout, the app usually clears session and redirects to landed/base with localized path)
