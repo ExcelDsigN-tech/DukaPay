@@ -7,6 +7,8 @@ import {
     nativeToScVal,
     xdr,
     StrKey,
+    Contract,
+    hash,
 } from '@stellar/stellar-sdk';
 import { createHash } from 'crypto';
 import * as fs from 'fs-extra';
@@ -28,25 +30,26 @@ function contractSalt(name: string): Buffer {
     return createHash('sha256').update(`dukapay:${name}`).digest();
 }
 
-// Extract the newly created contract ID from transaction result metadata.
-function extractContractId(resultMeta: xdr.TransactionMeta): string {
-    const v3 = resultMeta.v3();
-    for (const opMeta of v3.operations()) {
-        for (const change of opMeta.changes()) {
-            if (change.switch().name !== 'ledgerEntryCreated') continue;
-            const data = change.created().data();
-            if (data.switch().name !== 'contractData') continue;
-            const cd = data.contractData();
-            if (cd.key().switch().name !== 'scvLedgerKeyContractInstance') continue;
-            const contract = cd.contract();
-            if (contract.switch().name === 'scAddressTypeContract') {
-                return StrKey.encodeContract(
-                    Buffer.from(contract.contractId() as unknown as Uint8Array),
-                );
-            }
-        }
-    }
-    throw new Error('Could not extract contract ID from transaction metadata');
+// The address a contract gets when `deployer` creates it with `salt`. It is
+// fixed by those inputs, so a re-run can find a contract an earlier run made.
+function expectedContractId(deployer: string, salt: Buffer, networkPassphrase: string): string {
+    const preimage = xdr.HashIdPreimage.envelopeTypeContractId(
+        new xdr.HashIdPreimageContractId({
+            networkId: hash(Buffer.from(networkPassphrase)),
+            contractIdPreimage: xdr.ContractIdPreimage.contractIdPreimageFromAddress(
+                new xdr.ContractIdPreimageFromAddress({
+                    address: Address.fromString(deployer).toScAddress(),
+                    salt,
+                }),
+            ),
+        }),
+    );
+    return StrKey.encodeContract(hash(preimage.toXDR()));
+}
+
+async function contractExists(server: Rpc.Server, contractId: string): Promise<boolean> {
+    const { entries } = await server.getLedgerEntries(new Contract(contractId).getFootprint());
+    return entries.length > 0;
 }
 
 async function sendTx(
@@ -106,7 +109,8 @@ async function uploadWasm(
     return wasmHash;
 }
 
-// Instantiate a contract from an uploaded WASM hash. Returns the new contract ID.
+// Instantiate a contract from an uploaded WASM hash. Returns the contract ID.
+// If an earlier run already created it, reuse it instead of failing.
 async function createInstance(
     server: Rpc.Server,
     wasmHash: Buffer,
@@ -114,6 +118,12 @@ async function createInstance(
     account: Keypair,
     networkPassphrase: string,
 ): Promise<string> {
+    const contractId = expectedContractId(account.publicKey(), salt, networkPassphrase);
+    if (await contractExists(server, contractId)) {
+        console.log('    already exists from an earlier run, reusing');
+        return contractId;
+    }
+
     const source = await server.getAccount(account.publicKey());
     const tx = new TransactionBuilder(source, { fee: '100000', networkPassphrase })
         .addOperation(
@@ -127,7 +137,12 @@ async function createInstance(
         .build();
 
     const result = await sendTx(server, tx, account);
-    return extractContractId(result.resultMetaXdr);
+    // createCustomContract returns the new contract's address.
+    const created = result.returnValue ? Address.fromScVal(result.returnValue).toString() : null;
+    if (created !== contractId) {
+        throw new Error(`Created contract ${created} but expected ${contractId}`);
+    }
+    return contractId;
 }
 
 // Convert an argument to ScVal. Public-key / contract-address strings

@@ -33,7 +33,7 @@ used to build the contracts:
 ```toml
 [toolchain]
 channel = "1.85.0"
-targets = ["wasm32-unknown-unknown"]
+targets = ["wasm32-unknown-unknown", "wasm32v1-none"]
 components = ["rustfmt", "clippy"]
 ```
 
@@ -43,6 +43,12 @@ this file, downloads the pinned toolchain and the `wasm32-unknown-unknown`
 target on first use, and runs the real command with them. The first build after
 cloning will therefore pause to download a toolchain — that is expected, not a
 failure.
+
+**Build for deployment with `wasm32v1-none`** (`scripts/build.sh` does this).
+Since Rust 1.82, `wasm32-unknown-unknown` enables WASM features such as
+reference-types that the Stellar network rejects, so a contract built that way
+fails to upload with `reference-types not enabled`. `wasm32-unknown-unknown`
+is still fine for tests and size checks.
 
 The pin is what makes builds reproducible: a WASM built on a different compiler
 version can differ byte-for-byte, which breaks on-chain hash verification even
