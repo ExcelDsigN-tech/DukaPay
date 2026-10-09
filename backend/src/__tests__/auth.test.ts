@@ -3,6 +3,7 @@ import request from 'supertest';
 import app from '../app.js';
 import { cacheService } from '../services/cacheService.js';
 import { Keypair } from '@stellar/stellar-sdk';
+import crypto from 'crypto';
 
 describe('Auth API', () => {
   beforeAll(() => {
@@ -421,6 +422,31 @@ describe('authService unit tests', () => {
 
       const result = authService.verifySignature(keypair.publicKey(), message, signature);
       expect(result).toBe(true);
+    });
+
+    it('should return true for a SEP-53 signature (Freighter signMessage)', () => {
+      const keypair = Keypair.random();
+      const message = 'test message';
+      const digest = crypto
+        .createHash('sha256')
+        .update(Buffer.from(`Stellar Signed Message:\n${message}`, 'utf-8'))
+        .digest();
+      const signature = keypair.sign(digest).toString('base64');
+
+      const result = authService.verifySignature(keypair.publicKey(), message, signature);
+      expect(result).toBe(true);
+    });
+
+    it('should return false for a SEP-53 signature over a different message', () => {
+      const keypair = Keypair.random();
+      const digest = crypto
+        .createHash('sha256')
+        .update(Buffer.from('Stellar Signed Message:\nother message', 'utf-8'))
+        .digest();
+      const signature = keypair.sign(digest).toString('base64');
+
+      const result = authService.verifySignature(keypair.publicKey(), 'test message', signature);
+      expect(result).toBe(false);
     });
 
     it('should return false for wrong signer', () => {

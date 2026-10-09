@@ -14,6 +14,10 @@ interface ExtendedFreighterApi {
     xdr: string,
     opts?: { network?: string; networkPassphrase?: string },
   ) => Promise<string | { signedTxXdr?: string; error?: string }>;
+  signMessage: (
+    message: string,
+    opts?: { networkPassphrase?: string; address?: string },
+  ) => Promise<FreighterSignMessageResult>;
   getNetworkDetails?: () => Promise<FreighterNetworkResult>;
   getNetwork?: () => Promise<FreighterNetworkResult>;
   watchAddress?: (callback: (address: string) => void) => () => void;
@@ -43,11 +47,19 @@ interface FreighterNetworkResult {
   error?: unknown;
 }
 
+interface FreighterSignMessageResult {
+  // Freighter v4+ returns base64; older extensions return a Buffer.
+  signedMessage: string | { toString(encoding: "base64"): string } | null;
+  error?: unknown;
+}
+
 interface HorizonBalance {
   balance: string;
   asset_type: "native" | "credit_alphanum4" | "credit_alphanum12" | "liquidity_pool_shares";
   asset_code?: string;
 }
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
 const WalletProviderContext = createContext<WalletProviderContextValue | null>(null);
 
@@ -56,6 +68,13 @@ const NETWORK_CHAIN_IDS: Record<string, number> = {
   TESTNET: 2,
   FUTURENET: 3,
   STANDALONE: 4,
+};
+
+const NETWORK_PASSPHRASES: Record<string, string> = {
+  PUBLIC: "Public Global Stellar Network ; October 2015",
+  TESTNET: "Test SDF Network ; September 2015",
+  FUTURENET: "Test SDF Future Network ; October 2022",
+  STANDALONE: "Standalone Network ; Separate from SDF",
 };
 
 function normalizeWalletError(error: unknown): string {
@@ -225,10 +244,67 @@ export function WalletProvider({ children }: WalletProviderProps) {
     return task;
   }
 
+  async function postAuth<T>(path: string, body: Record<string, string>): Promise<T> {
+    const response = await fetch(`${API_URL}/api/auth/${path}`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const payload = (await response.json().catch(() => ({}))) as {
+      data?: T;
+      message?: string;
+      error?: { message?: string };
+    };
+
+    if (!response.ok || !payload.data) {
+      throw new Error(payload.error?.message ?? payload.message ?? "Sign-in failed.");
+    }
+
+    return payload.data;
+  }
+
+  /**
+   * Signs the backend's challenge with Freighter and exchanges it for the
+   * httpOnly session cookie that authenticated API calls need.
+   */
+  async function signIn(publicKey: string) {
+    const { message } = await postAuth<{ message: string }>("challenge", { publicKey });
+
+    const api = (await loadFreighterApi()) as unknown as ExtendedFreighterApi;
+    const networkName = useWalletStore.getState().network?.name ?? "TESTNET";
+    const result = await api.signMessage(message, {
+      address: publicKey,
+      networkPassphrase: NETWORK_PASSPHRASES[networkName] ?? NETWORK_PASSPHRASES.TESTNET,
+    });
+
+    if (result.error || !result.signedMessage) {
+      throw new Error(normalizeWalletError(result.error ?? "Message signing was rejected."));
+    }
+
+    const signature =
+      typeof result.signedMessage === "string"
+        ? result.signedMessage
+        : result.signedMessage.toString("base64");
+
+    await postAuth("login", { publicKey, message, signature });
+  }
+
   async function connectWallet() {
     setStatus("connecting");
     setError(null, "connecting");
     await syncWallet(true);
+
+    const connectedAddress = useWalletStore.getState().address;
+    if (!connectedAddress) return;
+
+    try {
+      await signIn(connectedAddress);
+    } catch (error) {
+      disconnect();
+      setError(normalizeWalletError(error), "error");
+      throw error;
+    }
   }
 
   function disconnectWallet() {
@@ -342,13 +418,6 @@ export function WalletProvider({ children }: WalletProviderProps) {
       }
     })();
   }
-
-  const NETWORK_PASSPHRASES: Record<string, string> = {
-    PUBLIC: "Public Global Stellar Network ; October 2015",
-    TESTNET: "Test SDF Network ; September 2015",
-    FUTURENET: "Test SDF Future Network ; October 2022",
-    STANDALONE: "Standalone Network ; Separate from SDF",
-  };
 
   async function signTransaction(unsignedTxXdr: string): Promise<string> {
     const api = (await loadFreighterApi()) as unknown as ExtendedFreighterApi;
