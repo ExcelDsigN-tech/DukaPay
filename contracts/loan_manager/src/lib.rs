@@ -178,7 +178,8 @@ impl LoanManager {
     const CURRENT_VERSION: u32 = 4;
     const DEFAULT_LATE_FEE_RATE_BPS: u32 = 500;
     const MAX_LATE_FEE_CAP_BPS: u32 = 2500;
-    const DEFAULT_MAX_LOAN_AMOUNT: i128 = 50_000;
+    /// 50,000 USDC. Amounts are in stroops (money::STROOP_SCALE per token unit).
+    const DEFAULT_MAX_LOAN_AMOUNT: i128 = 50_000 * money::STROOP_SCALE;
     const DEFAULT_MAX_LOANS_PER_BORROWER: u32 = 3;
     const DEFAULT_GRACE_PERIOD_LEDGERS: u32 = 4_320;
     const DEFAULT_DEFAULT_WINDOW_LEDGERS: u32 = Self::DEFAULT_TERM_LEDGERS;
@@ -190,7 +191,11 @@ impl LoanManager {
     const LATE_REPAYMENT_SCORE_PENALTY: i32 = 10;
     const DEFAULT_SCORE_PENALTY_POINTS: u32 = 50;
     const NFT_MAX_SCORE: u32 = 850;
+    /// In stroops. Also the dust threshold: a remaining debt at or below this is
+    /// closed by any payment (see repay), so it must stay tiny. Not scaled to USDC.
     const DEFAULT_MIN_REPAYMENT_AMOUNT: i128 = 100;
+    /// Repayment, in stroops, that earns one credit-score point: 100 USDC.
+    const STROOPS_PER_SCORE_POINT: i128 = 100 * money::STROOP_SCALE;
     const MAX_EXTENSIONS: u32 = 3;
     const EXTENSION_FEE_BPS: u32 = 100; // 1% of remaining principal
     /// Default minimum interest rate (configurable via set_rate_bounds). #631
@@ -1548,7 +1553,7 @@ impl LoanManager {
             events::loan_repaid(&env, borrower.clone(), loan_id, amount);
         }
 
-        if amount >= 100 {
+        if amount >= Self::STROOPS_PER_SCORE_POINT {
             let nft_contract = Self::nft_contract(&env);
             let nft_client = NftClient::new(&env, &nft_contract);
             let borrower_score = nft_client.get_score(&borrower);
@@ -1563,8 +1568,8 @@ impl LoanManager {
                 } else {
                     // Use apply_score_delta rather than update_score so score adjustments
                     // work for any token denomination without hitting RemittanceNFT's
-                    // anti-dust repayment floor (which assumes XLM stroops).
-                    let points_i128 = amount / 100;
+                    // anti-dust repayment floor. 1 point per 100 USDC repaid.
+                    let points_i128 = amount / Self::STROOPS_PER_SCORE_POINT;
                     let points_i32 = if points_i128 > i32::MAX as i128 {
                         i32::MAX
                     } else if points_i128 <= 0 {

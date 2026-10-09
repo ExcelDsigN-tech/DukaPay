@@ -7,6 +7,11 @@ use soroban_sdk::{
     contract, contractimpl, testutils::Address as _, Address, BytesN, Env, FromVal, String,
 };
 
+/// Test amounts written in USDC, converted to stroops (the unit the contracts use).
+fn usdc(amount: i128) -> i128 {
+    amount * money::STROOP_SCALE
+}
+
 fn create_test_commitment(env: &Env, value: u8) -> BytesN<32> {
     let mut commitment_bytes = [0u8; 32];
     commitment_bytes[0] = value;
@@ -762,22 +767,22 @@ fn test_repayment_flow() {
 
     let token_client = TokenClient::new(&env, &token_id);
     let stellar_token = StellarAssetClient::new(&env, &token_id);
-    seed_pool(&env, &pool_client, &token_id, 10_000);
-    stellar_token.mint(&borrower, &10_000);
+    seed_pool(&env, &pool_client, &token_id, usdc(10_000));
+    stellar_token.mint(&borrower, &usdc(10_000));
 
-    let loan_id = manager.request_loan(&borrower, &1000, &17280);
+    let loan_id = manager.request_loan(&borrower, &usdc(1000), &17280);
     manager.approve_loan(&loan_id);
 
     env.ledger()
         .set_sequence_number(env.ledger().sequence() + 2_000);
 
-    manager.repay(&borrower, &loan_id, &500);
+    manager.repay(&borrower, &loan_id, &usdc(500));
 
     let loan = manager.get_loan(&loan_id);
     assert!(loan.principal_paid > 0);
     assert!(loan.interest_paid >= 0);
     assert_eq!(loan.status, LoanStatus::Approved);
-    assert_eq!(token_client.balance(&pool_client), 9_500);
+    assert_eq!(token_client.balance(&pool_client), usdc(9_500));
 
     let remaining_debt = loan.amount + loan.accrued_interest + loan.accrued_late_fee
         - loan.principal_paid
@@ -790,7 +795,7 @@ fn test_repayment_flow() {
     let pool_stats = pool.get_pool_stats(&token_id);
     assert_eq!(
         pool_stats.total_managed_assets,
-        10_000 + completed.interest_paid + completed.late_fee_paid
+        usdc(10_000) + completed.interest_paid + completed.late_fee_paid
     );
     assert_eq!(
         pool_stats.total_yield_distributed,
@@ -960,6 +965,31 @@ fn test_small_repayment_does_not_change_score() {
 }
 
 #[test]
+fn test_default_max_loan_is_50k_usdc_in_stroops() {
+    let env = Env::default();
+    env.mock_all_auths_allowing_non_root_auth();
+
+    let (manager, nft_client, _pool_client, _token_id, _token_admin) = setup_test(&env);
+    let borrower = Address::generate(&env);
+
+    let history_hash = soroban_sdk::BytesN::from_array(&env, &[0u8; 32]);
+    nft_client.mint(
+        &borrower,
+        &600,
+        &history_hash,
+        &String::from_str(&env, "ipfs://QmTest"),
+        &create_test_commitment(&env, 1),
+        &None,
+    );
+
+    // One stroop over the default cap is rejected; the cap itself is allowed.
+    let over = manager.try_request_loan(&borrower, &(usdc(50_000) + 1), &17280);
+    assert_eq!(over, Err(Ok(LoanError::InvalidAmount)));
+    let at_cap = manager.try_request_loan(&borrower, &usdc(50_000), &17280);
+    assert!(at_cap.is_ok());
+}
+
+#[test]
 fn test_late_full_repayment_applies_score_penalty() {
     let env = Env::default();
     env.mock_all_auths_allowing_non_root_auth();
@@ -978,10 +1008,10 @@ fn test_late_full_repayment_applies_score_penalty() {
     );
 
     let stellar_token = StellarAssetClient::new(&env, &token_id);
-    seed_pool(&env, &pool_client, &token_id, 20_000);
-    stellar_token.mint(&borrower, &20_000);
+    seed_pool(&env, &pool_client, &token_id, usdc(20_000));
+    stellar_token.mint(&borrower, &usdc(20_000));
 
-    let loan_id = manager.request_loan(&borrower, &1000, &17280);
+    let loan_id = manager.request_loan(&borrower, &usdc(1000), &17280);
     manager.approve_loan(&loan_id);
 
     let due_date = manager.get_loan(&loan_id).due_date;

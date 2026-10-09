@@ -86,12 +86,13 @@ impl RemittanceNFT {
     pub const MAX_ALLOWED_BURN_THRESHOLD: u32 = 1000; // Set as appropriate for your business logic
     pub const MAX_AUTHORIZED_MINTERS: u32 = 32;
     const DEFAULT_MIN_REPAYMENT_AMOUNT: i128 = 0;
-    /// Minimum repayment amount accepted by update_score() (1/10 XLM in stroops).
-    /// Dust repayments below this threshold award 0 score points due to integer
-    /// division (`repayment_amount / 100 == 0`) but still write storage and emit
-    /// events, enabling spam attacks. This floor rejects such calls early with
-    /// InvalidRepaymentAmount (error 7).
-    pub const MIN_SCORE_UPDATE_REPAYMENT: i128 = 100;
+    /// Repayment, in stroops, that earns one score point: 100 USDC.
+    pub const STROOPS_PER_SCORE_POINT: i128 = 100 * money::STROOP_SCALE;
+    /// Minimum repayment accepted by update_score(), in stroops (100 USDC).
+    /// Smaller repayments award 0 points through integer division but would
+    /// still write storage and emit events, enabling spam. This floor rejects
+    /// them early with InvalidRepaymentAmount (error 7).
+    pub const MIN_SCORE_UPDATE_REPAYMENT: i128 = Self::STROOPS_PER_SCORE_POINT;
 
     fn admin_key() -> soroban_sdk::Symbol {
         symbol_short!("ADMIN")
@@ -685,7 +686,7 @@ impl RemittanceNFT {
             return Err(NftError::BelowMinimum);
         }
 
-        // Reject dust repayments that award zero score points (repayment_amount / 100 == 0)
+        // Reject dust repayments that award zero score points
         // but still incur storage writes and event emissions, enabling low-cost spam.
         if repayment_amount < Self::MIN_SCORE_UPDATE_REPAYMENT {
             return Err(NftError::InvalidRepaymentAmount);
@@ -696,8 +697,8 @@ impl RemittanceNFT {
         let mut metadata =
             Self::get_or_migrate_metadata(&env, &user).ok_or(NftError::NftNotFound)?;
 
-        // Simple logic: 1 point per 100 units of repayment.
-        let points_i128 = repayment_amount / 100;
+        // 1 point per 100 USDC repaid (amounts are in stroops).
+        let points_i128 = repayment_amount / Self::STROOPS_PER_SCORE_POINT;
         if points_i128 == 0 {
             return Ok(());
         }
