@@ -716,6 +716,50 @@ describe('EventIndexer', () => {
     expect(stateWrites).toEqual([0, 15]);
   });
 
+  it('pages getEvents with the cursor alone after the first request', async () => {
+    const indexer = new EventIndexer({
+      rpcUrl: 'https://rpc.test',
+      contractId: 'CINDEXERTEST',
+    });
+
+    const requests: Array<Record<string, unknown>> = [];
+    const pages = [
+      {
+        events: [makeRawEvent({ id: 'evt-a', ledger: 101, type: 'LoanRequested' })],
+        cursor: 'c1',
+      },
+      {
+        events: [
+          makeRawEvent({ id: 'evt-b', ledger: 150, type: 'LoanRequested' }),
+          makeRawEvent({ id: 'evt-late', ledger: 250, type: 'LoanRequested' }),
+        ],
+        cursor: 'c2',
+      },
+    ];
+    (indexer as unknown as { rpc: { getEvents: unknown } }).rpc = {
+      getEvents: async (request: Record<string, unknown>) => {
+        requests.push(request);
+        return pages[requests.length - 1] ?? { events: [] };
+      },
+    };
+
+    const events = await (
+      indexer as unknown as {
+        fetchEventsInRange: (start: number, end: number) => Promise<Array<{ id: string }>>;
+      }
+    ).fetchEventsInRange(100, 199);
+
+    // RPC rejects { startLedger/endLedger + cursor } with -32602.
+    expect(requests[0]).toMatchObject({ startLedger: 100, endLedger: 199 });
+    expect(requests[0]).not.toHaveProperty('cursor');
+    expect(requests[1]).toMatchObject({ cursor: 'c1' });
+    expect(requests[1]).not.toHaveProperty('startLedger');
+    expect(requests[1]).not.toHaveProperty('endLedger');
+    // Events past the window are dropped, and paging stops once it passes the end.
+    expect(events.map((event) => event.id)).toEqual(['evt-a', 'evt-b']);
+    expect(requests).toHaveLength(2);
+  });
+
   it('quarantines parse failures and emits growth alert logs', async () => {
     const previousThreshold = process.env.QUARANTINE_ALERT_THRESHOLD;
     process.env.QUARANTINE_ALERT_THRESHOLD = '2';

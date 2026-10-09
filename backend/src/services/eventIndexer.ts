@@ -718,32 +718,30 @@ export class EventIndexer {
     let cursor: string | undefined;
     let hasMorePages = true;
 
+    const filters = [{ type: 'contract', contractIds: this.contractIds }];
+
     while (hasMorePages) {
-      const response = (await this.rpc.getEvents({
-        startLedger,
-        endLedger,
-        cursor,
-        limit: this.batchSize,
-        filters: [
-          {
-            type: 'contract',
-            contractIds: this.contractIds,
-          },
-        ],
-      } as never)) as unknown as {
+      // RPC rejects a ledger range together with a cursor, so later pages send
+      // only the cursor and the range is enforced by the filter below.
+      const request = cursor
+        ? { cursor, limit: this.batchSize, filters }
+        : { startLedger, endLedger, limit: this.batchSize, filters };
+      const response = (await this.rpc.getEvents(request as never)) as unknown as {
         events?: SorobanRawEvent[];
         cursor?: string;
         nextCursor?: string;
       };
 
-      const events = (response.events ?? []).filter(
+      const pageEvents = response.events ?? [];
+      const events = pageEvents.filter(
         (event) => event.ledger >= startLedger && event.ledger <= endLedger,
       );
 
       result.push(...events);
 
+      const passedEnd = pageEvents.some((event) => event.ledger > endLedger);
       const nextCursor = response.nextCursor ?? response.cursor;
-      if (!nextCursor || nextCursor === cursor || events.length === 0) {
+      if (!nextCursor || nextCursor === cursor || events.length === 0 || passedEnd) {
         hasMorePages = false;
         continue;
       }
