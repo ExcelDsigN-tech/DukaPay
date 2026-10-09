@@ -67,7 +67,7 @@ describe('pagination and filtering', () => {
           {
             loan_id: 3,
             borrower,
-            principal: '250',
+            principal: '2500000000', // 250 USDC in stroops
             approved_at: '2024-02-20T00:00:00.000Z',
             approved_ledger: 95,
             rate_bps: 1200,
@@ -75,7 +75,7 @@ describe('pagination and filtering', () => {
             total_repaid: '0',
             is_defaulted: '0',
             accrued_interest: '0',
-            total_owed: '250',
+            total_owed: '2500000000',
             next_payment_deadline: '2024-02-21T00:00:00.000Z',
             status: 'active',
             full_count: 2,
@@ -104,6 +104,9 @@ describe('pagination and filtering', () => {
     expect(response.body.data.loans).toHaveLength(1);
     expect(response.body.data.loans[0].loanId).toBe(3);
     expect(response.body.data.loans[0].principal).toBe(250);
+    // amount_range=150,300 is in USDC; the query compares stroops.
+    const loansCall = mockQuery.mock.calls.find((call) => call[0].includes('loan_summaries'));
+    expect(loansCall?.[1]).toEqual(expect.arrayContaining(['1500000000', '3000000000']));
   });
 
   it('applies event filters and returns page info for borrower transaction history', async () => {
@@ -122,7 +125,7 @@ describe('pagination and filtering', () => {
             event_type: 'LoanRepaid',
             loan_id: 42,
             address: borrower,
-            amount: '250',
+            amount: '2500000000', // 250 USDC in stroops
             ledger: 200,
             ledger_closed_at: '2024-02-15T12:00:00.000Z',
             tx_hash: 'tx_2',
@@ -135,7 +138,7 @@ describe('pagination and filtering', () => {
             event_type: 'LoanRepaid',
             loan_id: 42,
             address: borrower,
-            amount: '300',
+            amount: '3000000000',
             ledger: 201,
             ledger_closed_at: '2024-02-15T12:01:00.000Z',
             tx_hash: 'tx_3',
@@ -157,6 +160,8 @@ describe('pagination and filtering', () => {
     expect(response.body.data.address).toBe(borrower);
     expect(response.body.data.items).toHaveLength(2);
     expect(response.body.data.items[0].event_type).toBe('LoanRepaid');
+    expect(response.body.data.items[0].amount).toBe(250);
+    expect(response.body.data.items[0].amountStroops).toBe('2500000000');
     expect(response.body.page).toEqual({
       next_cursor: null,
       snapshot_seq: '500',
@@ -172,6 +177,8 @@ describe('pagination and filtering', () => {
     );
     expect(dataCall?.[0]).toContain('event_type = $2');
     expect(dataCall?.[0]).toContain('CAST(amount AS NUMERIC) BETWEEN $3 AND $4');
+    // amount_range=100,500 is in USDC; the query compares stroops.
+    expect(dataCall?.[1]).toEqual(expect.arrayContaining(['1000000000', '5000000000']));
     expect(dataCall?.[0]).toContain('ledger_closed_at BETWEEN $5 AND $6');
     expect(dataCall?.[0]).toContain('ORDER BY created_at DESC, seq DESC');
   });

@@ -3,6 +3,7 @@ import { query } from '../db/connection.js';
 import { sorobanService } from '../services/sorobanService.js';
 import { cacheService } from '../services/cacheService.js';
 import logger from '../utils/logger.js';
+import { STROOP_SCALE } from '../money/decimal.js';
 
 export interface ReconciliationDiscrepancy {
   entityType: 'loan_balance' | 'float_balance' | 'collateral_ratio' | 'agent_status';
@@ -26,7 +27,8 @@ export interface ReconciliationRunResult {
   status: 'SUCCESS' | 'WARNING' | 'ALERT';
 }
 
-const DRIFT_ALERT_AMOUNT_THRESHOLD = 100; // $100
+// Balances compared below are on-chain stroops, so the $100 threshold is too.
+const DRIFT_ALERT_AMOUNT_THRESHOLD = 100 * Number(STROOP_SCALE);
 const DRIFT_ALERT_PERCENT_THRESHOLD = 0.01; // 1%
 
 /**

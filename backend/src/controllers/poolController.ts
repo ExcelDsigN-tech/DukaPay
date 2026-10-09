@@ -11,7 +11,7 @@ import {
   normalizeYieldHistoryDays,
 } from '../services/yieldHistoryService.js';
 import logger from '../utils/logger.js';
-import { amountToStroops } from '../money/decimal.js';
+import { amountToStroops, stroopsToAmount } from '../money/decimal.js';
 import { invalidateOnDeposit, invalidateOnWithdraw } from '../utils/cacheKeys.js';
 
 /**
@@ -64,8 +64,9 @@ export const getPoolStats = asyncHandler(async (_req: Request, res: Response) =>
     sorobanService.getWithdrawalCooldownLedgers().catch(() => 0),
   ]);
 
-  const totalDeposits = safeFloat(depositResult.rows[0]?.total_deposits);
-  const totalOutstanding = safeFloat(loanResult.rows[0]?.total_outstanding);
+  // Indexed amounts are stroops; the API returns whole tokens.
+  const totalDeposits = stroopsToAmount(depositResult.rows[0]?.total_deposits);
+  const totalOutstanding = stroopsToAmount(loanResult.rows[0]?.total_outstanding);
   const activeLoansCount = Math.trunc(safeFloat(loanResult.rows[0]?.active_loans_count));
 
   const utilizationRate = totalDeposits > 0 ? Math.min(totalOutstanding / totalDeposits, 1) : 0;
@@ -116,8 +117,9 @@ export const getDepositorPortfolio = asyncHandler(async (req: Request, res: Resp
     `),
   ]);
 
-  const depositAmount = safeFloat(depositorResult.rows[0]?.deposit_amount);
-  const poolTotal = safeFloat(poolTotalResult.rows[0]?.pool_total);
+  // Indexed amounts are stroops; the API returns whole tokens.
+  const depositAmount = stroopsToAmount(depositorResult.rows[0]?.deposit_amount);
+  const poolTotal = stroopsToAmount(poolTotalResult.rows[0]?.pool_total);
   const firstDepositAt = depositorResult.rows[0]?.first_deposit_at ?? null;
   const lastDepositAt = depositorResult.rows[0]?.last_deposit_at ?? null;
 
@@ -176,14 +178,15 @@ export const getDepositorYieldHistory = asyncHandler(async (req: Request, res: R
     ? Math.max(1, (Date.now() - new Date(firstTimestamp).getTime()) / (1000 * 60 * 60 * 24))
     : 1;
 
+  // History is rebuilt in stroops; the API returns whole tokens.
   const data = history.map((point) => ({
     timestamp: point.timestamp,
-    depositedValue: point.depositedValue,
-    currentValue: point.currentValue,
-    netYield: point.netYield,
+    depositedValue: stroopsToAmount(point.depositedValue),
+    currentValue: stroopsToAmount(point.currentValue),
+    netYield: stroopsToAmount(point.netYield),
     date: point.timestamp,
-    earnings: point.netYield,
-    principal: point.depositedValue,
+    earnings: stroopsToAmount(point.netYield),
+    principal: stroopsToAmount(point.depositedValue),
     apy: computeApy(point.netYield, point.depositedValue, daysElapsed),
   }));
 
@@ -449,11 +452,11 @@ export const getAnalytics = asyncHandler(async (_req: Request, res: Response) =>
   ]);
 
   const analyticsData = {
-    totalDeposits: safeFloat(poolStats.rows[0]?.total_deposits),
-    totalWithdrawals: safeFloat(poolStats.rows[0]?.total_withdrawals),
-    totalYieldDistributed: safeFloat(poolStats.rows[0]?.total_yield),
+    totalDeposits: stroopsToAmount(poolStats.rows[0]?.total_deposits),
+    totalWithdrawals: stroopsToAmount(poolStats.rows[0]?.total_withdrawals),
+    totalYieldDistributed: stroopsToAmount(poolStats.rows[0]?.total_yield),
     totalLoansIssued: parseInt(loanVolume.rows[0]?.total_loans_issued || '0', 10),
-    totalVolume: safeFloat(loanVolume.rows[0]?.total_volume),
+    totalVolume: stroopsToAmount(loanVolume.rows[0]?.total_volume),
     activeAgents: parseInt(agentCount.rows[0]?.active_agents || '0', 10),
     updatedAt: new Date().toISOString(),
   };

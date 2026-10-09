@@ -3,6 +3,7 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import { query } from '../db/connection.js';
 import { cacheService } from '../services/cacheService.js';
 import { sorobanService } from '../services/sorobanService.js';
+import { stroopsToAmount } from '../money/decimal.js';
 
 // ---------------------------------------------------------------------------
 // Score computation helpers
@@ -267,7 +268,8 @@ export const getScoreBreakdown = asyncHandler(async (req: Request, res: Response
   const repaidOnTime = parseInt(breakdown.on_time_count || '0', 10);
   const repaidLate = parseInt(breakdown.late_count || '0', 10);
   const defaultedCount = parseInt(breakdown.defaulted_count || '0', 10);
-  const totalRepaid = parseFloat(breakdown.total_repaid || '0');
+  // Indexed repayments are stroops; the API returns whole tokens.
+  const totalRepaid = stroopsToAmount(breakdown.total_repaid);
 
   // Convert average ledgers to days (1 ledger ≈ 5 seconds)
   const avgLedgers = parseFloat(breakdown.avg_repayment_ledgers || '0');
