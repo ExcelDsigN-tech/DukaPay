@@ -2,7 +2,7 @@ import Link from "next/link";
 
 export default function NotFound() {
   return (
-    <main
+    <div
       className="flex min-h-screen flex-col items-center justify-center bg-background text-foreground px-4"
       aria-labelledby="not-found-title"
     >
@@ -38,6 +38,6 @@ export default function NotFound() {
           </Link>
         </div>
       </div>
-    </main>
+    </div>
   );
 }

@@ -179,7 +179,7 @@ export function LendPageClient() {
   const isLoading = poolLoading || depositorLoading || historyLoading;
 
   return (
-    <main className="space-y-6">
+    <div className="space-y-6">
       <header className="flex items-start justify-between gap-4">
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-indigo-600">
@@ -550,6 +550,6 @@ export function LendPageClient() {
           )}
         </section>
       </ErrorBoundary>
-    </main>
+    </div>
   );
 }

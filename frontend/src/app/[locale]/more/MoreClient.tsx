@@ -61,7 +61,7 @@ export default function MoreClient() {
   const href = (path: string) => `/${locale}${path}`;
 
   return (
-    <main className="mx-auto max-w-xl space-y-5">
+    <div className="mx-auto max-w-xl space-y-5">
       <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">{t("title")}</h1>
 
       <div className="flex items-center gap-3 rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
@@ -99,6 +99,6 @@ export default function MoreClient() {
         />
       )}
       <MoreGroup items={[{ name: nav("settings"), href: href("/settings"), icon: Settings }]} />
-    </main>
+    </div>
   );
 }

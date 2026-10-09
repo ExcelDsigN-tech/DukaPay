@@ -643,7 +643,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <main className="space-y-8 min-h-screen p-8 lg:p-12 max-w-5xl mx-auto">
+    <div className="space-y-8 min-h-screen p-8 lg:p-12 max-w-5xl mx-auto">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-sm font-semibold uppercase tracking-widest text-indigo-600">
@@ -710,6 +710,6 @@ export default function SettingsPage() {
           {renderSection()}
         </div>
       </div>
-    </main>
+    </div>
   );
 }

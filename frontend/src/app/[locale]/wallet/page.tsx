@@ -167,7 +167,7 @@ function QRDisplay({ address }: { address: string }) {
 function ConnectWalletPrompt() {
   const t = useTranslations("WalletPage");
   return (
-    <main className="flex min-h-[60vh] flex-col items-center justify-center gap-6 p-8">
+    <div className="flex min-h-[60vh] flex-col items-center justify-center gap-6 p-8">
       <div className="rounded-2xl bg-zinc-50 p-6 dark:bg-zinc-900">
         <Wallet className="h-12 w-12 text-indigo-600 dark:text-indigo-400" />
       </div>
@@ -175,7 +175,7 @@ function ConnectWalletPrompt() {
         <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">{t("title")}</h1>
         <p className="mt-2 max-w-md text-zinc-500 dark:text-zinc-400">{t("connectPrompt")}</p>
       </div>
-    </main>
+    </div>
   );
 }
 
@@ -474,7 +474,7 @@ export default function WalletPage() {
   const explorerBase = getExplorerBase(network?.name);
 
   return (
-    <main className="space-y-8 min-h-screen p-8 lg:p-12 max-w-5xl mx-auto">
+    <div className="space-y-8 min-h-screen p-8 lg:p-12 max-w-5xl mx-auto">
       <header>
         <p className="text-sm font-semibold uppercase tracking-widest text-indigo-600">
           {t("eyebrow")}
@@ -595,6 +595,6 @@ export default function WalletPage() {
           explorerBase={explorerBase}
         />
       </ErrorBoundary>
-    </main>
+    </div>
   );
 }

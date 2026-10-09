@@ -249,7 +249,7 @@ export default function Home() {
   const shortAddress = address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "";
 
   return (
-    <main
+    <section
       className="space-y-8 min-h-screen p-8 lg:p-12 max-w-7xl mx-auto"
       aria-labelledby="dashboard-title"
     >
@@ -486,6 +486,6 @@ export default function Home() {
           </aside>
         </ErrorBoundary>
       </div>
-    </main>
+    </section>
   );
 }
