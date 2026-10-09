@@ -156,6 +156,12 @@ function toContractScVal(arg: unknown): xdr.ScVal {
     ) {
         return Address.fromString(arg).toScVal();
     }
+    // { type, value } is a type hint (u32, i128, ...). nativeToScVal does not
+    // read it from the object itself; passed whole it becomes a map.
+    if (arg !== null && typeof arg === 'object' && 'type' in arg && 'value' in arg) {
+        const { type, value } = arg as { type: string; value: unknown };
+        return nativeToScVal(value, { type });
+    }
     return nativeToScVal(arg);
 }
 
