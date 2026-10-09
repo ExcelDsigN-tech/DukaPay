@@ -12,7 +12,7 @@ one-off issues and for batch/bulk drafting passes alike.
 - **Security Model:** JWT auth, session management, CSRF protection, audit logging, encryption at rest
 - **Testing:** Playwright E2E, Proptest property-based, Supertest integration, fuzz testing
 - **Repo Root:** `{REPO_PATH}` — set per environment (env var or CLI arg), no hardcoded default
-- **Issue Templates:** `.github/ISSUE_TEMPLATE/` (standard, bug_report, feature_request, contracts_security, question, config)
+- **Issue Templates:** `.github/ISSUE_TEMPLATE/` (standard, contracts_security, config). The standard form renders the same sections as the template below, minus Points.
 
 ## Analysis Phase (Do First)
 
@@ -62,11 +62,12 @@ git log --oneline -50 -- {REPO_PATH}
 - [ ] {CHECKLIST_ITEM_3}
 - [ ] {CHECKLIST_ITEM_4}
       (can be more than 4 items, based on the issue)
-- [ ] All necessary CI checks passed
+- [ ] All required CI checks pass
 
 ---
 
-📋 Before working on this issue, please read our [Contributing Guidelines]({CONTRIBUTING_URL}) — it covers branching, commits, PR standards, testing, and style guides.
+📋 Before working on this issue, please read our [Contributing Guidelines]({CONTRIBUTING_URL}). It covers branching, commits, PR standards, testing and style guides.
+All official decisions, reviews and coordination happen right here on GitHub.
 
 🎯 To claim this issue: comment below before starting work. First contributor comment gets it for the current Drip Wave cycle. If it's not merged by cycle end, it reopens for the next cycle.
 
@@ -103,7 +104,7 @@ value is earned against the table above, not fit to a bucket count.
 - **Enhancement:** Documentation verified · Lint + typecheck pass
 - **Documentation:** Documentation complete and accurate · Examples and tutorials updated · Cross-reference checks complete
 - **Performance:** Performance improvements implemented · Benchmarks run and passing · No regressions in performance-critical paths
-- **Always last:** All necessary CI checks passed
+- **Always last:** All required CI checks pass
 
 ### Placeholders (Fill Before Execution)
 
@@ -115,8 +116,8 @@ value is earned against the table above, not fit to a bucket count.
 | `{IMPACT}` | Business/technical impact |
 | `{SUGGESTED_FIX}` | Concrete implementation approach |
 | `{POINTS}` | 200 \| 150 \| 100 |
-| `{TYPE}` | security \| bug \| enhancement \| tests \| documentation \| performance |
-| `{CONTRIBUTING_URL}` | Link to the repo's CONTRIBUTING.md or equivalent |
+| `{TYPE}` | bug \| feature \| enhancement \| security \| performance \| tests \| documentation \| refactor \| chore (matches the issue form) |
+| `{CONTRIBUTING_URL}` | https://github.com/ExcelDsigN-tech/dukapay/blob/main/CONTRIBUTING.md |
 | `{CHECKLIST_ITEM_N}` | Pulled from the component-specific list above |
 
 ## Execution
@@ -187,11 +188,12 @@ suite covering the lender role specifically.
 - [ ] Actual current behavior for lender-role RLS access confirmed and documented
 - [ ] Explicit RLS policy added for lender (or the role formally deprecated in favor of agent)
 - [ ] Test coverage added for lender-role row access
-- [ ] All necessary CI checks passed
+- [ ] All required CI checks pass
 
 ---
 
-📋 Before working on this issue, please read our [Contributing Guidelines]({CONTRIBUTING_URL}) — it covers branching, commits, PR standards, testing, and style guides.
+📋 Before working on this issue, please read our [Contributing Guidelines]({CONTRIBUTING_URL}). It covers branching, commits, PR standards, testing and style guides.
+All official decisions, reviews and coordination happen right here on GitHub.
 
 🎯 To claim this issue: comment below before starting work. First contributor comment gets it for the current Drip Wave cycle. If it's not merged by cycle end, it reopens for the next cycle.
 

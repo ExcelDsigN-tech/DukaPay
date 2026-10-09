@@ -37,8 +37,8 @@ cd backend  && npm run lint && npm run test
 
 ## 4. Branch & commit conventions
 
-- Branch: `feat/<short>`, `fix/<short>`, `docs/<short>`, `security/<short>`,
-  `contracts/<short>`, etc. (see `CONTRIBUTING.md`).
+- Branch: `feat/<short>`, `fix/<short>`, `docs/<short>` or `chore/<short>`
+  (see `CONTRIBUTING.md`).
 - Commits: Conventional Commits (`feat(contracts): ...`).
 - PR must `Closes #<issue>` and include testing evidence.
 
