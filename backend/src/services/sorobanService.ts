@@ -226,7 +226,7 @@ class SorobanService {
    */
   async buildRequestLoanTx(
     borrowerPublicKey: string,
-    amount: number,
+    amount: bigint,
     termLedgers: number,
   ): Promise<{ unsignedTxXdr: string; networkPassphrase: string }> {
     const server = this.getRpcServer();
@@ -238,7 +238,7 @@ class SorobanService {
     const borrowerScVal = nativeToScVal(Address.fromString(borrowerPublicKey), {
       type: 'address',
     });
-    const amountScVal = nativeToScVal(BigInt(amount), { type: 'i128' });
+    const amountScVal = nativeToScVal(amount, { type: 'i128' });
     const termScVal = nativeToScVal(termLedgers, { type: 'u32' });
 
     const tx = new TransactionBuilder(account, {
@@ -296,7 +296,7 @@ class SorobanService {
   async buildRepayTx(
     borrowerPublicKey: string,
     loanId: number,
-    amount: number,
+    amount: bigint,
   ): Promise<{ unsignedTxXdr: string; networkPassphrase: string }> {
     const server = this.getRpcServer();
     const contractId = this.getLoanManagerContractId();
@@ -308,7 +308,7 @@ class SorobanService {
       type: 'address',
     });
     const loanIdScVal = nativeToScVal(loanId, { type: 'u32' });
-    const amountScVal = nativeToScVal(BigInt(amount), { type: 'i128' });
+    const amountScVal = nativeToScVal(amount, { type: 'i128' });
 
     const tx = new TransactionBuilder(account, {
       fee: BASE_FEE,
@@ -344,7 +344,7 @@ class SorobanService {
   async buildDepositTx(
     providerPublicKey: string,
     tokenAddress: string,
-    amount: number,
+    amount: bigint,
   ): Promise<{ unsignedTxXdr: string; networkPassphrase: string }> {
     const server = this.getRpcServer();
     const contractId = this.getLendingPoolContractId();
@@ -358,7 +358,7 @@ class SorobanService {
     const tokenScVal = nativeToScVal(Address.fromString(tokenAddress), {
       type: 'address',
     });
-    const amountScVal = nativeToScVal(BigInt(amount), { type: 'i128' });
+    const amountScVal = nativeToScVal(amount, { type: 'i128' });
 
     const tx = new TransactionBuilder(account, {
       fee: BASE_FEE,
@@ -394,7 +394,7 @@ class SorobanService {
   async buildWithdrawTx(
     providerPublicKey: string,
     tokenAddress: string,
-    shares: number,
+    shares: bigint,
   ): Promise<{ unsignedTxXdr: string; networkPassphrase: string }> {
     const server = this.getRpcServer();
     const contractId = this.getLendingPoolContractId();
@@ -408,7 +408,7 @@ class SorobanService {
     const tokenScVal = nativeToScVal(Address.fromString(tokenAddress), {
       type: 'address',
     });
-    const sharesScVal = nativeToScVal(BigInt(shares), { type: 'i128' });
+    const sharesScVal = nativeToScVal(shares, { type: 'i128' });
 
     const tx = new TransactionBuilder(account, {
       fee: BASE_FEE,
@@ -444,7 +444,7 @@ class SorobanService {
   async buildEmergencyWithdrawTx(
     providerPublicKey: string,
     tokenAddress: string,
-    shares: number,
+    shares: bigint,
   ): Promise<{ unsignedTxXdr: string; networkPassphrase: string }> {
     const server = this.getRpcServer();
     const contractId = this.getLendingPoolContractId();
@@ -458,7 +458,7 @@ class SorobanService {
     const tokenScVal = nativeToScVal(Address.fromString(tokenAddress), {
       type: 'address',
     });
-    const sharesScVal = nativeToScVal(BigInt(shares), { type: 'i128' });
+    const sharesScVal = nativeToScVal(shares, { type: 'i128' });
 
     const tx = new TransactionBuilder(account, {
       fee: BASE_FEE,
@@ -535,7 +535,7 @@ class SorobanService {
   async buildDepositCollateralTx(
     borrowerPublicKey: string,
     loanId: number,
-    amount: number,
+    amount: bigint,
   ): Promise<{ unsignedTxXdr: string; networkPassphrase: string }> {
     const server = this.getRpcServer();
     const contractId = this.getLoanManagerContractId();
@@ -544,7 +544,7 @@ class SorobanService {
     const account = await server.getAccount(borrowerPublicKey);
 
     const loanIdScVal = nativeToScVal(loanId, { type: 'u32' });
-    const amountScVal = nativeToScVal(BigInt(amount), { type: 'i128' });
+    const amountScVal = nativeToScVal(amount, { type: 'i128' });
 
     const tx = new TransactionBuilder(account, {
       fee: BASE_FEE,
@@ -620,7 +620,7 @@ class SorobanService {
   async buildRefinanceLoanTx(
     borrowerPublicKey: string,
     loanId: number,
-    newAmount: number,
+    newAmount: bigint,
     newTerm: number,
   ): Promise<{ unsignedTxXdr: string; networkPassphrase: string }> {
     const server = this.getRpcServer();
@@ -630,7 +630,7 @@ class SorobanService {
     const account = await server.getAccount(borrowerPublicKey);
 
     const loanIdScVal = nativeToScVal(loanId, { type: 'u32' });
-    const amountScVal = nativeToScVal(BigInt(newAmount), { type: 'i128' });
+    const amountScVal = nativeToScVal(newAmount, { type: 'i128' });
     const termScVal = nativeToScVal(newTerm, { type: 'u32' });
 
     const tx = new TransactionBuilder(account, {
@@ -758,7 +758,7 @@ class SorobanService {
   async buildTransferToAgentTx(
     fromAgent: string,
     toAgent: string,
-    amount: number | bigint,
+    amount: bigint,
   ): Promise<{ unsignedTxXdr: string; networkPassphrase: string }> {
     const server = this.getRpcServer();
     const contractId = this.getAgentVaultContractId();
@@ -768,7 +768,7 @@ class SorobanService {
 
     const fromScVal = nativeToScVal(Address.fromString(fromAgent), { type: 'address' });
     const toScVal = nativeToScVal(Address.fromString(toAgent), { type: 'address' });
-    const amountScVal = nativeToScVal(BigInt(amount), { type: 'i128' });
+    const amountScVal = nativeToScVal(amount, { type: 'i128' });
 
     const tx = new TransactionBuilder(account, {
       fee: BASE_FEE,

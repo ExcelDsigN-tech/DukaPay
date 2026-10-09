@@ -266,7 +266,47 @@ describe('POST /api/loans/request', () => {
       .send({ amount: 2000, borrowerPublicKey: TEST_BORROWER, termLedgers: 1036800 });
 
     expect(response.status).toBe(200);
-    expect(mockBuildRequestLoanTx).toHaveBeenCalledWith(TEST_BORROWER, 2000, 1036800);
+    expect(mockBuildRequestLoanTx).toHaveBeenCalledWith(TEST_BORROWER, 20_000_000_000n, 1036800);
+  });
+
+  it('converts a decimal amount in USDC to stroops', async () => {
+    mockBuildRequestLoanTx.mockResolvedValueOnce({
+      unsignedTxXdr: 'AAAA...base64xdr',
+      networkPassphrase: 'Test SDF Network ; September 2015',
+    });
+
+    const response = await request(app)
+      .post('/api/loans/request')
+      .set(bearer(TEST_BORROWER))
+      .send({ amount: 250.5, borrowerPublicKey: TEST_BORROWER, termLedgers: 518400 });
+
+    expect(response.status).toBe(200);
+    expect(mockBuildRequestLoanTx).toHaveBeenCalledWith(TEST_BORROWER, 2_505_000_000n, 518400);
+  });
+
+  it('accepts one stroop (7 decimal places)', async () => {
+    mockBuildRequestLoanTx.mockResolvedValueOnce({
+      unsignedTxXdr: 'AAAA...base64xdr',
+      networkPassphrase: 'Test SDF Network ; September 2015',
+    });
+
+    const response = await request(app)
+      .post('/api/loans/request')
+      .set(bearer(TEST_BORROWER))
+      .send({ amount: 0.0000001, borrowerPublicKey: TEST_BORROWER, termLedgers: 518400 });
+
+    expect(response.status).toBe(200);
+    expect(mockBuildRequestLoanTx).toHaveBeenCalledWith(TEST_BORROWER, 1n, 518400);
+  });
+
+  it('rejects an amount with more than 7 decimal places', async () => {
+    const response = await request(app)
+      .post('/api/loans/request')
+      .set(bearer(TEST_BORROWER))
+      .send({ amount: 1.12345678, borrowerPublicKey: TEST_BORROWER, termLedgers: 518400 });
+
+    expect(response.status).toBe(400);
+    expect(mockBuildRequestLoanTx).not.toHaveBeenCalled();
   });
 
   it('rejects a request without a term (request_loan requires one)', async () => {

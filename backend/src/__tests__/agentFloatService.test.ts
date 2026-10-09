@@ -357,7 +357,7 @@ describe('AgentFloatService', () => {
       expect(result.transfer.status).toBe('COMPLETED');
       expect(result.executedOnChain).toBe(true);
       expect(result.unsignedTxXdr).toBe('AAAA...XDR');
-      expect(mockBuildTransferToAgentTx).toHaveBeenCalledWith(AGENT_A, AGENT_B, 10000);
+      expect(mockBuildTransferToAgentTx).toHaveBeenCalledWith(AGENT_A, AGENT_B, 100_000_000_000n);
 
       delete process.env.AGENT_VAULT_CONTRACT_ID;
     });

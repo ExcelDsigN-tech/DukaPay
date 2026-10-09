@@ -312,7 +312,7 @@ router.get(
  *                 description: Address of the token to deposit
  *               amount:
  *                 type: number
- *                 description: Amount to deposit
+ *                 description: Amount to deposit in whole tokens (e.g. USDC), up to 7 decimal places
  *                 example: 1000
  *     responses:
  *       200:
@@ -367,7 +367,7 @@ router.post(
  *                 description: Address of the token to withdraw
  *               amount:
  *                 type: number
- *                 description: Amount (shares) to withdraw
+ *                 description: Pool shares to withdraw, up to 7 decimal places (same scale as the token)
  *                 example: 500
  *     responses:
  *       200:
@@ -423,7 +423,7 @@ router.post(
  *                 description: Address of the token to withdraw
  *               shares:
  *                 type: number
- *                 description: Amount (shares) to withdraw
+ *                 description: Pool shares to withdraw, up to 7 decimal places (same scale as the token)
  *     responses:
  *       200:
  *         description: Unsigned transaction XDR returned

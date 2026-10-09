@@ -10,7 +10,16 @@ export const rejectLoanSchema = z.object({
 
 export type RejectLoanInput = z.infer<typeof rejectLoanSchema>;
 
-export const positiveAmountSchema = z.number().int().positive('Amount must be a positive integer');
+/**
+ * A token amount in whole units (e.g. 250.5 USDC), up to 7 decimal places
+ * (one stroop). Controllers convert it with `amountToStroops` before it
+ * reaches a contract.
+ */
+export const positiveAmountSchema = z
+  .number()
+  .positive('Amount must be positive')
+  .lt(1e15, 'Amount is too large')
+  .refine((n) => Number(n.toFixed(7)) === n, 'Amount can have at most 7 decimal places');
 
 const base64Regex = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
 
