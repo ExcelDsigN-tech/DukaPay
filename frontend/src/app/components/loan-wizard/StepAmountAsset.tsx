@@ -227,7 +227,9 @@ export function StepAmountAsset({ data, onChange, onNext, error, onError }: Step
               </div>
               <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
                 <p className="text-zinc-500 dark:text-zinc-400">APR</p>
-                <p className="font-semibold text-zinc-900 dark:text-zinc-50">12%</p>
+                <p className="font-semibold text-zinc-900 dark:text-zinc-50">
+                  {data.interestRatePercent}%
+                </p>
               </div>
             </div>
 

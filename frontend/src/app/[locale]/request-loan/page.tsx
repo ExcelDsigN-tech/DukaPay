@@ -118,7 +118,11 @@ export default function RequestLoanPage() {
   const isCheckingEligibility =
     isWalletConnected && (isLoadingConfig || (isLoadingScore && !!borrowerAddress));
 
-  const hasEligibilityError = Boolean(configError || scoreError);
+  // The rate comes from the loan config; without it the wizard can't quote terms.
+  const interestRatePercent = minScoreConfig?.interestRatePercent;
+  const hasEligibilityError = Boolean(
+    configError || scoreError || (!isLoadingConfig && interestRatePercent === undefined),
+  );
 
   if (successLoanId) {
     return (
@@ -243,6 +247,7 @@ export default function RequestLoanPage() {
               borrowerAddress={borrowerAddress!}
               creditScore={resolvedCreditScore}
               maxAmount={maxAmount}
+              interestRatePercent={interestRatePercent!}
               onSuccess={setSuccessLoanId}
             />
           </Suspense>

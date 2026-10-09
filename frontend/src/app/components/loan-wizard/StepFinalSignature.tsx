@@ -18,7 +18,6 @@ import { mapTransactionError, type TransactionErrorDetails } from "../../utils/t
 import type { LoanWizardData } from "./LoanApplicationWizard";
 import { formatCurrency, formatDateObj } from "../../utils/formatLocale";
 
-const ANNUAL_RATE_PERCENT = 12;
 /** Soroban ledgers close about every 5 seconds: 17,280 per day. */
 const LEDGERS_PER_DAY = 17280;
 
@@ -58,7 +57,7 @@ export function StepFinalSignature({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const principal = Number(data.amount || "0");
-  const estimatedInterest = (principal * ANNUAL_RATE_PERCENT * data.termDays) / (365 * 100);
+  const estimatedInterest = (principal * data.interestRatePercent * data.termDays) / (365 * 100);
   const totalRepayment = principal + estimatedInterest;
   const dueDate = addDays(new Date(), data.termDays);
 
@@ -113,7 +112,7 @@ export function StepFinalSignature({
             token: data.asset,
             details: {
               "Credit Score": data.creditScore,
-              "Interest Rate (APR)": `${ANNUAL_RATE_PERCENT}%`,
+              "Interest Rate (APR)": `${data.interestRatePercent}%`,
               "Estimated Due Date": dueDate.toLocaleDateString(),
               Term: `${data.termDays} days`,
               "Unsigned XDR": `${xdr.slice(0, 16)}...${xdr.slice(-16)}`,
@@ -206,7 +205,7 @@ export function StepFinalSignature({
                 { label: "Asset", value: data.asset },
                 { label: "Principal", value: formatCurrency(principal, locale) },
                 { label: "Term", value: `${data.termDays} days` },
-                { label: "APR", value: `${ANNUAL_RATE_PERCENT}%` },
+                { label: "APR", value: `${data.interestRatePercent}%` },
                 { label: "Estimated Interest", value: formatCurrency(estimatedInterest, locale) },
                 {
                   label: "Total Repayment",
