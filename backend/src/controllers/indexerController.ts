@@ -885,7 +885,11 @@ export const reprocessQuarantinedEvents = async (req: Request, res: Response) =>
           continue;
         }
 
+        // Sequential on purpose: events apply in ledger order, and one bad
+        // event must not block the rest. Admin-only, capped at 500.
+        // eslint-disable-next-line no-await-in-loop
         await indexer.ingestRawEvents([rawEvent]);
+        // eslint-disable-next-line no-await-in-loop
         await query('DELETE FROM quarantine_events WHERE id = $1', [row.id]);
         deleted += 1;
       } catch (error) {

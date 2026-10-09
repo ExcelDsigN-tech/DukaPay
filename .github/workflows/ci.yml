@@ -426,6 +426,10 @@ jobs:
         run: node scripts/check-error-code-mappings.mjs
       - name: Check i18n catalogs match en.json keys
         run: node scripts/check-i18n-parity.mjs
+      - name: Check translation keys used in code exist in en.json
+        run: node scripts/check-i18n-keys.mjs
+      - name: Check public asset sizes
+        run: node scripts/check-asset-sizes.mjs
 
   contracts:
     needs: money-policy

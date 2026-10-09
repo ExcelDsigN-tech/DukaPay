@@ -18,7 +18,9 @@
 import { execFileSync } from "child_process";
 
 const base = process.argv[2] ?? "origin/main";
-const MIGRATIONS_DIR = "backend/migrations/";
+// Same glob the runner uses (backend/package.json migrate:up), so docs like
+// AGENTS.md in the folder are not treated as migrations.
+const MIGRATIONS_GLOB = "backend/migrations/*.cjs";
 
 function git(...args) {
   return execFileSync("git", args, { encoding: "utf-8" }).trim();
@@ -27,7 +29,7 @@ function git(...args) {
 const mergeBase = git("merge-base", base, "HEAD");
 
 // --name-status lists A (added), M (modified), D (deleted), R (renamed), ...
-const changes = git("diff", "--name-status", "--find-renames", mergeBase, "HEAD", "--", MIGRATIONS_DIR)
+const changes = git("diff", "--name-status", "--find-renames", mergeBase, "HEAD", "--", MIGRATIONS_GLOB)
   .split("\n")
   .filter(Boolean)
   .map((line) => line.split("\t"));

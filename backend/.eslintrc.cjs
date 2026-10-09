@@ -49,5 +49,13 @@ module.exports = {
         'no-console': 'off',
       },
     },
+    {
+      // Request handlers must not query once per item (N+1); batch or use Promise.all.
+      files: ['src/controllers/**/*.ts', 'src/routes/**/*.ts'],
+      excludedFiles: ['**/*.test.ts', '**/__tests__/**'],
+      rules: {
+        'no-await-in-loop': 'error',
+      },
+    },
   ],
 };
