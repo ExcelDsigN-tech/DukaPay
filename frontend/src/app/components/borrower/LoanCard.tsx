@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useLocale } from "next-intl";
 import { Card } from "../ui/Card";
 import { Button } from "../ui/Button";
 import type { BorrowerLoan } from "../../hooks/useApi";
@@ -20,6 +21,7 @@ export interface LoanCardProps {
 
 export function LoanCard({ loan, variant = "compact" }: LoanCardProps) {
   const router = useRouter();
+  const locale = useLocale();
   const daysUntil = getDaysUntilDeadline(loan.nextPaymentDeadline);
   const isOverdue = daysUntil < 0;
   const isUrgent = daysUntil >= 0 && daysUntil <= 7;
@@ -168,26 +170,26 @@ export function LoanCard({ loan, variant = "compact" }: LoanCardProps) {
         {isTerminalDistressed ? (
           <>
             <Button
-              onClick={() => router.push(`/loans/${loan.id}`)}
+              onClick={() => router.push(`/${locale}/loans/${loan.id}`)}
               className="flex-1"
               variant="primary"
             >
               Contact Support
             </Button>
-            <Button variant="outline" onClick={() => router.push(`/loans/${loan.id}`)}>
+            <Button variant="outline" onClick={() => router.push(`/${locale}/loans/${loan.id}`)}>
               {variant === "compact" ? "View Details" : "Details"}
             </Button>
           </>
         ) : (
           <>
             <Button
-              onClick={() => router.push(`/repay/${loan.id}`)}
+              onClick={() => router.push(`/${locale}/repay/${loan.id}`)}
               className="flex-1"
               variant={isOverdue || isUrgent ? "primary" : "outline"}
             >
               {isOverdue ? "Pay Now (Overdue)" : "Repay Now"}
             </Button>
-            <Button variant="outline" onClick={() => router.push(`/loans/${loan.id}`)}>
+            <Button variant="outline" onClick={() => router.push(`/${locale}/loans/${loan.id}`)}>
               {variant === "compact" ? "View Details" : "Details"}
             </Button>
           </>

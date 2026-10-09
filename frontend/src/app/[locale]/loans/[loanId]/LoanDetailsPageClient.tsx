@@ -345,7 +345,7 @@ export function LoanDetailsPageClient() {
                 loan.status !== "defaulted" &&
                 loan.status !== "liquidated" && (
                   <Link
-                    href={`/repay/${loanId}`}
+                    href={`/${locale}/repay/${loanId}`}
                     className="mt-4 inline-flex items-center gap-2 rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500"
                   >
                     {t("nextAction.makePayment")}
