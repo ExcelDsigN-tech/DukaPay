@@ -74,6 +74,19 @@ body:
     validations:
       required: true
 
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      description: Your best estimate. A maintainer sets the final severity during triage.
+      options:
+        - "Critical: funds can be lost or stolen, auth bypassed, or user data leaked"
+        - "High: a core money flow is broken with no workaround, or amounts are wrong"
+        - "Medium: a feature is broken but has a workaround, or shows wrong non-financial data"
+        - "Low: cosmetic, docs, copy, minor UX"
+    validations:
+      required: true
+
   - type: textarea
     id: definition_of_done
     attributes:

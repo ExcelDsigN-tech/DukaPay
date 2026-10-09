@@ -15,6 +15,19 @@ For local setup, see [docs/wiki/onboarding.md](docs/wiki/onboarding.md).
 - `money-policy.json` is the single source of money rules. Generated files
   derive from it; don't edit them by hand.
 
+## Issues and severity
+
+File issues with the Standard Issue form. It labels the issue with its
+component, type and severity. Pick the severity that fits; a maintainer
+sets the final one during triage.
+
+| Severity | Meaning |
+|---|---|
+| Critical | Funds can be lost or stolen, auth bypassed, or user data leaked |
+| High | A core money flow (loan, repay, deposit, withdraw, remittance) is broken with no workaround, or amounts are wrong |
+| Medium | A feature is broken but has a workaround, or shows wrong non-financial data |
+| Low | Cosmetic, docs, copy, minor UX |
+
 ## Branches
 
 `feat/`, `fix/`, `docs/` or `chore/` plus a short name, e.g. `fix/loan-max-units`.

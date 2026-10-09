@@ -12,7 +12,7 @@ one-off issues and for batch/bulk drafting passes alike.
 - **Security Model:** JWT auth, session management, CSRF protection, audit logging, encryption at rest
 - **Testing:** Playwright E2E, Proptest property-based, Supertest integration, fuzz testing
 - **Repo Root:** `{REPO_PATH}` — set per environment (env var or CLI arg), no hardcoded default
-- **Issue Templates:** `.github/ISSUE_TEMPLATE/` (standard, contracts_security, config). The standard form renders the same sections as the template below, minus Points.
+- **Issue Templates:** `.github/ISSUE_TEMPLATE/` (standard, contracts_security, config). The standard form renders the same sections as the template below, minus Points; a workflow labels component, type and severity.
 
 ## Analysis Phase (Do First)
 
@@ -55,6 +55,7 @@ git log --oneline -50 -- {REPO_PATH}
 
 **Points**: {POINTS}
 **Type**: {TYPE}
+**Severity**: {SEVERITY}
 
 **Definition of Done**
 - [ ] {CHECKLIST_ITEM_1}
@@ -115,6 +116,7 @@ value is earned against the table above, not fit to a bucket count.
 | `{SUGGESTED_FIX}` | Concrete implementation approach |
 | `{POINTS}` | 200 \| 150 \| 100 |
 | `{TYPE}` | bug \| feature \| enhancement \| security \| performance \| tests \| documentation \| refactor \| chore (matches the issue form) |
+| `{SEVERITY}` | critical \| high \| medium \| low (definitions in CONTRIBUTING.md) |
 | `{CONTRIBUTING_URL}` | https://github.com/ExcelDsigN-tech/dukapay/blob/main/CONTRIBUTING.md |
 | `{CHECKLIST_ITEM_N}` | Pulled from the component-specific list above |
 
@@ -127,11 +129,12 @@ gh issue create \
   --title "[{COMPONENT}] {DESCRIPTION}" \
   --body "$(cat issue_body.md)" \
   --label "{COMPONENT}" \
-  --label "{TYPE}"
+  --label "{TYPE}" \
+  --label "severity: {SEVERITY}"
 ```
 
 Batch: `create_issues.py` reads a manifest (JSON/YAML list of `{component,
-description, impact, fix, points, type, checklist}`), renders each into the
+description, impact, fix, points, type, severity, checklist}`), renders each into the
 template above, and loops `gh issue create` with the matching labels.
 Prerequisite: `gh label list` must already contain every component/type label
 used — create any missing ones first.
@@ -181,6 +184,7 @@ suite covering the lender role specifically.
 
 **Points**: 150
 **Type**: security
+**Severity**: high
 
 **Definition of Done**
 - [ ] Actual current behavior for lender-role RLS access confirmed and documented
