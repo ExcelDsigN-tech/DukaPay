@@ -11,6 +11,15 @@ export const stellarAddressSchema = z
   .min(1, 'Stellar address is required')
   .refine((val) => StrKey.isValidEd25519PublicKey(val), 'Invalid Stellar address format');
 
+/**
+ * Zod schema for a Soroban contract address (C... strkey), e.g. a token's
+ * Stellar Asset Contract.
+ */
+export const contractAddressSchema = z
+  .string()
+  .min(1, 'Contract address is required')
+  .refine((val) => StrKey.isValidContract(val), 'Invalid contract address format');
+
 /** Param schema for routes with a :borrower path parameter. */
 export const borrowerParamSchema = z.object({
   params: z.object({
