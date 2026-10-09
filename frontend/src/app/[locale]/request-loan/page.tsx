@@ -129,12 +129,14 @@ export default function RequestLoanPage() {
             <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
               Loan Request Submitted
             </h1>
-            <p className="text-zinc-600 dark:text-zinc-400">Request ID: {successLoanId}</p>
+            <p className="break-all text-zinc-600 dark:text-zinc-400">
+              Transaction: {successLoanId}
+            </p>
             <p className="text-sm text-zinc-500 dark:text-zinc-400">
               Next steps: monitor approval status and prepare repayment before the due date.
             </p>
             <div className="flex justify-center gap-3 pt-2">
-              <Link href="/loans">
+              <Link href={`/${locale}/loans`}>
                 <Button variant="outline">View Loans</Button>
               </Link>
               <Button onClick={() => setSuccessLoanId(null)}>Request Another</Button>

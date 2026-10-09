@@ -348,7 +348,7 @@ export default function Home() {
                 {t("activity.title")}
               </h2>
               <button
-                onClick={() => router.push("/activity")}
+                onClick={() => router.push(`/${locale}/activity`)}
                 className="text-sm font-medium text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 rounded px-2 py-1"
                 aria-label={t("activity.viewAllLabel")}
               >
@@ -420,7 +420,7 @@ export default function Home() {
                   title: t("quickActions.applyLoan"),
                   desc: t("quickActions.applyLoanDesc"),
                   color: "bg-indigo-600",
-                  href: "/loans",
+                  href: "/request-loan",
                 },
                 {
                   title: t("quickActions.sendRemittance"),
@@ -431,7 +431,7 @@ export default function Home() {
               ].map((action, i) => (
                 <button
                   key={i}
-                  onClick={() => router.push(action.href)}
+                  onClick={() => router.push(`/${locale}${action.href}`)}
                   className={`w-full text-left p-4 rounded-xl ${action.color} text-white hover:opacity-90 transition-opacity shadow-lg shadow-indigo-500/10 focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2`}
                 >
                   <div className="flex items-center justify-between mb-1">

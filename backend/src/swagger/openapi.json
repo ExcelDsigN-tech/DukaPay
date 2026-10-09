@@ -4923,7 +4923,7 @@
     "/loans/request": {
       "post": {
         "summary": "Build an unsigned loan request transaction",
-        "description": "Builds an unsigned Soroban `request_loan(borrower, amount)` transaction XDR. The frontend signs it with the user's wallet and submits via POST /api/loans/submit.\n",
+        "description": "Builds an unsigned Soroban `request_loan(borrower, amount, term)` transaction XDR. The frontend signs it with the user's wallet and submits via POST /api/loans/submit.\n",
         "tags": [
           "Loans"
         ],
@@ -4940,7 +4940,8 @@
                 "type": "object",
                 "required": [
                   "amount",
-                  "borrowerPublicKey"
+                  "borrowerPublicKey",
+                  "termLedgers"
                 ],
                 "properties": {
                   "amount": {
@@ -4951,6 +4952,11 @@
                   "borrowerPublicKey": {
                     "type": "string",
                     "description": "Borrower's Stellar public key (must match JWT)"
+                  },
+                  "termLedgers": {
+                    "type": "integer",
+                    "description": "Loan term in ledgers (about 17280 per day)",
+                    "example": 518400
                   }
                 }
               }

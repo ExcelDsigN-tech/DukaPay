@@ -17,6 +17,8 @@ const base64Regex = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3
 export const requestLoanSchema = z.object({
   amount: positiveAmountSchema,
   borrowerPublicKey: stellarAddressSchema,
+  // Loan term in ledgers; the contract's request_loan takes it as u32 and rejects 0.
+  termLedgers: z.number().int().positive().max(4_294_967_295),
 });
 
 export const repayLoanSchema = z.object({

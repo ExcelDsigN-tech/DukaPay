@@ -227,6 +227,7 @@ class SorobanService {
   async buildRequestLoanTx(
     borrowerPublicKey: string,
     amount: number,
+    termLedgers: number,
   ): Promise<{ unsignedTxXdr: string; networkPassphrase: string }> {
     const server = this.getRpcServer();
     const contractId = this.getLoanManagerContractId();
@@ -238,6 +239,7 @@ class SorobanService {
       type: 'address',
     });
     const amountScVal = nativeToScVal(BigInt(amount), { type: 'i128' });
+    const termScVal = nativeToScVal(termLedgers, { type: 'u32' });
 
     const tx = new TransactionBuilder(account, {
       fee: BASE_FEE,
@@ -247,7 +249,7 @@ class SorobanService {
         Operation.invokeContractFunction({
           contract: contractId,
           function: 'request_loan',
-          args: [borrowerScVal, amountScVal],
+          args: [borrowerScVal, amountScVal, termScVal],
         }),
       )
       .setTimeout(30)
