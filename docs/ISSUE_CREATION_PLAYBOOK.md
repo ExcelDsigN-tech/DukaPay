@@ -69,8 +69,6 @@ git log --oneline -50 -- {REPO_PATH}
 📋 Before working on this issue, please read our [Contributing Guidelines]({CONTRIBUTING_URL}). It covers branching, commits, PR standards, testing and style guides.
 All official decisions, reviews and coordination happen right here on GitHub.
 
-🎯 To claim this issue: comment below before starting work. First contributor comment gets it for the current Drip Wave cycle. If it's not merged by cycle end, it reopens for the next cycle.
-
 ```
 
 ### Component Prefixes (Use Exactly One)
@@ -194,6 +192,4 @@ suite covering the lender role specifically.
 
 📋 Before working on this issue, please read our [Contributing Guidelines]({CONTRIBUTING_URL}). It covers branching, commits, PR standards, testing and style guides.
 All official decisions, reviews and coordination happen right here on GitHub.
-
-🎯 To claim this issue: comment below before starting work. First contributor comment gets it for the current Drip Wave cycle. If it's not merged by cycle end, it reopens for the next cycle.
 
