@@ -1,0 +1,38 @@
+name: Issue Labels
+
+# Labels issues filed through the standard form with their Component, Type
+# and Severity answers. Only labels from the allowlists below can be applied,
+# whatever the issue body says.
+
+on:
+  issues:
+    types: [opened, edited]
+
+permissions:
+  issues: write
+
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Apply component and type labels
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+        with:
+          script: |
+            const COMPONENTS = ['backend', 'contracts', 'frontend', 'sdk', 'indexer', 'scripts', 'docs', 'ci', 'infra', 'security', 'tests', 'ops', 'product'];
+            const TYPES = ['bug', 'feature', 'enhancement', 'security', 'performance', 'tests', 'documentation', 'refactor', 'chore'];
+            const SEVERITIES = ['critical', 'high', 'medium', 'low'];
+            const body = context.payload.issue.body || '';
+            const field = (name) => ((body.match(new RegExp(`^### ${name}\\s*\\n+([^\\n]+)`, 'm')) || [])[1] || '').trim();
+            const component = (field('Component').match(/^\[(\w+)\]/) || [])[1];
+            const type = field('Type').toLowerCase();
+            const labels = [...new Set([component, type])].filter((l) => COMPONENTS.includes(l) || TYPES.includes(l));
+            // Severity only on open: maintainers re-rate it during triage, and a
+            // later edit must not re-add the reporter's original rating.
+            if (context.payload.action === 'opened') {
+              const severity = (field('Severity').match(/^(\w+):/) || [])[1]?.toLowerCase();
+              if (SEVERITIES.includes(severity)) labels.push(`severity: ${severity}`);
+            }
+            if (labels.length) {
+              await github.rest.issues.addLabels({ ...context.repo, issue_number: context.issue.number, labels });
+            }

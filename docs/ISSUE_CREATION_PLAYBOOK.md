@@ -1,7 +1,7 @@
 # Issue Creation Playbook
 
-Universal template for drafting and filing issues on the DukaPay repo — used for
-one-off issues and for batch/bulk drafting passes alike.
+How maintainers draft and file issues on the DukaPay repo. Contributors can
+use the Standard Issue form instead; it has the same sections minus Points.
 
 ## Key Context — DukaPay Monorepo
 
@@ -11,8 +11,7 @@ one-off issues and for batch/bulk drafting passes alike.
 - **Key Flows:** Agent onboarding (KYC + USDC bond), cash-in/out, float transfers, loan management, settlement
 - **Security Model:** JWT auth, session management, CSRF protection, audit logging, encryption at rest
 - **Testing:** Playwright E2E, Proptest property-based, Supertest integration, fuzz testing
-- **Repo Root:** `{REPO_PATH}` — set per environment (env var or CLI arg), no hardcoded default
-- **Issue Templates:** `.github/ISSUE_TEMPLATE/` (standard, bug_report, feature_request, contracts_security, question, config)
+- **Issue Templates:** `.github/ISSUE_TEMPLATE/` (standard, contracts_security, config). The standard form renders the same sections as the template below, minus Points; a workflow labels component, type and severity.
 
 ## Analysis Phase (Do First)
 
@@ -27,9 +26,9 @@ gh issue list --state open --limit 100 --json number,title,body,labels
 gh label list
 
 # 3. Surface-level gaps (candidates for the 100/150 tier)
-grep -r "TODO\|FIXME\|XXX" --include="*.ts" --include="*.rs" --include="*.js" {REPO_PATH}
-grep -r "sk-\|api_key\|password" --include="*.ts" --include="*.rs" {REPO_PATH} | head -20
-find {REPO_PATH} -name "*.test.*" -o -name "*.spec.*" | wc -l
+grep -r "TODO\|FIXME\|XXX" --include="*.ts" --include="*.rs" --include="*.js" .
+grep -r "sk-\|api_key\|password" --include="*.ts" --include="*.rs" . | head -20
+find . -name "*.test.*" -o -name "*.spec.*" | wc -l
 
 # 4. Protocol-depth review (genuine 200-point candidates come from here, not from grep)
 #    - Read contracts/ for: overflow/underflow paths, access control gaps, reentrancy,
@@ -39,7 +38,7 @@ find {REPO_PATH} -name "*.test.*" -o -name "*.spec.*" | wc -l
 #      don't inflate other findings to compensate
 
 # 5. Recent commits, for context on what's already in flight
-git log --oneline -50 -- {REPO_PATH}
+git log --oneline -50
 ```
 
 ## Output Format — Exact Template (Non-Negotiable)
@@ -55,6 +54,7 @@ git log --oneline -50 -- {REPO_PATH}
 
 **Points**: {POINTS}
 **Type**: {TYPE}
+**Severity**: {SEVERITY}
 
 **Definition of Done**
 - [ ] {CHECKLIST_ITEM_1}
@@ -62,13 +62,12 @@ git log --oneline -50 -- {REPO_PATH}
 - [ ] {CHECKLIST_ITEM_3}
 - [ ] {CHECKLIST_ITEM_4}
       (can be more than 4 items, based on the issue)
-- [ ] All necessary CI checks passed
+- [ ] All required CI checks pass
 
 ---
 
-📋 Before working on this issue, please read our [Contributing Guidelines]({CONTRIBUTING_URL}) — it covers branching, commits, PR standards, testing, and style guides.
-
-🎯 To claim this issue: comment below before starting work. First contributor comment gets it for the current Drip Wave cycle. If it's not merged by cycle end, it reopens for the next cycle.
+📋 Before working on this issue, please read our [Contributing Guidelines]({CONTRIBUTING_URL}). It covers branching, commits, PR standards, testing and style guides.
+All official decisions, reviews and coordination happen right here on GitHub.
 
 ```
 
@@ -84,18 +83,6 @@ git log --oneline -50 -- {REPO_PATH}
 | 150 | Medium-High — enhancements, security updates, test suites |
 | 100 | Trivial/Simple — docs, cosmetic, config |
 
-### Target Distribution
-
-No fixed quota. Scope target: roughly 60 issues total, but each issue's point
-value is earned against the table above, not fit to a bucket count.
-
-- Assign 200 only if it's genuinely high complexity — don't downgrade a real
-  200 for variety, and don't upgrade a medium one just for volume.
-- If the protocol-depth review turns up fewer critical issues than expected,
-  report the real count and say why.
-- After drafting, report the actual breakdown (e.g. "18×200 / 27×150 /
-  15×100") — the distribution is a finding, not an input.
-
 ### Definition of Done — Component-Specific (pick one set)
 
 - **Security:** No hardcoded secrets remain in source (grep scan clean) · Authentication flow verified and tested · Security headers (CSP, etc.) configured · No PII exposed in logs or error messages
@@ -103,55 +90,32 @@ value is earned against the table above, not fit to a bucket count.
 - **Enhancement:** Documentation verified · Lint + typecheck pass
 - **Documentation:** Documentation complete and accurate · Examples and tutorials updated · Cross-reference checks complete
 - **Performance:** Performance improvements implemented · Benchmarks run and passing · No regressions in performance-critical paths
-- **Always last:** All necessary CI checks passed
+- **Always last:** All required CI checks pass
 
 ### Placeholders (Fill Before Execution)
 
 | Placeholder | Description |
 |---|---|
-| `{REPO_PATH}` | Absolute path to repo root (set per environment, no default) |
 | `{COMPONENT}` | One of the 13 prefixes above |
 | `{DESCRIPTION}` | One-line issue title |
 | `{IMPACT}` | Business/technical impact |
 | `{SUGGESTED_FIX}` | Concrete implementation approach |
 | `{POINTS}` | 200 \| 150 \| 100 |
-| `{TYPE}` | security \| bug \| enhancement \| tests \| documentation \| performance |
-| `{CONTRIBUTING_URL}` | Link to the repo's CONTRIBUTING.md or equivalent |
+| `{TYPE}` | bug \| feature \| enhancement \| security \| performance \| tests \| documentation \| refactor \| chore (matches the issue form) |
+| `{SEVERITY}` | critical \| high \| medium \| low (definitions in CONTRIBUTING.md) |
+| `{CONTRIBUTING_URL}` | https://github.com/ExcelDsigN-tech/dukapay/blob/main/CONTRIBUTING.md |
 | `{CHECKLIST_ITEM_N}` | Pulled from the component-specific list above |
 
 ## Execution
-
-Single issue:
 
 ```bash
 gh issue create \
   --title "[{COMPONENT}] {DESCRIPTION}" \
   --body "$(cat issue_body.md)" \
   --label "{COMPONENT}" \
-  --label "{TYPE}"
+  --label "{TYPE}" \
+  --label "severity: {SEVERITY}"
 ```
-
-Batch: `create_issues.py` reads a manifest (JSON/YAML list of `{component,
-description, impact, fix, points, type, checklist}`), renders each into the
-template above, and loops `gh issue create` with the matching labels.
-Prerequisite: `gh label list` must already contain every component/type label
-used — create any missing ones first.
-
-```bash
-python create_issues.py
-```
-
-## Tone
-
-Professional, precise, structured. Zero fluff. Every field serves a purpose.
-No deviation from the template.
-
-## Clarifying Questions (ask if needed)
-
-1. Prioritize security over features? (Default: Yes)
-2. Run duplicate detection against existing issues? (Default: Yes)
-3. Auto-assign component/type labels? (Default: Yes)
-4. Create milestones per point tier? (Default: No)
 
 ## Sample Issue (for calibration)
 
@@ -182,16 +146,16 @@ suite covering the lender role specifically.
 
 **Points**: 150
 **Type**: security
+**Severity**: high
 
 **Definition of Done**
 - [ ] Actual current behavior for lender-role RLS access confirmed and documented
 - [ ] Explicit RLS policy added for lender (or the role formally deprecated in favor of agent)
 - [ ] Test coverage added for lender-role row access
-- [ ] All necessary CI checks passed
+- [ ] All required CI checks pass
 
 ---
 
-📋 Before working on this issue, please read our [Contributing Guidelines]({CONTRIBUTING_URL}) — it covers branching, commits, PR standards, testing, and style guides.
-
-🎯 To claim this issue: comment below before starting work. First contributor comment gets it for the current Drip Wave cycle. If it's not merged by cycle end, it reopens for the next cycle.
+📋 Before working on this issue, please read our [Contributing Guidelines]({CONTRIBUTING_URL}). It covers branching, commits, PR standards, testing and style guides.
+All official decisions, reviews and coordination happen right here on GitHub.
 
