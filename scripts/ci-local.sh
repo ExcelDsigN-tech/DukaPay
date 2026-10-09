@@ -155,6 +155,8 @@ guards() {
   step guards "error code mappings"; node scripts/check-error-code-mappings.mjs
   step guards "migrations unchanged"; node scripts/check-migrations-immutable.mjs
   step guards "i18n parity";         node scripts/check-i18n-parity.mjs
+  step guards "i18n keys";           node scripts/check-i18n-keys.mjs
+  step guards "asset sizes";         node scripts/check-asset-sizes.mjs
 }
 
 contracts() {
