@@ -1,84 +1,145 @@
-// e2e coverage temporarily skipped: assertions rely on product wiring (wallet-connect state, /api/* mock paths, Zustand hydration) that has drifted from the current app. Restore file-by-file once the flows are re-aligned with the mocks.
 import { test, expect, type Page, type Route } from "@playwright/test";
+import { mockFreighter } from "./helpers/freighter";
 
 /**
- * E2E Test Suite for Borrower Loan Request Flow
- * E2E tests for borrower loan request flow
+ * Borrower loan lifecycle: connect, credit score, request a loan through the
+ * wizard (backend build -> wallet signature -> submit), see it pending, see it
+ * approved, repay it, and read its timeline.
  *
- * Test Cases:
- * 1. Connect Freighter wallet (mock in CI)
- * 2. View credit score on dashboard
- * 3. Navigate to loan request form and submit
- * 4. See pending loan in loans list
- * 5. Simulate loan approval and see status update
- * 6. Submit repayment and confirm balance change
+ * Mocks use the backend's real response shapes (see backend/src/controllers).
  */
 
-// Mock wallet address for all tests
 const MOCK_BORROWER_ADDRESS = "GCJPBXSE6WCQDCEYZW6C3YVZCSSCHC4AE72L5KWKCYL2CLLL7NH5VSCI";
 const MOCK_CREDIT_SCORE = 715;
 const MOCK_LOAN_ID = 42;
+const LEDGERS_PER_DAY = 17280;
+
+const json = (body: unknown) => ({
+  status: 200,
+  contentType: "application/json",
+  body: JSON.stringify(body),
+});
+
+type LoanStatus = "pending_indexing" | "active" | "repaid";
+
+function borrowerLoans(status: LoanStatus) {
+  return {
+    success: true,
+    data: {
+      borrower: MOCK_BORROWER_ADDRESS,
+      loans: [
+        {
+          loanId: MOCK_LOAN_ID,
+          principal: 1000,
+          accruedInterest: status === "pending_indexing" ? 0 : 80,
+          totalRepaid: status === "repaid" ? 1080 : 0,
+          totalOwed: status === "repaid" ? 0 : status === "active" ? 1080 : 1000,
+          interestRateBps: 800,
+          nextPaymentDeadline: "2026-12-31T00:00:00.000Z",
+          status,
+          borrower: MOCK_BORROWER_ADDRESS,
+          approvedAt: status === "pending_indexing" ? null : "2026-10-02T00:00:00.000Z",
+        },
+      ],
+    },
+    page_info: { limit: 100, count: 1, has_next: false, next_cursor: null },
+    total_count: 1,
+  };
+}
+
+async function mockLoanList(page: Page, status: () => LoanStatus) {
+  await page.route("**/api/loans/borrower/**", (route: Route) =>
+    route.fulfill(json(borrowerLoans(status()))),
+  );
+}
+
+async function mockScore(page: Page) {
+  await page.route(`**/api/score/${MOCK_BORROWER_ADDRESS}`, (route: Route) =>
+    route.fulfill(
+      json({
+        success: true,
+        userId: MOCK_BORROWER_ADDRESS,
+        score: MOCK_CREDIT_SCORE,
+        band: "Good",
+      }),
+    ),
+  );
+  await page.route(`**/api/score/${MOCK_BORROWER_ADDRESS}/history`, (route: Route) =>
+    route.fulfill(
+      json({
+        success: true,
+        walletAddress: MOCK_BORROWER_ADDRESS,
+        history: [
+          { score: 690, timestamp: 1200, reason: "remittance" },
+          { score: MOCK_CREDIT_SCORE, timestamp: 1300, reason: "repayment" },
+        ],
+      }),
+    ),
+  );
+}
+
+/** Walks the loan request wizard and returns the body sent to /loans/request. */
+async function requestLoan(page: Page): Promise<unknown> {
+  let requestBody: unknown = null;
+  await page.route("**/api/loans/request", async (route: Route) => {
+    requestBody = route.request().postDataJSON();
+    await route.fulfill(
+      json({
+        success: true,
+        unsignedTxXdr: "AAAA-unsigned-request",
+        networkPassphrase: "Test SDF Network ; September 2015",
+      }),
+    );
+  });
+  await page.route("**/api/loans/submit", (route: Route) =>
+    route.fulfill(json({ success: true, txHash: "tx_request_abc", status: "SUCCESS" })),
+  );
+
+  await page.goto("/en/request-loan");
+
+  // Step 1: Amount & asset
+  await page.getByLabel(/Amount \(USDC\)/).fill("1000");
+  await page.getByRole("button", { name: "30 days" }).click();
+  await page.getByRole("button", { name: "Continue to Repayment Schedule" }).click();
+  // Step 2: Repayment schedule
+  await page.getByRole("button", { name: "Continue to Collateral" }).click();
+  // Step 3: Collateral & NFT link
+  await page.getByRole("checkbox").check();
+  await page.getByRole("button", { name: "Continue to Signature" }).click();
+  // Step 4: Sign & submit (built on the backend, signed in the wallet)
+  await page.getByRole("button", { name: "Sign & Submit" }).click();
+  const review = page.getByRole("dialog", { name: "Review Transaction" });
+  await review.getByRole("checkbox").check();
+  await review.getByRole("button", { name: "Sign Transaction" }).click();
+
+  await expect(page.getByRole("heading", { name: "Loan Request Submitted" })).toBeVisible({
+    timeout: 10000,
+  });
+  return requestBody;
+}
 
 test.describe("Borrower Loan Request Flow", () => {
   test.beforeEach(async ({ page }: { page: Page }) => {
-    // Mock wallet connection state via localStorage (Zustand persist)
-    const walletState = {
-      state: {
-        status: "connected",
-        address: MOCK_BORROWER_ADDRESS,
-        network: { chainId: 2, name: "TESTNET", isSupported: true },
-        balances: [
-          { symbol: "USDC", amount: "5000.00", usdValue: 5000 },
-          { symbol: "XLM", amount: "100.00", usdValue: 12.5 },
-        ],
-        shouldAutoReconnect: true,
+    await page.addInitScript(
+      (stateJson: string) => {
+        window.localStorage.setItem("dukapay-wallet", stateJson);
       },
-      version: 0,
-    };
-
-    const walletStateJson = JSON.stringify(walletState);
-    await page.addInitScript((stateJson: string) => {
-      window.localStorage.setItem("dukapay-wallet", stateJson);
-    }, walletStateJson);
-
-    // Mock User Profile
-    await page.route("**/api/user/profile", async (route: Route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          id: "user_borrower_1",
-          email: "borrower@example.com",
-          walletAddress: MOCK_BORROWER_ADDRESS,
-          kycVerified: true,
-        }),
-      });
-    });
-
-    // Mock Pool Stats
-    await page.route("**/api/pool/stats", async (route: Route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          success: true,
-          data: {
-            totalDeposits: 1000000,
-            totalOutstanding: 450000,
-            utilizationRate: 0.45,
-            apy: 0.12,
-            activeLoansCount: 154,
-          },
-        }),
-      });
-    });
-
-    // Mock Loan Config
-    await page.route("**/api/loans/config", async (route: Route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
+      JSON.stringify({
+        state: {
+          status: "connected",
+          address: MOCK_BORROWER_ADDRESS,
+          network: { chainId: 2, name: "TESTNET", isSupported: true },
+          balances: [{ symbol: "USDC", amount: "5000.00", usdValue: 5000 }],
+          shouldAutoReconnect: true,
+        },
+        version: 0,
+      }),
+    );
+    await mockFreighter(page, MOCK_BORROWER_ADDRESS);
+    await mockScore(page);
+    await page.route("**/api/loans/config", (route: Route) =>
+      route.fulfill(
+        json({
           success: true,
           data: {
             minScore: 500,
@@ -88,440 +149,205 @@ test.describe("Borrower Loan Request Flow", () => {
             maxTermDays: 365,
           },
         }),
-      });
-    });
+      ),
+    );
   });
 
   test("Step 1: Connect Freighter wallet (mocked)", async ({ page }: { page: Page }) => {
     await page.goto("/en");
 
-    // Verify wallet is connected via mocked localStorage
     const walletPersist = await page.evaluate(() => window.localStorage.getItem("dukapay-wallet"));
     const parsed = JSON.parse(walletPersist || "{}");
-
     expect(parsed.state?.status).toBe("connected");
     expect(parsed.state?.address).toBe(MOCK_BORROWER_ADDRESS);
 
-    // Verify wallet address is displayed in UI
-    await expect(page.locator(`text=${MOCK_BORROWER_ADDRESS.slice(0, 8)}`)).toBeVisible();
+    // The shell shows the shortened address.
+    await expect(page.getByText("GCJP…VSCI").first()).toBeVisible();
   });
 
   test("Step 2: View credit score on dashboard", async ({ page }: { page: Page }) => {
-    // Mock User Credit Score
-    await page.route("**/api/score/*", async (route: Route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          success: true,
-          score: MOCK_CREDIT_SCORE,
-          breakdown: {
-            paymentHistory: 250,
-            creditUtilization: 200,
-            accountAge: 150,
-            remittanceActivity: 115,
-          },
-        }),
-      });
-    });
-
     await page.goto("/en");
 
-    // Wait for credit score to load and be displayed
-    await expect(page.locator(`text=${MOCK_CREDIT_SCORE}`)).toBeVisible({ timeout: 10000 });
-
-    // Verify score is in the expected range
-    const scoreElement = page
-      .locator('[data-testid="credit-score"]')
-      .or(page.locator(`text=${MOCK_CREDIT_SCORE}`));
-    await expect(scoreElement).toBeVisible();
+    const scoreCard = page
+      .getByRole("region", { name: "Credit Score" })
+      .or(page.locator(`[aria-label="Credit Score"]`));
+    await expect(scoreCard.getByText(String(MOCK_CREDIT_SCORE))).toBeVisible({ timeout: 10000 });
   });
 
   test("Step 3: Navigate to loan request form and submit", async ({ page }: { page: Page }) => {
-    // Mock User Credit Score
-    await page.route("**/api/score/*", async (route: Route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ success: true, score: MOCK_CREDIT_SCORE }),
-      });
-    });
-
     await page.goto("/en");
+    await page.getByRole("button", { name: /Apply for Loan/i }).click();
+    await expect(page).toHaveURL(/\/en\/request-loan$/);
 
-    // Navigate to Loan Request Form
-    const applyBtn = page.getByRole("button", { name: /Apply for Loan/i });
-    await applyBtn.waitFor({ timeout: 10000 });
-    await applyBtn.click();
-
-    // Fill out loan request form - Step 1: Amount & Asset
-    await expect(page.locator("text=Loan Amount")).toBeVisible({ timeout: 10000 });
-    await page.selectOption('select[name="asset"]', "USDC");
-    await page.fill('input[placeholder="0.00"]', "1000");
-
-    const continueToCollateral = page.getByRole("button", { name: /Continue to Collateral/i });
-    await continueToCollateral.click();
-
-    // Step 2: Collateral & NFT Link
-    await expect(page.locator("text=Collateral & NFT Link")).toBeVisible();
-    await page.click('input[type="checkbox"]'); // Accept terms
-
-    const continueToSignature = page.getByRole("button", { name: /Continue to Signature/i });
-    await continueToSignature.click();
-
-    // Step 3: Transaction Signature
-    await expect(page.locator("text=Ready to Sign")).toBeVisible();
-
-    // Mock loan creation request
-    await page.route("**/api/loans", async (route: Route) => {
-      if (route.request().method() === "POST") {
-        await route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify({
-            success: true,
-            data: {
-              id: MOCK_LOAN_ID,
-              status: "pending",
-              txHash: "tx_abc123",
-              amount: 1000,
-              asset: "USDC",
-              borrower: MOCK_BORROWER_ADDRESS,
-            },
-          }),
-        });
-      } else {
-        await route.continue();
-      }
+    const body = await requestLoan(page);
+    expect(body).toEqual({
+      amount: 1000,
+      borrowerPublicKey: MOCK_BORROWER_ADDRESS,
+      termLedgers: 30 * LEDGERS_PER_DAY,
     });
-
-    await page.click('button:has-text("Sign & Submit Application")');
-
-    // Verify success message
-    await expect(page.locator("text=Application Submitted")).toBeVisible({ timeout: 10000 });
-    await expect(page.locator("text=Reviewing your application")).toBeVisible();
+    await expect(page.getByText("Transaction: tx_request_abc")).toBeVisible();
   });
 
   test("Step 4: See pending loan in loans list", async ({ page }: { page: Page }) => {
-    // Mock borrower's loans list with pending loan
-    await page.route("**/api/loans/borrower/**", async (route: Route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          success: true,
-          data: {
-            borrower: MOCK_BORROWER_ADDRESS,
-            loans: [
-              {
-                id: MOCK_LOAN_ID,
-                principal: 1000,
-                asset: "USDC",
-                totalOwed: 1080,
-                status: "pending",
-                interestRateBps: 800,
-                termLedgers: 365,
-                createdAt: new Date().toISOString(),
-              },
-            ],
-          },
-        }),
-      });
-    });
+    await mockLoanList(page, () => "pending_indexing");
+    await page.goto("/en/loans");
 
-    await page.goto("/en");
-
-    // Navigate to loans list or verify it's visible on dashboard
-    await expect(page.locator("text=Pending")).toBeVisible({ timeout: 10000 });
-    await expect(page.locator("text=1,000")).toBeVisible(); // Loan amount
-    await expect(page.locator("text=USDC")).toBeVisible();
+    const row = page.locator("article", { hasText: `Loan #${MOCK_LOAN_ID}` });
+    await expect(row).toBeVisible({ timeout: 10000 });
+    await expect(row.getByText("Pending")).toBeVisible();
+    await expect(row.getByText("$1,000.00")).toBeVisible();
   });
 
   test("Step 5: Simulate loan approval and see status update", async ({ page }: { page: Page }) => {
-    // Initially mock loan as pending
-    let loanStatus = "pending";
+    let status: LoanStatus = "pending_indexing";
+    await mockLoanList(page, () => status);
+    await page.goto("/en/loans");
 
-    await page.route("**/api/loans/borrower/**", async (route: Route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          success: true,
-          data: {
-            borrower: MOCK_BORROWER_ADDRESS,
-            loans: [
-              {
-                id: MOCK_LOAN_ID,
-                principal: 1000,
-                asset: "USDC",
-                totalOwed: 1080,
-                status: loanStatus,
-                interestRateBps: 800,
-                termLedgers: 365,
-                createdAt: new Date().toISOString(),
-                approvedAt: loanStatus === "active" ? new Date().toISOString() : null,
-              },
-            ],
-          },
-        }),
-      });
-    });
+    const row = page.locator("article", { hasText: `Loan #${MOCK_LOAN_ID}` });
+    await expect(row.getByText("Pending")).toBeVisible({ timeout: 10000 });
 
-    await page.goto("/en");
-
-    // Verify loan is initially pending
-    await expect(page.locator("text=Pending")).toBeVisible({ timeout: 10000 });
-
-    // Simulate approval by updating the mock
-    loanStatus = "active";
-
-    // Trigger a refresh or navigation to see updated status
+    status = "active";
     await page.reload();
 
-    // Verify loan status changed to active
-    await expect(page.locator("text=Active")).toBeVisible({ timeout: 10000 });
-    await expect(page.locator("text=Pending")).not.toBeVisible();
+    await expect(row.getByText("Active")).toBeVisible({ timeout: 10000 });
+    await expect(row.getByText("Pending")).not.toBeVisible();
   });
 
   test("Step 6: Submit repayment and confirm balance change", async ({ page }: { page: Page }) => {
-    // Mock active loan
-    await page.route("**/api/loans/borrower/**", async (route: Route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
+    let submitted = false;
+    await page.route(`**/api/loans/${MOCK_LOAN_ID}`, (route: Route) =>
+      route.fulfill(
+        json({
           success: true,
-          data: {
-            borrower: MOCK_BORROWER_ADDRESS,
-            loans: [
-              {
-                id: MOCK_LOAN_ID,
-                principal: 1000,
-                asset: "USDC",
-                totalOwed: 500,
-                amountPaid: 580,
-                status: "active",
-                interestRateBps: 800,
-                termLedgers: 365,
-                nextPaymentDeadline: "2026-12-31T00:00:00Z",
-                createdAt: new Date().toISOString(),
-              },
-            ],
+          loanId: MOCK_LOAN_ID,
+          summary: {
+            principal: 1000,
+            accruedInterest: 80,
+            totalRepaid: submitted ? 500 : 0,
+            totalOwed: submitted ? 580 : 1080,
+            interestRate: 0.08,
+            termLedgers: 30 * LEDGERS_PER_DAY,
+            elapsedLedgers: 100,
+            status: "active",
+            requestedAt: "2026-10-01T00:00:00.000Z",
+            approvedAt: "2026-10-02T00:00:00.000Z",
+            events: [],
+            disputeFrozen: false,
           },
         }),
-      });
+      ),
+    );
+    await page.route(`**/api/loans/${MOCK_LOAN_ID}/repay`, (route: Route) =>
+      route.fulfill(json({ success: true, unsignedTxXdr: "AAAA-unsigned-repay" })),
+    );
+    await page.route("**/api/loans/submit", (route: Route) => {
+      submitted = true;
+      return route.fulfill(json({ success: true, txHash: "tx_repay_xyz", status: "SUCCESS" }));
     });
-
-    await page.goto("/en");
-
-    // Click repay button on the loan
-    const repayBtn = page.getByRole("button", { name: /Repay/i }).first();
-    await repayBtn.waitFor({ timeout: 10000 });
-    await repayBtn.click();
-
-    // Fill repayment amount
-    await expect(page.locator("text=Repayment Amount")).toBeVisible();
-    await page.fill('input[type="number"]', "500");
-
-    // Mock repayment submission
-    await page.route(`**/api/loans/${MOCK_LOAN_ID}/repay`, async (route: Route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          success: true,
-          txHash: "tx_repay_xyz",
-          newBalance: 0,
-          status: "repaid",
+    await page.route(`**/accounts/${MOCK_BORROWER_ADDRESS}`, (route: Route) =>
+      route.fulfill(
+        json({
+          balances: [
+            {
+              asset_type: "credit_alphanum4",
+              asset_code: "USDC",
+              balance: submitted ? "4500.0000000" : "5000.0000000",
+            },
+          ],
         }),
-      });
-    });
+      ),
+    );
 
-    // Mock updated wallet balance after repayment
-    const updatedWalletState = {
-      state: {
-        status: "connected",
-        address: MOCK_BORROWER_ADDRESS,
-        network: { chainId: 2, name: "TESTNET", isSupported: true },
-        balances: [
-          { symbol: "USDC", amount: "4500.00", usdValue: 4500 }, // Reduced by 500
-          { symbol: "XLM", amount: "100.00", usdValue: 12.5 },
-        ],
-        shouldAutoReconnect: true,
-      },
-      version: 0,
-    };
+    await page.goto(`/en/repay/${MOCK_LOAN_ID}`);
+    await expect(page.getByText("Outstanding balance: $1,080.00")).toBeVisible();
+    await page.getByLabel("Repayment amount").fill("500");
+    await page.getByRole("button", { name: "Review & Repay" }).click();
+    const review = page.getByRole("dialog", { name: "Review Transaction" });
+    await review.getByRole("checkbox").check();
+    await review.getByRole("button", { name: "Sign Transaction" }).click();
 
-    const updatedWalletStateJson = JSON.stringify(updatedWalletState);
-    await page.evaluate((stateJson: string) => {
-      window.localStorage.setItem("dukapay-wallet", stateJson);
-    }, updatedWalletStateJson);
+    await expect(page.getByText("Repayment recorded")).toBeVisible({ timeout: 10000 });
 
-    // Submit repayment
-    await page.click('button:has-text("Review Repayment")');
-    await page.click('button:has-text("Confirm Payment")');
-
-    // Verify success message
-    await expect(page.locator("text=Repayment Successful")).toBeVisible({ timeout: 10000 });
-
-    // Verify balance change
-    await page.reload();
-    await expect(page.locator("text=4,500")).toBeVisible(); // Updated USDC balance
+    // Updated USDC balance, as reported by Horizon.
+    await page.goto("/en");
+    await expect(page.getByText("$4,500.00")).toBeVisible();
   });
 
   test("Step 7: View loan event timeline on loan detail page", async ({ page }: { page: Page }) => {
-    // Mock loan detail with events
-    await page.route("**/api/loans/42", async (route: Route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
+    await page.route(`**/api/loans/${MOCK_LOAN_ID}`, (route: Route) =>
+      route.fulfill(
+        json({
           success: true,
-          data: {
-            loanId: MOCK_LOAN_ID,
+          loanId: MOCK_LOAN_ID,
+          summary: {
             principal: 1000,
             accruedInterest: 80,
             totalRepaid: 580,
             totalOwed: 500,
-            interestRate: 8,
+            interestRate: 0.08,
+            termLedgers: 30 * LEDGERS_PER_DAY,
+            elapsedLedgers: 100,
             status: "active",
-            borrower: MOCK_BORROWER_ADDRESS,
-            requestedAt: "2025-01-15T00:00:00Z",
-            approvedAt: "2025-01-20T00:00:00Z",
+            requestedAt: "2026-10-01T00:00:00.000Z",
+            approvedAt: "2026-10-02T00:00:00.000Z",
+            events: [],
+            disputeFrozen: false,
           },
         }),
-      });
+      ),
+    );
+    const event = (id: string, type: string, amount: string, day: string) => ({
+      event_id: id,
+      event_type: type,
+      loan_id: MOCK_LOAN_ID,
+      address: MOCK_BORROWER_ADDRESS,
+      amount,
+      ledger: 100,
+      ledger_closed_at: `2026-10-${day}T00:00:00.000Z`,
+      tx_hash: `tx-${id}`,
     });
-
-    // Mock loan events endpoint
-    await page.route("**/api/loans/42/events*", async (route: Route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
+    await page.route(`**/api/loans/${MOCK_LOAN_ID}/events*`, (route: Route) =>
+      route.fulfill(
+        json({
           success: true,
           data: {
             loanId: MOCK_LOAN_ID,
-            events: [
-              {
-                event_id: 1,
-                event_type: "LoanRequested",
-                amount: "1000",
-                ledger_closed_at: "2025-01-15T10:00:00Z",
-                tx_hash: "tx_request_hash",
-              },
-              {
-                event_id: 2,
-                event_type: "LoanApproved",
-                amount: "0",
-                ledger_closed_at: "2025-01-20T14:30:00Z",
-                tx_hash: "tx_approve_hash",
-              },
-              {
-                event_id: 3,
-                event_type: "LoanRepaid",
-                amount: "580",
-                ledger_closed_at: "2025-02-15T09:00:00Z",
-                tx_hash: "tx_repay_hash",
-              },
+            items: [
+              event("3", "LoanRepaid", "580", "05"),
+              event("2", "LoanApproved", "1000", "02"),
+              event("1", "LoanRequested", "1000", "01"),
             ],
           },
+          page: { next_cursor: null, snapshot_seq: "3", total_at_snapshot: 3, limit: 50 },
         }),
-      });
-    });
+      ),
+    );
 
     await page.goto(`/en/loans/${MOCK_LOAN_ID}`);
 
-    // Verify timeline section is present
-    await expect(page.locator("text=Repayment timeline")).toBeVisible({ timeout: 10000 });
-
-    // Verify event types are rendered
-    await expect(page.locator("text=Loan requested")).toBeVisible();
-    await expect(page.locator("text=Loan approved")).toBeVisible();
-    await expect(page.locator("text=Repayment made")).toBeVisible();
-
-    // Verify amounts are shown
-    await expect(page.locator("text=$1,000.00")).toBeVisible();
-    await expect(page.locator("text=$580.00")).toBeVisible();
-
-    // Verify Export CSV button is enabled since events exist
-    await expect(page.getByRole("button", { name: /Export CSV/i })).toBeEnabled();
+    await expect(page.getByText("Repayment timeline")).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText("Loan requested")).toBeVisible();
+    await expect(page.getByText("Loan approved")).toBeVisible();
+    await expect(page.getByText("Repayment made")).toBeVisible();
   });
 
   test("Complete end-to-end borrower flow", async ({ page }: { page: Page }) => {
-    // Mock User Credit Score
-    await page.route("**/api/score/*", async (route: Route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ success: true, score: MOCK_CREDIT_SCORE }),
-      });
-    });
+    let status: LoanStatus = "pending_indexing";
+    await mockLoanList(page, () => status);
 
-    // Step 1: Connect wallet (already mocked in beforeEach)
+    // Connected, with the credit score on the dashboard
     await page.goto("/en");
-    await expect(page.locator(`text=${MOCK_BORROWER_ADDRESS.slice(0, 8)}`)).toBeVisible();
+    await expect(page.getByText("GCJP…VSCI").first()).toBeVisible();
 
-    // Step 2: View credit score
-    await expect(page.locator(`text=${MOCK_CREDIT_SCORE}`)).toBeVisible({ timeout: 10000 });
+    // Request a loan through the wizard
+    await requestLoan(page);
 
-    // Step 3: Request loan
-    const applyBtn = page.getByRole("button", { name: /Apply for Loan/i });
-    await applyBtn.click();
-
-    await page.selectOption('select[name="asset"]', "USDC");
-    await page.fill('input[placeholder="0.00"]', "1000");
-    await page.getByRole("button", { name: /Continue to Collateral/i }).click();
-
-    await page.click('input[type="checkbox"]');
-    await page.getByRole("button", { name: /Continue to Signature/i }).click();
-
-    // Mock loan creation
-    await page.route("**/api/loans", async (route: Route) => {
-      if (route.request().method() === "POST") {
-        await route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify({
-            success: true,
-            data: {
-              id: MOCK_LOAN_ID,
-              status: "pending",
-              txHash: "tx_complete_flow",
-            },
-          }),
-        });
-      } else {
-        await route.continue();
-      }
-    });
-
-    await page.click('button:has-text("Sign & Submit Application")');
-    await expect(page.locator("text=Application Submitted")).toBeVisible({ timeout: 10000 });
-
-    // Step 4: Verify pending loan appears
-    await page.route("**/api/loans/borrower/**", async (route: Route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          success: true,
-          data: {
-            borrower: MOCK_BORROWER_ADDRESS,
-            loans: [
-              {
-                id: MOCK_LOAN_ID,
-                principal: 1000,
-                status: "active",
-                totalOwed: 500,
-              },
-            ],
-          },
-        }),
-      });
-    });
-
-    await page.goto("/en");
-    await expect(page.locator("text=Active")).toBeVisible({ timeout: 10000 });
+    // Pending, then approved
+    await page.goto("/en/loans");
+    const row = page.locator("article", { hasText: `Loan #${MOCK_LOAN_ID}` });
+    await expect(row.getByText("Pending")).toBeVisible({ timeout: 10000 });
+    status = "active";
+    await page.reload();
+    await expect(row.getByText("Active")).toBeVisible({ timeout: 10000 });
   });
 });
