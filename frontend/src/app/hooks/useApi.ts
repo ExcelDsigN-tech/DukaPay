@@ -142,7 +142,10 @@ export class ApiRequestError extends Error {
 
 // ─── CSRF (double-submit cookie) ─────────────────────────────────────────────
 
-/** Non-httpOnly cookie the backend sets so the client can echo it back. */
+/**
+ * Double-submit cookie name. The backend sets it httpOnly, so in a browser the
+ * token normally comes from the `GET /auth/csrf` response body instead.
+ */
 export const CSRF_COOKIE_NAME = "XSRF-TOKEN";
 /** Header the backend validates against that cookie. */
 export const CSRF_HEADER_NAME = "x-csrf-token";
@@ -171,11 +174,12 @@ function readCsrfCookie(): string | null {
 }
 
 /**
- * Returns the CSRF token to send on mutating requests, bootstrapping the
- * double-submit cookie from `GET /auth/csrf` the first time it is needed.
+ * Returns the CSRF token to send on mutating requests.
  *
  * With the JWT in an httpOnly cookie the browser automatically authenticates
- * mutating requests, so the backend additionally requires this token.
+ * mutating requests, so the backend additionally requires this token. The
+ * backend's CSRF cookie is httpOnly too, so the token is read from the
+ * `GET /auth/csrf` response body, which echoes the cookie's current value.
  */
 export async function getCsrfToken(): Promise<string | null> {
   const existing = readCsrfCookie();
@@ -190,11 +194,18 @@ export async function getCsrfToken(): Promise<string | null> {
   }
 
   try {
-    await fetch(`${API_URL}/api/auth/csrf`, {
+    const response = await fetch(`${API_URL}/api/auth/csrf`, {
       method: "GET",
       credentials: "include",
       headers: { Accept: "application/json" },
     });
+    const body = (await response.json().catch(() => null)) as {
+      data?: { csrfToken?: unknown };
+    } | null;
+    const token = body?.data?.csrfToken;
+    if (typeof token === "string" && token.length > 0) {
+      return token;
+    }
   } catch {
     return null;
   }

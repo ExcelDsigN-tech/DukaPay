@@ -67,6 +67,24 @@ describe("CSRF token mechanism", () => {
     expect(token).toBe(testToken);
   });
 
+  it("reads the token from the /auth/csrf response when the cookie is httpOnly", async () => {
+    // The backend sets XSRF-TOKEN httpOnly, so document.cookie never shows it.
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true, data: { csrfToken: testToken } }),
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const token = await getCsrfToken();
+
+    expect(token).toBe(testToken);
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/api/auth/csrf"),
+      expect.objectContaining({ credentials: "include" }),
+    );
+  });
+
   it("returns null for CSRF token in SSR context", async () => {
     const originalDoc = global.document;
     delete (global as unknown as { document?: typeof global.document }).document;
