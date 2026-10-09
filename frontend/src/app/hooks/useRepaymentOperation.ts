@@ -29,8 +29,9 @@ export function useDepositOperation(options?: {
 }) {
   const queryClient = useQueryClient();
   const { signTransaction } = useWallet();
-  const buildDeposit = useDepositToPool();
+  const { mutateAsync: buildDeposit } = useDepositToPool();
   const { data: poolStats } = usePoolStats();
+  const poolTokenAddress = poolStats?.poolTokenAddress;
 
   const uid = useId();
   const transactionId = `deposit-${uid}`;
@@ -49,14 +50,14 @@ export function useDepositOperation(options?: {
       setError(null);
 
       try {
-        const token = poolStats?.poolTokenAddress;
+        const token = poolTokenAddress;
         if (!token) {
           throw new Error("Pool token address not found. Please wait for stats to load.");
         }
 
         // Step 1: Build unsigned transaction
         transaction.updateProgress(20, "Building transaction...");
-        const buildResult = await buildDeposit.mutateAsync({
+        const buildResult = await buildDeposit({
           amount,
           depositorAddress,
           token,
@@ -101,7 +102,7 @@ export function useDepositOperation(options?: {
         throw err;
       }
     },
-    [transaction, queryClient, options],
+    [transaction, queryClient, options, poolTokenAddress, buildDeposit, signTransaction],
   );
 
   return {
@@ -121,8 +122,9 @@ export function useWithdrawalOperation(options?: {
 }) {
   const queryClient = useQueryClient();
   const { signTransaction } = useWallet();
-  const buildWithdraw = useWithdrawFromPool();
+  const { mutateAsync: buildWithdraw } = useWithdrawFromPool();
   const { data: poolStats } = usePoolStats();
+  const poolTokenAddress = poolStats?.poolTokenAddress;
 
   const uid = useId();
   const transactionId = `withdrawal-${uid}`;
@@ -141,14 +143,14 @@ export function useWithdrawalOperation(options?: {
       setError(null);
 
       try {
-        const token = poolStats?.poolTokenAddress;
+        const token = poolTokenAddress;
         if (!token) {
           throw new Error("Pool token address not found. Please wait for stats to load.");
         }
 
         // Step 1: Build unsigned transaction
         transaction.updateProgress(20, "Building transaction...");
-        const buildResult = await buildWithdraw.mutateAsync({
+        const buildResult = await buildWithdraw({
           amount,
           depositorAddress,
           token,
@@ -193,7 +195,7 @@ export function useWithdrawalOperation(options?: {
         throw err;
       }
     },
-    [transaction, queryClient, options],
+    [transaction, queryClient, options, poolTokenAddress, buildWithdraw, signTransaction],
   );
 
   return {
