@@ -2,10 +2,11 @@
 
 import { useMemo, useRef, useState, type FormEvent } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
-import { signTransaction } from "@stellar/freighter-api";
+import { useLocale, useTranslations } from "next-intl";
 import { CheckCircle2, Wallet } from "lucide-react";
-import { submitLoanTransaction } from "../../../hooks/useApi";
+import { buildRepaymentTx, submitLoanTransaction, useLoan } from "../../../hooks/useApi";
+import { useWallet } from "../../../components/providers/WalletProvider";
+import { formatCurrency } from "../../../utils/formatLocale";
 import { Button } from "../../../components/ui/Button";
 import { ConnectWalletButton } from "../../../components/ui/ConnectWalletButton";
 import {
@@ -37,6 +38,9 @@ export default function RepayLoanPage() {
   const params = useParams<{ loanId: string }>();
   const loanId = params?.loanId ?? "unknown";
   const router = useRouter();
+  const locale = useLocale();
+  const { signTransaction } = useWallet();
+  const { data: loan } = useLoan(params?.loanId);
 
   const walletAddress = useWalletStore(selectWalletAddress);
   const isWalletConnected = useWalletStore(selectIsWalletConnected);
@@ -57,6 +61,11 @@ export default function RepayLoanPage() {
   const decimals = getAssetDecimals("USDC");
   const precisionError = getPrecisionError(amount, "USDC");
   const helperText = buildAmountHelperText(amount, "USDC", decimals);
+  const owed = loan?.totalOwed;
+  const exceedsOwed = owed !== undefined && amountNumber > owed;
+  const amountError =
+    precisionError ??
+    (exceedsOwed ? t("exceedsOwed", { amount: formatCurrency(owed, locale) }) : null);
 
   const cancelFlow = () => {
     setTrackerState("cancelled");
@@ -80,22 +89,22 @@ export default function RepayLoanPage() {
       toast.error(t("toast.precisionTitle"), precisionError);
       return;
     }
+    if (exceedsOwed) {
+      toast.error(t("toast.amountTitle"), amountError ?? undefined);
+      return;
+    }
 
     try {
       setIsSubmitting(true);
 
       const contractId = process.env.NEXT_PUBLIC_LOAN_MANAGER_CONTRACT_ID;
-      if (!contractId) {
-        throw new Error("Contract configuration missing");
-      }
 
-      const { buildUnsignedRepaymentXdr } = await import("../../../utils/soroban");
-      const xdr = await buildUnsignedRepaymentXdr({
-        borrower: walletAddress,
+      // Built by the backend, which checks that this wallet owns the loan.
+      const { unsignedTxXdr: xdr } = await buildRepaymentTx(
         loanId,
-        amount: amountNumber,
-        contractId,
-      });
+        Math.floor(amountNumber),
+        walletAddress,
+      );
 
       txPreview.show(
         {
@@ -138,21 +147,15 @@ export default function RepayLoanPage() {
       setTrackerTitle(t("tracker.signingTitle"));
       setTrackerMessage(t("tracker.signingMessage"));
 
-      const signResult = await signTransaction(unsignedXdr, {
-        networkPassphrase: "Test SDF Network ; September 2015",
-      });
-      if (signResult.error) {
-        throw new Error(
-          typeof signResult.error === "string" ? signResult.error : "Failed to sign transaction",
-        );
-      }
+      // Signs on the wallet's current network; throws if the user rejects.
+      const signedTxXdr = await signTransaction(unsignedXdr);
 
       setTrackerState("submitting");
       setTrackerTitle(t("tracker.submittingTitle"));
       setTrackerMessage(t("tracker.submittingMessage"));
       toastId = toast.showPending(t("toast.pending"));
 
-      const result = await submitLoanTransaction(signResult.signedTxXdr);
+      const result = await submitLoanTransaction(signedTxXdr);
 
       if (result.status === "SUCCESS") {
         setTrackerTxHash(result.txHash);
@@ -228,23 +231,28 @@ export default function RepayLoanPage() {
               }
             }}
             className={`mt-2 w-full rounded-2xl border bg-zinc-50 px-4 py-3 text-zinc-900 outline-none transition focus:border-indigo-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-50 ${
-              precisionError ? "border-red-500" : "border-zinc-200"
+              amountError ? "border-red-500" : "border-zinc-200"
             }`}
           />
           <p
             className={`mt-2 text-xs ${
-              precisionError ? "text-red-600 dark:text-red-400" : "text-zinc-500 dark:text-zinc-400"
+              amountError ? "text-red-600 dark:text-red-400" : "text-zinc-500 dark:text-zinc-400"
             }`}
           >
-            {precisionError ?? helperText ?? t("decimalsHelper", { decimals })}
+            {amountError ?? helperText ?? t("decimalsHelper", { decimals })}
           </p>
+          {owed !== undefined && (
+            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+              {t("owed", { amount: formatCurrency(owed, locale) })}
+            </p>
+          )}
         </div>
 
         <Button
           type="submit"
           className="w-full"
           isLoading={isSubmitting}
-          disabled={!!precisionError || !isWalletConnected}
+          disabled={!!amountError || !isWalletConnected}
         >
           {t("submit")}
         </Button>

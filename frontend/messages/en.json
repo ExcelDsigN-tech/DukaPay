@@ -980,6 +980,8 @@
     "description": "Real-time blockchain settlement for your loan repayments.",
     "amountLabel": "Repayment amount",
     "decimalsHelper": "Up to {decimals} decimal places supported.",
+    "owed": "Outstanding balance: {amount}",
+    "exceedsOwed": "Amount is more than the outstanding balance of {amount}.",
     "submit": "Review & Repay",
     "preview": {
       "operation": "Repay Loan",

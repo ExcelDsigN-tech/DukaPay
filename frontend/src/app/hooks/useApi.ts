@@ -1961,6 +1961,22 @@ export async function submitPoolTransaction(signedTxXdr: string) {
 /**
  * Submits a signed loan transaction (e.g. repayment) to the Stellar network.
  */
+/**
+ * Builds an unsigned `repay(borrower, loan_id, amount)` transaction on the
+ * backend (POST /loans/:loanId/repay), which checks loan ownership. Sign it in
+ * the wallet, then send it with `submitLoanTransaction`.
+ */
+export async function buildRepaymentTx(
+  loanId: string | number,
+  amount: number,
+  borrowerPublicKey: string,
+) {
+  return apiFetch<{ unsignedTxXdr: string; networkPassphrase?: string }>(`/loans/${loanId}/repay`, {
+    method: "POST",
+    body: JSON.stringify({ amount, borrowerPublicKey }),
+  });
+}
+
 export async function submitLoanTransaction(signedTxXdr: string) {
   return apiFetch<{ txHash: string; status: string; resultXdr?: string }>("/loans/submit", {
     method: "POST",
