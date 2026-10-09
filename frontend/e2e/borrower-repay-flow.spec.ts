@@ -186,6 +186,29 @@ test.describe("Borrower Repayment Flow", () => {
     await expect(page.getByText("$4,500.00")).toBeVisible();
   });
 
+  test("sends a decimal repayment without rounding it down", async ({ page }: { page: Page }) => {
+    let builtWith: unknown = null;
+    await page.route(`**/api/loans/${MOCK_LOAN_ID}/repay`, async (route: Route) => {
+      builtWith = route.request().postDataJSON();
+      await route.fulfill(json({ success: true, unsignedTxXdr: "AAAA-unsigned-repay" }));
+    });
+    await page.route("**/api/loans/submit", (route: Route) =>
+      route.fulfill(json({ success: true, txHash: "tx_repay_dec", status: "SUCCESS" })),
+    );
+
+    await page.goto(`/en/repay/${MOCK_LOAN_ID}`);
+    await expect(page.getByText("Outstanding balance: $500.00")).toBeVisible();
+    await page.getByLabel("Repayment amount").fill("250.5");
+    await page.getByRole("button", { name: "Review & Repay" }).click();
+
+    const review = page.getByRole("dialog", { name: "Review Transaction" });
+    await review.getByRole("checkbox").check();
+    await review.getByRole("button", { name: "Sign Transaction" }).click();
+
+    await expect(page.getByText("Repayment recorded")).toBeVisible({ timeout: 10000 });
+    expect(builtWith).toEqual({ amount: 250.5, borrowerPublicKey: MOCK_BORROWER_ADDRESS });
+  });
+
   test("rejects a repayment greater than the outstanding balance", async ({
     page,
   }: {
