@@ -11,6 +11,7 @@ import {
   normalizeYieldHistoryDays,
 } from '../services/yieldHistoryService.js';
 import logger from '../utils/logger.js';
+import { amountToStroops } from '../money/decimal.js';
 import { invalidateOnDeposit, invalidateOnWithdraw } from '../utils/cacheKeys.js';
 
 /**
@@ -208,7 +209,11 @@ export const depositToPool = asyncHandler(async (req: Request, res: Response) =>
     throw AppError.forbidden('depositorPublicKey must match your authenticated wallet');
   }
 
-  const result = await sorobanService.buildDepositTx(depositorPublicKey, token, amount);
+  const result = await sorobanService.buildDepositTx(
+    depositorPublicKey,
+    token,
+    amountToStroops(amount),
+  );
 
   // Invalidate stale pool stats cache now that a deposit has been initiated
   await invalidateOnDeposit(depositorPublicKey);
@@ -248,7 +253,11 @@ export const withdrawFromPool = asyncHandler(async (req: Request, res: Response)
     throw AppError.forbidden('depositorPublicKey must match your authenticated wallet');
   }
 
-  const result = await sorobanService.buildWithdrawTx(depositorPublicKey, token, amount);
+  const result = await sorobanService.buildWithdrawTx(
+    depositorPublicKey,
+    token,
+    amountToStroops(amount),
+  );
 
   // Invalidate stale pool stats cache now that a withdrawal has been initiated
   await invalidateOnWithdraw(depositorPublicKey);
@@ -287,7 +296,11 @@ export const emergencyWithdrawFromPool = asyncHandler(async (req: Request, res: 
     throw AppError.forbidden('depositorPublicKey must match your authenticated wallet');
   }
 
-  const result = await sorobanService.buildEmergencyWithdrawTx(depositorPublicKey, token, shares);
+  const result = await sorobanService.buildEmergencyWithdrawTx(
+    depositorPublicKey,
+    token,
+    amountToStroops(shares),
+  );
 
   logger.info('Emergency withdraw transaction built', {
     depositor: depositorPublicKey,

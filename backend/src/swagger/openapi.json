@@ -4318,8 +4318,8 @@
                 ],
                 "properties": {
                   "amount": {
-                    "type": "integer",
-                    "minimum": 1,
+                    "type": "number",
+                    "description": "Loan amount in whole tokens (e.g. USDC), up to 7 decimal places",
                     "example": 10000
                   },
                   "termDays": {
@@ -4946,7 +4946,7 @@
                 "properties": {
                   "amount": {
                     "type": "number",
-                    "description": "Loan amount requested",
+                    "description": "Loan amount requested in whole tokens (e.g. USDC), up to 7 decimal places",
                     "example": 1000
                   },
                   "borrowerPublicKey": {
@@ -5018,8 +5018,8 @@
                 ],
                 "properties": {
                   "amount": {
-                    "type": "integer",
-                    "description": "Amount of collateral to deposit"
+                    "type": "number",
+                    "description": "Amount of collateral to deposit in whole tokens (e.g. USDC), up to 7 decimal places"
                   },
                   "borrowerPublicKey": {
                     "type": "string",
@@ -5140,8 +5140,8 @@
                 ],
                 "properties": {
                   "newAmount": {
-                    "type": "integer",
-                    "description": "New loan principal amount"
+                    "type": "number",
+                    "description": "New loan principal amount in whole tokens (e.g. USDC), up to 7 decimal places"
                   },
                   "newTerm": {
                     "type": "integer",
@@ -5380,7 +5380,7 @@
                 "properties": {
                   "amount": {
                     "type": "number",
-                    "description": "Repayment amount",
+                    "description": "Repayment amount in whole tokens (e.g. USDC), up to 7 decimal places",
                     "example": 500
                   },
                   "borrowerPublicKey": {
@@ -6083,7 +6083,7 @@
                   },
                   "amount": {
                     "type": "number",
-                    "description": "Amount to deposit",
+                    "description": "Amount to deposit in whole tokens (e.g. USDC), up to 7 decimal places",
                     "example": 1000
                   }
                 }
@@ -6145,7 +6145,7 @@
                   },
                   "amount": {
                     "type": "number",
-                    "description": "Amount (shares) to withdraw",
+                    "description": "Pool shares to withdraw, up to 7 decimal places (same scale as the token)",
                     "example": 500
                   }
                 }
@@ -6207,7 +6207,7 @@
                   },
                   "shares": {
                     "type": "number",
-                    "description": "Amount (shares) to withdraw"
+                    "description": "Pool shares to withdraw, up to 7 decimal places (same scale as the token)"
                   }
                 }
               }

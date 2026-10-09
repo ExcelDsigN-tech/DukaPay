@@ -175,8 +175,8 @@ router.post(
  *             required: [amount, termDays]
  *             properties:
  *               amount:
- *                 type: integer
- *                 minimum: 1
+ *                 type: number
+ *                 description: Loan amount in whole tokens (e.g. USDC), up to 7 decimal places
  *                 example: 10000
  *               termDays:
  *                 type: integer
@@ -621,7 +621,7 @@ router.get(
  *             properties:
  *               amount:
  *                 type: number
- *                 description: Loan amount requested
+ *                 description: Loan amount requested in whole tokens (e.g. USDC), up to 7 decimal places
  *                 example: 1000
  *               borrowerPublicKey:
  *                 type: string
@@ -681,8 +681,8 @@ router.post(
  *               - borrowerPublicKey
  *             properties:
  *               amount:
- *                 type: integer
- *                 description: Amount of collateral to deposit
+ *                 type: number
+ *                 description: Amount of collateral to deposit in whole tokens (e.g. USDC), up to 7 decimal places
  *               borrowerPublicKey:
  *                 type: string
  *                 description: Borrower's Stellar public key
@@ -790,8 +790,8 @@ router.post(
  *               - borrowerPublicKey
  *             properties:
  *               newAmount:
- *                 type: integer
- *                 description: New loan principal amount
+ *                 type: number
+ *                 description: New loan principal amount in whole tokens (e.g. USDC), up to 7 decimal places
  *               newTerm:
  *                 type: integer
  *                 description: New loan term in ledgers
@@ -1002,7 +1002,7 @@ router.post(
  *             properties:
  *               amount:
  *                 type: number
- *                 description: Repayment amount
+ *                 description: Repayment amount in whole tokens (e.g. USDC), up to 7 decimal places
  *                 example: 500
  *               borrowerPublicKey:
  *                 type: string

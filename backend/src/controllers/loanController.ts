@@ -16,7 +16,7 @@ import logger from '../utils/logger.js';
 import { cacheService } from '../services/cacheService.js';
 import { notificationService } from '../services/notificationService.js';
 import { invalidateOnRepay, invalidateOnLoanRequest } from '../utils/cacheKeys.js';
-import { roundToCents } from '../money/decimal.js';
+import { amountToStroops, roundToCents } from '../money/decimal.js';
 import { sanitizeHtml } from '../utils/sanitize.js';
 
 interface LoanTermConfig {
@@ -863,7 +863,8 @@ export const requestLoan = asyncHandler(async (req: Request, res: Response) => {
     const poolBalance = await (
       sorobanService as unknown as { getPoolBalance: () => Promise<number> }
     ).getPoolBalance();
-    if (amount > poolBalance) {
+    // Pool balance is in stroops; the request is in whole tokens.
+    if (amountToStroops(amount) > BigInt(poolBalance)) {
       throw AppError.badRequest(
         'Insufficient pool liquidity to cover this loan',
         ErrorCode.INSUFFICIENT_BALANCE,
@@ -891,7 +892,11 @@ export const requestLoan = asyncHandler(async (req: Request, res: Response) => {
     return;
   }
 
-  const result = await sorobanService.buildRequestLoanTx(borrowerPublicKey, amount, termLedgers);
+  const result = await sorobanService.buildRequestLoanTx(
+    borrowerPublicKey,
+    amountToStroops(amount),
+    termLedgers,
+  );
 
   // Cache for 60 seconds to prevent sequence number collisions from rapid requests
   await cacheService.set(cacheKey, result, 60);
@@ -956,7 +961,11 @@ export const repayLoan = asyncHandler(async (req: Request, res: Response) => {
     return;
   }
 
-  const result = await sorobanService.buildRepayTx(borrowerPublicKey, loanIdNum, amount);
+  const result = await sorobanService.buildRepayTx(
+    borrowerPublicKey,
+    loanIdNum,
+    amountToStroops(amount),
+  );
 
   // Cache for 60 seconds
   await cacheService.set(cacheKey, result, 60);
@@ -1025,7 +1034,7 @@ export const depositCollateral = asyncHandler(async (req: Request, res: Response
   const result = await sorobanService.buildDepositCollateralTx(
     borrowerPublicKey,
     loanIdNum,
-    amount,
+    amountToStroops(amount),
   );
 
   await cacheService.set(cacheKey, result, 60);
@@ -1150,7 +1159,7 @@ export const refinanceLoan = asyncHandler(async (req: Request, res: Response) =>
   const result = await sorobanService.buildRefinanceLoanTx(
     borrowerPublicKey,
     loanIdNum,
-    newAmount,
+    amountToStroops(newAmount),
     newTerm,
   );
 

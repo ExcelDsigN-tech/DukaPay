@@ -3,6 +3,7 @@ import { query } from '../db/connection.js';
 import { AppError } from '../errors/AppError.js';
 import logger from '../utils/logger.js';
 import { sorobanService } from './sorobanService.js';
+import { toStroops } from '../money/decimal.js';
 
 export interface InitiateTransferInput {
   fromAgent: string;
@@ -319,7 +320,8 @@ export class AgentFloatService {
           const result = await sorobanService.buildTransferToAgentTx(
             transfer.from_agent,
             transfer.to_agent,
-            Number(transfer.amount),
+            // Stored in whole tokens; the contract takes stroops.
+            toStroops(String(transfer.amount)),
           );
           unsignedTxXdr = result.unsignedTxXdr;
         }

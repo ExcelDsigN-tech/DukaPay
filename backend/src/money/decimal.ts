@@ -141,6 +141,15 @@ export function toStroops(input: string, mode: RoundingMode = DEFAULT_MODE): big
 }
 
 /**
+ * Convert an API amount in whole token units (e.g. `250.5` USDC) to stroops.
+ * Validate the input with `positiveAmountSchema` first: it guarantees at most
+ * {@link STROOP_DECIMALS} fractional digits, so this conversion is exact.
+ */
+export function amountToStroops(value: number): bigint {
+  return toStroops(value.toFixed(STROOP_DECIMALS));
+}
+
+/**
  * Format an exact stroop amount as a full-precision decimal string (no
  * rounding — this is the settlement-precision representation, not the
  * display-truncated one). Inverse of {@link toStroops} for values that fit
