@@ -1,23 +1,11 @@
 /**
  * hooks/useRepaymentOperation.ts
  *
- * Complete repayment operation management with optimistic updates,
- * progress tracking, and automatic state rollback on failure.
+ * Lending pool deposit and withdrawal operations: build the unsigned
+ * transaction on the backend, sign it in the wallet, submit it, and track
+ * progress with optimistic updates and rollback on failure.
  *
- * Usage Example:
- * ```tsx
- * const repayment = useRepaymentOperation();
- *
- * const handleRepay = async () => {
- *   repayment.start("Repaying loan...);
- *   try {
- *     const result = await repayLoan({ loanId: 123, amount: 500 });
- *     repayment.success(result.txHash);
- *   } catch (error) {
- *     repayment.error(error.message);
- *   }
- * };
- * ```
+ * Loan repayments live on the repay page (app/[locale]/repay/[loanId]).
  */
 
 import { useCallback, useId, useState } from "react";
@@ -27,109 +15,10 @@ import { useWallet } from "../components/providers/WalletProvider";
 import {
   useDepositToPool,
   usePoolStats,
-  useRepayLoan,
   useWithdrawFromPool,
   submitPoolTransaction,
   queryKeys,
 } from "./useApi";
-import { enqueueRepayment } from "../../lib/offlineQueue";
-
-interface RepaymentOperationOptions {
-  loanId: number;
-  amount: number;
-  borrowerAddress: string;
-}
-
-interface RepaymentOperationResult {
-  txHash: string;
-  /**
-   * `success` when the API accepted the repayment, `queued` when it was only
-   * written to the offline queue and has not reached the API yet.
-   */
-  status: "success" | "queued";
-}
-
-export function useRepaymentOperation(options?: {
-  onSuccess?: (result: RepaymentOperationResult) => void;
-  /** Called instead of `onSuccess` when the repayment was queued for replay. */
-  onQueued?: (result: RepaymentOperationResult) => void;
-  onError?: (error: Error) => void;
-}) {
-  const uid = useId();
-  const transactionId = `repayment-${uid}`;
-  const transaction = useTransaction(transactionId);
-  const [error, setError] = useState<string | null>(null);
-  const repayLoan = useRepayLoan();
-
-  const executeRepayment = useCallback(
-    async ({
-      loanId,
-      amount,
-      borrowerAddress,
-    }: RepaymentOperationOptions): Promise<RepaymentOperationResult> => {
-      transaction.start("Processing repayment...");
-      setError(null);
-
-      try {
-        // If offline, enqueue the repayment for background sync and return a queued result
-        if (typeof navigator !== "undefined" && !navigator.onLine) {
-          await enqueueRepayment({ loanId, amount, borrowerAddress });
-          try {
-            if ("serviceWorker" in navigator && "SyncManager" in window) {
-              const reg = await navigator.serviceWorker.ready;
-              // register background sync to process queued repayments
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any -- SyncManager not in standard TS types
-              await (reg as any).sync.register("sync-repayments");
-            }
-          } catch (swErr) {
-            // Non-fatal
-            // eslint-disable-next-line no-console
-            console.error("Background sync register failed", swErr);
-          }
-
-          // The repayment has NOT been paid yet — it is only queued on this
-          // device and replayed by the service worker once connectivity returns.
-          // Reporting this as a success would tell the borrower the loan is
-          // settled when the money never moved.
-          const queueRef = `queued-${Date.now()}`;
-          transaction.queue(queueRef, "Queued — will send when you are back online");
-
-          const result = { txHash: queueRef, status: "queued" as const };
-          options?.onQueued?.(result);
-          return result;
-        }
-
-        transaction.updateProgress(20, "Submitting repayment...");
-
-        // useRepayLoan handles the full submit flow with optimistic cache updates
-        const response = await repayLoan.mutateAsync({ loanId, amount, borrowerAddress });
-        const txHash = response.txHash ?? String(loanId);
-
-        transaction.submit(txHash, "Transaction submitted, waiting for confirmation...");
-        transaction.confirm("Confirming transaction...");
-        transaction.complete(txHash);
-
-        const result = { txHash, status: "success" as const };
-        options?.onSuccess?.(result);
-        return result;
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : "Repayment failed";
-        transaction.fail(errorMessage);
-        setError(errorMessage);
-        options?.onError?.(err instanceof Error ? err : new Error(errorMessage));
-        throw err;
-      }
-    },
-    [transaction, repayLoan, options],
-  );
-
-  return {
-    ...transaction,
-    executeRepayment,
-    error,
-    clearError: () => setError(null),
-  };
-}
 
 /**
  * Hook for managing deposit operations
