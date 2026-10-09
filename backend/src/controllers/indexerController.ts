@@ -20,6 +20,14 @@ import { parseCappedLimit } from '../utils/queryHelpers.js';
 import logger from '../utils/logger.js';
 
 import { getStellarRpcUrl } from '../config/stellar.js';
+import { amountToStroops } from '../money/decimal.js';
+import { eventAmountFields } from '../money/eventAmounts.js';
+
+/** Money event amounts go out in whole tokens; see money/eventAmounts.ts. */
+const withApiAmount = (row: Record<string, unknown>) => ({
+  ...row,
+  ...eventAmountFields(row.event_type, row.amount),
+});
 
 const buildEventFilters = (req: Request, baseParams: unknown[], initialWhereClause: string) => {
   const { status, dateRange, amountRange } = parseQueryParams(req);
@@ -43,7 +51,11 @@ const buildEventFilters = (req: Request, baseParams: unknown[], initialWhereClau
   }
 
   if (amountRange) {
-    params.push(amountRange.min, amountRange.max);
+    // amount_range is in whole tokens; contract_events.amount is stroops.
+    params.push(
+      amountToStroops(amountRange.min).toString(),
+      amountToStroops(amountRange.max).toString(),
+    );
     appendCondition(`CAST(amount AS NUMERIC) BETWEEN $${params.length - 1} AND $${params.length}`);
   }
 
@@ -306,7 +318,7 @@ export const getBorrowerEvents = async (req: Request, res: Response) => {
       success: true,
       data: {
         address: borrower,
-        items: events,
+        items: events.map(withApiAmount),
       },
       page: {
         next_cursor: nextCursor,
@@ -429,7 +441,7 @@ export const getLoanEvents = async (req: Request, res: Response) => {
       success: true,
       data: {
         loanId: Number.parseInt(loanId, 10),
-        items: events,
+        items: events.map(withApiAmount),
       },
       page: {
         next_cursor: nextCursor,
@@ -538,7 +550,7 @@ export const getRecentEvents = async (req: Request, res: Response) => {
     res.json({
       success: true,
       data: {
-        items: events,
+        items: events.map(withApiAmount),
       },
       page: {
         next_cursor: nextCursor,

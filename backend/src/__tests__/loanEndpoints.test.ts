@@ -372,7 +372,7 @@ describe('GET /api/loans/:loanId', () => {
         rows: [
           {
             event_type: 'LoanRequested',
-            amount: '1000',
+            amount: '10000000000', // 1000 USDC in stroops,
             ledger: 10,
             ledger_closed_at: '2025-01-01T00:00:00.000Z',
             tx_hash: 'request-tx',
@@ -434,7 +434,7 @@ describe('GET /api/loans/:loanId/amortization-schedule', () => {
       rows: [
         {
           event_type: 'LoanRequested',
-          amount: '1000',
+          amount: '10000000000', // 1000 USDC in stroops,
           ledger_closed_at: '2025-01-01T00:00:00.000Z',
         },
         {

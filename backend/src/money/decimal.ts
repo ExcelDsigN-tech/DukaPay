@@ -150,6 +150,26 @@ export function amountToStroops(value: number): bigint {
 }
 
 /**
+ * Read a stroop value from Postgres or the chain as a whole-stroop bigint.
+ * NUMERIC strings with a fractional part (computed interest) round to the
+ * nearest stroop; null or empty reads as zero.
+ */
+export function toWholeStroops(value: string | number | bigint | null | undefined): bigint {
+  if (value === null || value === undefined || value === '') return 0n;
+  if (typeof value === 'bigint') return value;
+  const text = typeof value === 'number' ? value.toFixed(STROOP_DECIMALS) : value;
+  return roundDiv(toStroops(text), STROOP_SCALE);
+}
+
+/**
+ * Convert a stroop value to whole tokens for an API response, e.g.
+ * `2505000000` -> `250.5`. Inverse of {@link amountToStroops}.
+ */
+export function stroopsToAmount(value: string | number | bigint | null | undefined): number {
+  return Number(fromStroops(toWholeStroops(value)));
+}
+
+/**
  * Format an exact stroop amount as a full-precision decimal string (no
  * rounding — this is the settlement-precision representation, not the
  * display-truncated one). Inverse of {@link toStroops} for values that fit

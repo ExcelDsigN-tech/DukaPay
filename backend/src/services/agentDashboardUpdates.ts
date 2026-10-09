@@ -2,6 +2,7 @@ import { pubsubService } from './pubsubService.js';
 import { cacheService } from './cacheService.js';
 import { query } from '../db/connection.js';
 import logger from '../utils/logger.js';
+import { stroopsToAmount } from '../money/decimal.js';
 
 const AGENT_DASHBOARD_PUBLISH_INTERVAL_MS = 10_000;
 
@@ -75,8 +76,15 @@ async function fetchAgentDashboardSummary(
     const earningsRow = earningsResult.rows[0] as Record<string, unknown>;
     const portfolioRow = portfolioResult.rows[0] as Record<string, unknown>;
 
-    const totalFloat = Number(floatRow.total_float ?? 0);
-    const allocated = Math.max(0, totalFloat - Number(floatRow.total_withdrawn ?? 0));
+    // contract_events amounts are stroops; dashboards show whole tokens.
+    const totalFloat = stroopsToAmount(floatRow.total_float as string | null);
+    const allocated = Math.max(
+      0,
+      totalFloat - stroopsToAmount(floatRow.total_withdrawn as string | null),
+    );
+    const daily = stroopsToAmount(earningsRow.daily as string | null);
+    const weekly = stroopsToAmount(earningsRow.weekly as string | null);
+    const monthly = stroopsToAmount(earningsRow.monthly as string | null);
 
     return {
       agentPublicKey,
@@ -86,13 +94,10 @@ async function fetchAgentDashboardSummary(
         utilizationPct: totalFloat > 0 ? (allocated / totalFloat) * 100 : 0,
       },
       earnings: {
-        daily: Number(earningsRow.daily ?? 0),
-        weekly: Number(earningsRow.weekly ?? 0),
-        monthly: Number(earningsRow.monthly ?? 0),
-        total:
-          Number(earningsRow.daily ?? 0) +
-          Number(earningsRow.weekly ?? 0) +
-          Number(earningsRow.monthly ?? 0),
+        daily,
+        weekly,
+        monthly,
+        total: daily + weekly + monthly,
       },
       borrowerPortfolio: {
         totalLoans: Number(portfolioRow.total_loans ?? 0),

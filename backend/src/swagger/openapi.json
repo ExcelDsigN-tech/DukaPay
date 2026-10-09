@@ -166,7 +166,8 @@
                   "type": "string"
                 },
                 "amount": {
-                  "type": "number"
+                  "type": "number",
+                  "description": "Whole tokens for money events; raw value otherwise."
                 },
                 "loanId": {
                   "type": "string",
@@ -417,8 +418,20 @@
             "type": "string"
           },
           "amount": {
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "nullable": true,
+            "description": "Money events: whole tokens (e.g. 250.5 USDC). Config events (rates, ledgers, scores): the raw on-chain value."
+          },
+          "amountStroops": {
             "type": "string",
-            "nullable": true
+            "description": "Exact amount in stroops (10^-7 token). Money events only."
           },
           "timestamp": {
             "type": "string",
@@ -1351,7 +1364,20 @@
             "type": "string"
           },
           "amount": {
-            "type": "string"
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "nullable": true,
+            "description": "Money events: whole tokens (e.g. 250.5 USDC). Config events (rates, ledgers, scores): the raw on-chain value."
+          },
+          "amountStroops": {
+            "type": "string",
+            "description": "Exact amount in stroops (10^-7 token). Money events only."
           },
           "ledger": {
             "type": "integer"

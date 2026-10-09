@@ -2,6 +2,8 @@ import type { Request, Response } from 'express';
 import { query } from '../db/connection.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { cacheService } from '../services/cacheService.js';
+import { stroopsToAmount } from '../money/decimal.js';
+import { isMoneyEvent } from '../money/eventAmounts.js';
 
 interface AgentDashboardData {
   agentPublicKey: string;
@@ -151,13 +153,14 @@ export const getAgentDashboard = asyncHandler(async (req: Request, res: Response
   const settlementsRow = settlementsResult.rows[0] as Record<string, unknown>;
   const collateralRow = collateralResult.rows[0] as Record<string, unknown>;
 
-  const totalFloat = formatNumber(floatRow.total_float as string | number | null);
-  const totalWithdrawn = formatNumber(floatRow.total_withdrawn as string | number | null);
+  // contract_events amounts are stroops; the API returns whole tokens.
+  const totalFloat = stroopsToAmount(floatRow.total_float as string | number | null);
+  const totalWithdrawn = stroopsToAmount(floatRow.total_withdrawn as string | number | null);
   const allocated = Math.max(0, totalFloat - totalWithdrawn);
   const utilizationPct = totalFloat > 0 ? (allocated / totalFloat) * 100 : 0;
 
-  const totalDebt = formatNumber(collateralRow.total_debt as string | number | null);
-  const totalCollateral = formatNumber(collateralRow.total_collateral as string | number | null);
+  const totalDebt = stroopsToAmount(collateralRow.total_debt as string | number | null);
+  const totalCollateral = stroopsToAmount(collateralRow.total_collateral as string | number | null);
   const collateralRatio = totalDebt > 0 ? totalCollateral / totalDebt : 0;
 
   const dashboardData: AgentDashboardData = {
@@ -168,10 +171,10 @@ export const getAgentDashboard = asyncHandler(async (req: Request, res: Response
       utilizationPct: Math.round(utilizationPct * 100) / 100,
     },
     earnings: {
-      daily: formatNumber(earningsRow.daily as string | number | null),
-      weekly: formatNumber(earningsRow.weekly as string | number | null),
-      monthly: formatNumber(earningsRow.monthly as string | number | null),
-      total: formatNumber(earningsRow.total as string | number | null),
+      daily: stroopsToAmount(earningsRow.daily as string | number | null),
+      weekly: stroopsToAmount(earningsRow.weekly as string | number | null),
+      monthly: stroopsToAmount(earningsRow.monthly as string | number | null),
+      total: stroopsToAmount(earningsRow.total as string | number | null),
     },
     borrowerPortfolio: {
       totalLoans: Number(portfolioRow?.total_loans ?? 0),
@@ -185,7 +188,7 @@ export const getAgentDashboard = asyncHandler(async (req: Request, res: Response
     },
     pendingSettlements: {
       count: Number(settlementsRow.settlement_count ?? 0),
-      totalValue: formatNumber(settlementsRow.total_value as string | number | null),
+      totalValue: stroopsToAmount(settlementsRow.total_value as string | number | null),
     },
     collateralRatio: {
       totalCollateral,
@@ -196,7 +199,9 @@ export const getAgentDashboard = asyncHandler(async (req: Request, res: Response
       const r = row as Record<string, unknown>;
       return {
         type: String(r.event_type ?? ''),
-        amount: formatNumber(r.amount as string | number | null),
+        amount: isMoneyEvent(r.event_type)
+          ? stroopsToAmount(r.amount as string | number | null)
+          : formatNumber(r.amount as string | number | null),
         loanId: r.loan_id != null ? String(r.loan_id) : null,
         timestamp:
           r.created_at instanceof Date
