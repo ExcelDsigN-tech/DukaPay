@@ -13,7 +13,6 @@ import { useWalletConnectAction } from "../hooks/useWalletConnectAction";
 import {
   useBorrowerLoans,
   useRemittances,
-  useUserProfile,
   useCreditScoreHistory,
   useScoreBreakdown,
 } from "../hooks/useApi";
@@ -147,9 +146,8 @@ export default function Home() {
   });
   const balances = useWalletStore(selectWalletBalances);
   const usdcBalance = Number(balances.find((b) => b.symbol === "USDC")?.amount ?? 0);
-  const { data: userProfile } = useUserProfile({ enabled: isConnected });
-  const { data: creditHistory } = useCreditScoreHistory(userProfile?.id, {
-    enabled: isConnected && !!userProfile?.id,
+  const { data: creditHistory } = useCreditScoreHistory(address ?? undefined, {
+    enabled: isConnected && !!address,
   });
 
   const isLoading = (loansLoading || remittancesLoading) && isConnected;

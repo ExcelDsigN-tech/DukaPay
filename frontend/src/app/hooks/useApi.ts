@@ -1172,14 +1172,28 @@ export function useUpdateUserProfile() {
  * Fetches credit score history for trend visualization.
  * Returns historical score data points over time.
  */
+/**
+ * On-chain score history for a wallet (GET /score/:walletAddress/history).
+ * The contract records the ledger of each change, not a time, so `date` holds
+ * the ledger sequence as a label.
+ */
 export function useCreditScoreHistory(
-  userId: string | undefined,
+  walletAddress: string | undefined,
   options?: Omit<UseQueryOptions<CreditScoreHistory[]>, "queryKey" | "queryFn">,
 ) {
   return useQuery<CreditScoreHistory[]>({
-    queryKey: queryKeys.creditScoreHistory.byUser(userId ?? ""),
-    queryFn: () => apiFetch<CreditScoreHistory[]>(`/score/${userId}/history`),
-    enabled: !!userId,
+    queryKey: queryKeys.creditScoreHistory.byUser(walletAddress ?? ""),
+    queryFn: async () => {
+      const response = await apiFetch<{
+        history?: Array<{ score: number; timestamp: number; reason: string }>;
+      }>(`/score/${walletAddress}/history`);
+      return (response.history ?? []).map((entry) => ({
+        date: String(entry.timestamp),
+        score: entry.score,
+        event: entry.reason,
+      }));
+    },
+    enabled: !!walletAddress,
     ...options,
   });
 }

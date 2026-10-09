@@ -1,10 +1,11 @@
 import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
-import { useBorrowerLoans, useLoan } from "./useApi";
+import { useBorrowerLoans, useCreditScoreHistory, useLoan } from "./useApi";
 
 // Response bodies below mirror backend/src/controllers/loanController.ts
-// (getLoanDetails and getBorrowerLoans), so a shape drift fails here.
+// (getLoanDetails and getBorrowerLoans) and scoreController.ts
+// (getOnChainScoreHistory), so a shape drift fails here.
 
 function renderWithClient<T>(hook: () => T) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -117,5 +118,32 @@ describe("loan API response mapping", () => {
     expect(result.current.loans).toHaveLength(1);
     expect(result.current.loans[0]).toMatchObject({ id: 42, interestRateBps: 1200 });
     expect(result.current.loans[0]).not.toHaveProperty("loanId");
+  });
+});
+
+describe("score API response mapping", () => {
+  const originalFetch = global.fetch;
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
+
+  it("useCreditScoreHistory requests by wallet and reads `history`", async () => {
+    mockFetchOnce({
+      success: true,
+      walletAddress: "GABC",
+      history: [
+        { score: 680, timestamp: 1200, reason: "repayment" },
+        { score: 715, timestamp: 1300, reason: "remittance" },
+      ],
+    });
+
+    const { result } = renderWithClient(() => useCreditScoreHistory("GABC"));
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect((global.fetch as jest.Mock).mock.calls[0][0]).toContain("/score/GABC/history");
+    expect(result.current.data).toEqual([
+      { date: "1200", score: 680, event: "repayment" },
+      { date: "1300", score: 715, event: "remittance" },
+    ]);
   });
 });
