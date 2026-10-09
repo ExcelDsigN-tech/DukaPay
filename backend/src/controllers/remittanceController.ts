@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { query } from '../db/connection.js';
 import { remittanceService } from '../services/remittanceService.js';
+import { toRemittance } from '../services/remittanceMapper.js';
 import { sorobanService } from '../services/sorobanService.js';
 import { notificationService } from '../services/notificationService.js';
 import { AppError } from '../errors/AppError.js';
@@ -173,7 +174,7 @@ export const getRemittances = asyncHandler(async (req: Request, res: Response) =
 
   res.json({
     success: true,
-    data: remittances,
+    data: remittances.map(toRemittance),
     page: {
       next_cursor: nextCursor,
       snapshot_seq: actualSnapshotSeq.toString(),
