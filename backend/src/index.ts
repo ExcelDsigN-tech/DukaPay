@@ -1,5 +1,7 @@
-import dotenv from 'dotenv';
-dotenv.config();
+// Must stay the first import: ES modules evaluate every import before this
+// file's body runs, so a later dotenv.config() is too late for modules that
+// read process.env at load time (db pool, Redis URLs).
+import 'dotenv/config';
 
 import { validateEnvVars } from './config/env.js';
 validateEnvVars();
@@ -11,6 +13,7 @@ initSentry();
 const app = (await import('./app.js')).default;
 import logger from './utils/logger.js';
 import { closePool } from './db/connection.js';
+import { cacheService } from './services/cacheService.js';
 import { startIndexer, stopIndexer } from './services/indexerManager.js';
 import {
   startDefaultCheckerScheduler,
@@ -172,6 +175,7 @@ const shutdown = async (signal: 'SIGTERM' | 'SIGINT') => {
 
     await closePool();
     logger.info('Database pool drained.');
+    await cacheService.close();
     process.exit(0);
   } catch (err) {
     logger.error('Graceful shutdown failed', { signal, err });

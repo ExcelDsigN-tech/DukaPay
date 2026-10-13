@@ -1,8 +1,6 @@
-import dotenv from 'dotenv';
+import 'dotenv/config';
 import { closePool, query } from '../db/connection.js';
 import logger from '../utils/logger.js';
-
-dotenv.config();
 
 type NotificationType =
   | 'loan_approved'

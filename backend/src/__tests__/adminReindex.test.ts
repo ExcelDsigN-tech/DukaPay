@@ -1,5 +1,19 @@
+import { jest } from '@jest/globals';
 import request from 'supertest';
-import app from '../app.js';
+
+// Admin routes write an audit row after the response is sent. Mock the pool so
+// that write never opens a real connection that outlives the test.
+const mockQuery = jest.fn<() => Promise<{ rows: unknown[]; rowCount: number }>>();
+mockQuery.mockResolvedValue({ rows: [], rowCount: 0 });
+jest.unstable_mockModule('../db/connection.js', () => ({
+  default: { query: mockQuery },
+  query: mockQuery,
+  getClient: jest.fn(),
+  closePool: jest.fn(),
+  withTransaction: jest.fn(),
+}));
+
+const { default: app } = await import('../app.js');
 
 describe('Admin reindex endpoint', () => {
   const apiKey = 'test-internal-api-key';

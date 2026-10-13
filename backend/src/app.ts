@@ -1,12 +1,12 @@
+// First import so .env is loaded before any module reads process.env.
+import 'dotenv/config';
 import express, { type Request, type Response, type NextFunction } from 'express';
 import cors from 'cors';
 import compression from 'compression';
 import helmet from 'helmet';
-import dotenv from 'dotenv';
 import { Sentry } from './config/sentry.js';
 import { mountSwaggerDocs } from './config/swagger.js';
 
-dotenv.config();
 import pool from './db/connection.js';
 import { cacheService } from './services/cacheService.js';
 import { sorobanService } from './services/sorobanService.js';
