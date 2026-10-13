@@ -16,7 +16,7 @@ describe('CSRF Protection Middleware', () => {
     app.use(express.json());
     app.use(csrfProtection());
 
-    app.get('/api/v1/auth/csrf', getCsrfTokenController);
+    app.get('/api/auth/csrf', getCsrfTokenController);
     app.get('/api/test-safe', (_req: Request, res: Response) => {
       res.json({ success: true, message: 'safe' });
     });
@@ -29,7 +29,7 @@ describe('CSRF Protection Middleware', () => {
     app.delete('/api/test-delete', (_req: Request, res: Response) => {
       res.json({ success: true, message: 'deleted' });
     });
-    app.post('/api/v1/auth/challenge', (_req: Request, res: Response) => {
+    app.post('/api/auth/challenge', (_req: Request, res: Response) => {
       res.json({ success: true, message: 'exempt challenge' });
     });
 
@@ -62,7 +62,7 @@ describe('CSRF Protection Middleware', () => {
 
   it('should expose CSRF token in X-CSRF-Token response header (Double Submit pattern)', async () => {
     const app = createTestApp();
-    const response = await request(app).get('/api/v1/auth/csrf').expect(200);
+    const response = await request(app).get('/api/auth/csrf').expect(200);
 
     // Token must be accessible via response header so JavaScript can read it once
     const headerToken = response.headers[CSRF_HEADER_NAME];
@@ -74,9 +74,9 @@ describe('CSRF Protection Middleware', () => {
     expect(headerToken).toBe(response.body.data.csrfToken);
   });
 
-  it('should issue CSRF token via GET /api/v1/auth/csrf', async () => {
+  it('should issue CSRF token via GET /api/auth/csrf', async () => {
     const app = createTestApp();
-    const response = await request(app).get('/api/v1/auth/csrf').expect(200);
+    const response = await request(app).get('/api/auth/csrf').expect(200);
 
     expect(response.body.success).toBe(true);
     expect(response.body.data.csrfToken).toBeDefined();
@@ -145,7 +145,7 @@ describe('CSRF Protection Middleware', () => {
   it('should exempt configured exempt paths from CSRF check', async () => {
     const app = createTestApp();
     const response = await request(app)
-      .post('/api/v1/auth/challenge')
+      .post('/api/auth/challenge')
       .send({ publicKey: 'G...' })
       .expect(200);
 
@@ -157,7 +157,7 @@ describe('CSRF Protection Middleware', () => {
     const app = createTestApp();
 
     // Step 1: GET the CSRF endpoint — server sets httpOnly cookie and exposes token in header
-    const getResp = await request(app).get('/api/v1/auth/csrf').expect(200);
+    const getResp = await request(app).get('/api/auth/csrf').expect(200);
 
     const setCookieHeader: string[] = getResp.headers['set-cookie'] as string[];
     expect(setCookieHeader).toBeDefined();

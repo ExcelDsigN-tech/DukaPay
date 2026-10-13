@@ -21,7 +21,7 @@ test.skip("opens recent transactions drawer with copied hashes", async ({ page }
     );
   });
 
-  await page.route("**/api/v1/transactions/me**", async (route) => {
+  await page.route("**/api/transactions/me**", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",

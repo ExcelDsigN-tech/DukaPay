@@ -67,10 +67,10 @@ afterAll(() => {
 });
 
 // ---------------------------------------------------------------------------
-// /api/v1 route mounts
+// /api route mounts
 // ---------------------------------------------------------------------------
-describe('/api/v1 route mounts', () => {
-  it('GET /api/v1/pool/stats returns 200 with lender auth', async () => {
+describe('/api route mounts', () => {
+  it('GET /api/pool/stats returns 200 with lender auth', async () => {
     mockQuery
       .mockResolvedValueOnce({
         rows: [{ total_deposits: '10000' }],
@@ -79,36 +79,54 @@ describe('/api/v1 route mounts', () => {
         rows: [{ active_loans_count: '3', total_outstanding: '5000' }],
       });
 
-    const response = await request(app).get('/api/v1/pool/stats').set(bearer(LENDER_WALLET));
+    const response = await request(app).get('/api/pool/stats').set(bearer(LENDER_WALLET));
 
     expect(response.status).toBe(200);
     expect(response.body.success).toBe(true);
   });
 
-  it('GET /api/v1/notifications returns 200 with borrower auth', async () => {
+  it('GET /api/notifications returns 200 with borrower auth', async () => {
     mockGetNotificationsForUser.mockResolvedValueOnce([]);
     mockGetUnreadCount.mockResolvedValueOnce(0);
 
     const response = await request(app)
-      .get('/api/v1/notifications')
+      .get('/api/notifications')
       .set(bearer('GAAABORROWER123456789'));
 
     expect(response.status).toBe(200);
     expect(response.body.success).toBe(true);
   });
 
-  it('GET /api/v1/events/status returns 200 with API key', async () => {
+  it('GET /api/events/status returns 200 with API key', async () => {
     mockGetConnectionCount.mockReturnValueOnce({
       borrower: 0,
       admin: 0,
       total: 0,
     });
 
-    const response = await request(app)
-      .get('/api/v1/events/status')
-      .set('x-api-key', VALID_API_KEY);
+    const response = await request(app).get('/api/events/status').set('x-api-key', VALID_API_KEY);
 
     expect(response.status).toBe(200);
     expect(response.body.success).toBe(true);
+  });
+
+  it.each(['/api/privacy/dsar/abc-123', '/api/audit/proof/1', '/api/user/profile'])(
+    'mounts %s under /api (rejects the unauthenticated request)',
+    async (path) => {
+      const response = await request(app).get(path);
+
+      expect(response.status).toBe(401);
+    },
+  );
+
+  it.each([
+    '/api/v1/pool/stats',
+    '/api/v1/privacy/dsar/abc-123',
+    '/audit/proof/1',
+    '/user/profile',
+  ])('no longer mounts %s', async (path) => {
+    const response = await request(app).get(path).set(bearer(LENDER_WALLET));
+
+    expect(response.status).toBe(404);
   });
 });

@@ -176,7 +176,7 @@ export const login = asyncHandler(async (req: Request, res: Response): Promise<v
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'strict',
-    path: '/api/v1/auth',
+    path: '/api/auth',
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
   });
 
@@ -225,7 +225,7 @@ export const refresh = asyncHandler(async (req: Request, res: Response): Promise
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'strict',
-    path: '/api/v1/auth',
+    path: '/api/auth',
     maxAge: 7 * 24 * 60 * 60 * 1000,
   });
 
@@ -291,7 +291,7 @@ export const logout = async (req: Request, res: Response): Promise<void> => {
   const cookieName = process.env.JWT_COOKIE_NAME ?? 'dukapay_jwt';
   const refreshCookieName = process.env.REFRESH_COOKIE_NAME ?? 'dukapay_refresh';
   res.clearCookie(cookieName, { path: '/' });
-  res.clearCookie(refreshCookieName, { path: '/api/v1/auth' });
+  res.clearCookie(refreshCookieName, { path: '/api/auth' });
 
   res.status(200).json({
     success: true,
@@ -309,7 +309,7 @@ export const logoutAllSessions = asyncHandler(async (req: Request, res: Response
   const cookieName = process.env.JWT_COOKIE_NAME ?? 'dukapay_jwt';
   const refreshCookieName = process.env.REFRESH_COOKIE_NAME ?? 'dukapay_refresh';
   res.clearCookie(cookieName, { path: '/' });
-  res.clearCookie(refreshCookieName, { path: '/api/v1/auth' });
+  res.clearCookie(refreshCookieName, { path: '/api/auth' });
 
   logger.withContext().info('User logged out from all sessions', {
     publicKey: req.user.publicKey,

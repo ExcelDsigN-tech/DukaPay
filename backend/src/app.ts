@@ -372,7 +372,7 @@ const statusRouter = express.Router();
 registerStatusRoutes(statusRouter);
 app.use('/', statusRouter);
 
-// Legacy routes (deprecated, maintained for backward compatibility)
+// API routes
 app.use('/api', simulationRoutes);
 app.use('/api/score', scoreRoutes);
 app.use('/api/loans', loanRoutes);
@@ -386,27 +386,9 @@ app.use('/api/events', eventRoutes);
 app.use('/api/remittances', remittanceRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/agents', agentFloatRoutes);
-app.use('/audit', auditRoutes);
-
-// Versioned API routes (v1 - current)
-app.use('/api/v1', simulationRoutes);
-app.use('/api/v1/score', scoreRoutes);
-app.use('/api/v1/loans', loanRoutes);
-app.use('/api/v1/indexer', indexerRoutes);
-app.use('/api/v1/admin', adminRoutes);
-app.use('/api/v1/auth', authRoutes);
-app.use('/api/v1/agents', agentRoutes);
-app.use('/api/v1/remittances', remittanceRoutes);
-app.use('/api/v1/transactions', transactionRoutes);
-app.use('/api/v1/pool', poolRoutes);
-app.use('/api/v1/notifications', notificationsRoutes);
-app.use('/api/v1/events', eventRoutes);
-app.use('/api/v1/privacy', privacyRoutes);
-app.use('/api/v1/agents', agentFloatRoutes);
-app.use('/api/v1/audit', auditRoutes);
-app.use('/user', userRoutes);
+app.use('/api/privacy', privacyRoutes);
+app.use('/api/audit', auditRoutes);
 app.use('/api/user', userRoutes);
-app.use('/api/v1/user', userRoutes);
 
 mountSwaggerDocs(app);
 

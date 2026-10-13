@@ -607,12 +607,12 @@ describe('authService unit tests', () => {
       ).rejects.toThrow(/revoked/i);
     });
 
-    it('should support /api/v1/auth/refresh endpoint', async () => {
+    it('should support /api/auth/refresh endpoint', async () => {
       const keypair = Keypair.random();
       const initialPair = await authService.generateTokenPair(keypair.publicKey());
 
       const response = await request(app)
-        .post('/api/v1/auth/refresh')
+        .post('/api/auth/refresh')
         .send({ refreshToken: initialPair.refreshToken })
         .expect(200);
 

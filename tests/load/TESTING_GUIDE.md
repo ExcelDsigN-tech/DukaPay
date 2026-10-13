@@ -474,7 +474,7 @@ curl https://your-staging-backend.example/health
 echo $TEST_AUTH_TOKEN
 
 # Check rate limits
-curl -I https://your-staging-backend.example/api/v1/pool/stats
+curl -I https://your-staging-backend.example/api/pool/stats
 
 # Review API logs
 kubectl logs -n dukapay deployment/api --tail=100

@@ -11,10 +11,7 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 // Default routes exempted from CSRF (e.g. public webhook callbacks with HMAC verification, public challenge)
 const DEFAULT_EXEMPT_PATHS = [
   '/api/auth/challenge',
-  '/api/v1/auth/challenge',
   '/api/auth/login',
-  '/api/v1/auth/login',
-  '/api/v1/webhooks',
   '/health',
   '/metrics',
   '/version',
@@ -153,7 +150,7 @@ export function csrfProtection(options: CsrfOptions = {}) {
 
 /**
  * Controller endpoint to retrieve or refresh a CSRF token.
- * GET /api/v1/auth/csrf
+ * GET /api/auth/csrf
  */
 export function getCsrfTokenController(req: Request, res: Response): void {
   // csrfProtection() runs ahead of this controller on every route and already
