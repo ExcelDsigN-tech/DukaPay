@@ -1,4 +1,13 @@
-import { describe, it, expect, beforeAll, afterAll, jest } from '@jest/globals';
+import {
+  describe,
+  it,
+  expect,
+  beforeAll,
+  afterAll,
+  beforeEach,
+  afterEach,
+  jest,
+} from '@jest/globals';
 import request from 'supertest';
 import app from '../app.js';
 import { cacheService } from '../services/cacheService.js';
@@ -487,9 +496,22 @@ describe('authService unit tests', () => {
   });
 
   describe('verifyChallengeTimestamp', () => {
+    // Freeze the clock: the service reads Date.now() itself, so a real clock
+    // can tick between building the timestamp and checking it.
+    const NOW = 1_700_000_000_000;
+    let dateNow: jest.SpiedFunction<typeof Date.now>;
+
+    beforeEach(() => {
+      dateNow = jest.spyOn(Date, 'now').mockReturnValue(NOW);
+    });
+
+    afterEach(() => {
+      dateNow.mockRestore();
+    });
+
     it('should accept timestamp at the window edge', () => {
       const maxAge = 5 * 60 * 1000; // 5 minutes
-      const timestamp = Date.now() - maxAge;
+      const timestamp = NOW - maxAge;
 
       const result = authService.verifyChallengeTimestamp(timestamp, maxAge);
       expect(result).toBe(true);
@@ -497,15 +519,23 @@ describe('authService unit tests', () => {
 
     it('should accept timestamp under the window', () => {
       const maxAge = 5 * 60 * 1000;
-      const timestamp = Date.now() - 1000; // 1 second ago
+      const timestamp = NOW - 1000; // 1 second ago
 
       const result = authService.verifyChallengeTimestamp(timestamp, maxAge);
       expect(result).toBe(true);
     });
 
+    it('should reject timestamp 1ms past the window edge', () => {
+      const maxAge = 5 * 60 * 1000;
+      const timestamp = NOW - maxAge - 1;
+
+      const result = authService.verifyChallengeTimestamp(timestamp, maxAge);
+      expect(result).toBe(false);
+    });
+
     it('should reject timestamp over the window', () => {
       const maxAge = 5 * 60 * 1000;
-      const timestamp = Date.now() - maxAge - 1000; // 1 second too old
+      const timestamp = NOW - maxAge - 1000; // 1 second too old
 
       const result = authService.verifyChallengeTimestamp(timestamp, maxAge);
       expect(result).toBe(false);
@@ -513,7 +543,7 @@ describe('authService unit tests', () => {
 
     it('should accept future timestamp within tolerance', () => {
       const maxAge = 5 * 60 * 1000;
-      const timestamp = Date.now() + 1000; // 1 second in future
+      const timestamp = NOW + 1000; // 1 second in future
 
       const result = authService.verifyChallengeTimestamp(timestamp, maxAge);
       expect(result).toBe(true);
