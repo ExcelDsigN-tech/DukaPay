@@ -9,6 +9,22 @@ Agent-banking and lending protocol on Stellar/Soroban. Testnet only; no audit ye
 - `frontend/`: Next.js app. `sdk/`: TypeScript SDK. `indexer/`: Rust indexer.
 - `money-policy.json`: single source of money rules; generated files derive from it.
 
+## Stack
+
+Major versions; exact pins live in `package.json` / `Cargo.toml`. Write code for these, not older patterns.
+
+- frontend: Next 16 (App Router), React 19, Tailwind 4 (CSS config), TanStack Query 5, zustand 5, ESLint 9 flat config
+- backend: Express 5, zod 4, pg 8, ESLint 8 (`.eslintrc`)
+- sdk: React 18, vitest 2, ESLint 10
+- contracts: soroban-sdk 22, Rust edition 2021
+- Stellar JS: `@stellar/stellar-sdk` 14 everywhere
+
+## Moved off (never import or copy)
+
+- `soroban-client`, `stellar-sdk`, `stellar-base` → `@stellar/stellar-sdk`
+- `next/router`, `pages/`, `getServerSideProps` / `getStaticProps` → App Router
+- `tailwind.config.js` (v3 style) → Tailwind 4 `@import "tailwindcss"` in CSS
+
 ## Rules everywhere
 
 - Branch `feat/`, `fix/`, `docs/`, `chore/` + short name. Conventional Commits.
