@@ -6,10 +6,6 @@ import 'dotenv/config';
 import { validateEnvVars } from './config/env.js';
 validateEnvVars();
 
-// Sentry must be initialized before any other imports so it can instrument them
-import { initSentry } from './config/sentry.js';
-initSentry();
-
 const app = (await import('./app.js')).default;
 import logger from './utils/logger.js';
 import { closePool } from './db/connection.js';

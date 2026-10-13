@@ -164,7 +164,7 @@ jobs:
           REPO=ghcr.io/${{ env.OWNER_LC }}/dukapay-backend
           docker pull "${REPO}:production-${{ github.sha }}"
           docker run --rm "${REPO}:production-${{ github.sha }}" node --version
-          docker run --rm "${REPO}:production-${{ github.sha }}" sh -lc 'test -f /app/dist/index.js && echo "dist/index.js present"'
+          docker run --rm "${REPO}:production-${{ github.sha }}" sh -lc 'test -f /app/dist/index.js && test -f /app/dist/instrument.js && echo "dist/index.js and dist/instrument.js present"'
 
       - name: Run Trivy CRITICAL scan (production backend)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
