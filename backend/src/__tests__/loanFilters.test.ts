@@ -1,7 +1,6 @@
 import { jest, describe, it, expect, beforeEach, afterAll } from '@jest/globals';
 import request from 'supertest';
 import { Keypair } from '@stellar/stellar-sdk';
-import { generateJwtToken } from '../services/authService.js';
 
 /**
  * Tests for status + date-range filters on GET /api/loans/borrower/:borrower
@@ -56,6 +55,7 @@ jest.unstable_mockModule('../services/sorobanService.js', () => ({
 }));
 
 const { default: app } = await import('../app.js');
+const { generateJwtToken } = await import('../services/authService.js');
 
 const bearer = (publicKey: string) => ({
   Authorization: `Bearer ${generateJwtToken(publicKey)}`,

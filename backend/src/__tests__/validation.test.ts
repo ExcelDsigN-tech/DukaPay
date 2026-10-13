@@ -1,7 +1,6 @@
 import request from 'supertest';
 import { jest } from '@jest/globals';
 import { Keypair, StrKey } from '@stellar/stellar-sdk';
-import { generateJwtToken } from '../services/authService.js';
 
 process.env.JWT_SECRET = 'test-jwt-secret-min-32-chars-long!!';
 
@@ -34,6 +33,7 @@ jest.unstable_mockModule('../services/cacheService.js', () => ({
 // Use dynamic imports to ensure mocks are applied
 await import('../db/connection.js');
 const { default: app } = await import('../app.js');
+const { generateJwtToken } = await import('../services/authService.js');
 
 const TEST_WALLET = Keypair.random().publicKey();
 const OTHER_WALLET = Keypair.random().publicKey();

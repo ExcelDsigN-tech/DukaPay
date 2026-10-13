@@ -14,9 +14,6 @@ import { cacheService } from '../services/cacheService.js';
 import { Keypair } from '@stellar/stellar-sdk';
 import crypto from 'crypto';
 
-// The auth routes open the Redis cache client; close it or Jest never exits.
-afterAll(() => cacheService.close());
-
 describe('Auth API', () => {
   beforeAll(() => {
     process.env.JWT_SECRET = 'test-secret-key-for-jest';
