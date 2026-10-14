@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
+import { describe, it, expect, beforeAll, afterAll, jest } from '@jest/globals';
 import { query } from '../db/connection.js';
+import { cacheService } from '../services/cacheService.js';
 import { updateUserScoresBulk } from '../services/scoresService.js';
 
 let __scoresService_dbAvailable = false;
@@ -117,5 +118,59 @@ describeIf_scoresService('Scores Service - bulk updates', () => {
     expect(Number(res.rows[0].score)).toBe(850);
 
     await query('DELETE FROM scores WHERE borrower = $1', [userD]);
+  });
+});
+
+describe('Scores Service - delta sign and clamp SQL semantics', () => {
+  it('builds INSERT and ON CONFLICT clauses that add +delta and clamp to [300, 850]', async () => {
+    const deleteSpy = jest.spyOn(cacheService, 'delete').mockResolvedValue(false);
+    const executedQueries: Array<{ sql: string; params: unknown[] }> = [];
+    const store = new Map<string, number>();
+
+    const mockClient = {
+      query: async (sql: string, params: unknown[] = []) => {
+        executedQueries.push({ sql, params });
+        for (let i = 0; i < params.length; i += 2) {
+          const borrower = String(params[i]);
+          const delta = Number(params[i + 1]);
+          const excludedScore = Math.min(850, Math.max(300, 500 + delta));
+          const existing = store.get(borrower);
+          if (existing === undefined) {
+            store.set(borrower, excludedScore);
+          } else {
+            store.set(borrower, Math.min(850, Math.max(300, existing + (excludedScore - 500))));
+          }
+        }
+        return { rows: [], rowCount: params.length / 2 };
+      },
+    } as unknown as Parameters<typeof updateUserScoresBulk>[1];
+
+    try {
+      await updateUserScoresBulk(
+        new Map([
+          ['G_USER_REPAID', 15],
+          ['G_USER_DEFAULTED', -50],
+          ['G_USER_FLOOR', -1000],
+        ]),
+        mockClient,
+      );
+
+      expect(executedQueries).toHaveLength(1);
+      expect(executedQueries[0]!.sql).toContain('LEAST(850, GREATEST(300, 500 + $2))');
+      expect(executedQueries[0]!.sql).not.toContain('500 - $');
+      expect(executedQueries[0]!.sql).toContain(
+        'LEAST(850, GREATEST(300, scores.score + (EXCLUDED.score - 500)))',
+      );
+
+      expect(store.get('G_USER_REPAID')).toBe(515);
+      expect(store.get('G_USER_DEFAULTED')).toBe(450);
+      expect(store.get('G_USER_FLOOR')).toBe(300);
+
+      // Subsequent update on existing user applies +delta and clamps to 850
+      await updateUserScoresBulk(new Map([['G_USER_REPAID', 1000]]), mockClient);
+      expect(store.get('G_USER_REPAID')).toBe(850);
+    } finally {
+      deleteSpy.mockRestore();
+    }
   });
 });
