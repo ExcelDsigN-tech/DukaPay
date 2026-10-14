@@ -105,5 +105,5 @@ body:
     attributes:
       value: |
         ---
-        📋 Before working on this issue, please read our [Contributing Guidelines](https://github.com/ExcelDsigN-tech/dukapay/blob/main/CONTRIBUTING.md). It covers branching, commits, PR standards, testing and style guides.
+        📋 Before working on this issue, please read our [Contributing Guidelines](https://github.com/ExcelDsigN-tech/dukapay/blob/main/CONTRIBUTING.md). It covers branching, commits, PR standards, testing and style guides. Comment on the issue and wait to be assigned before you start.
         All official decisions, reviews and coordination happen right here on GitHub.

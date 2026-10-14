@@ -66,7 +66,7 @@ git log --oneline -50
 
 ---
 
-📋 Before working on this issue, please read our [Contributing Guidelines]({CONTRIBUTING_URL}). It covers branching, commits, PR standards, testing and style guides.
+📋 Before working on this issue, please read our [Contributing Guidelines]({CONTRIBUTING_URL}). It covers branching, commits, PR standards, testing and style guides. Comment on the issue and wait to be assigned before you start.
 All official decisions, reviews and coordination happen right here on GitHub.
 
 ```
@@ -156,6 +156,6 @@ suite covering the lender role specifically.
 
 ---
 
-📋 Before working on this issue, please read our [Contributing Guidelines]({CONTRIBUTING_URL}). It covers branching, commits, PR standards, testing and style guides.
+📋 Before working on this issue, please read our [Contributing Guidelines]({CONTRIBUTING_URL}). It covers branching, commits, PR standards, testing and style guides. Comment on the issue and wait to be assigned before you start.
 All official decisions, reviews and coordination happen right here on GitHub.
 

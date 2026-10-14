@@ -8,6 +8,12 @@ For local setup, see [docs/wiki/onboarding.md](docs/wiki/onboarding.md).
 ## Before you start
 
 - Work from an open issue. Read its Definition of Done before writing code.
+- Comment on the issue and wait to be assigned before you start. PRs for
+  unassigned issues, or issues assigned to someone else, may be closed.
+- Small fixes (typos, broken links, small docs corrections) don't need an
+  issue. Open a PR directly.
+- For paid programs such as the Drip Wave, apply on the issue through the
+  program. Points go only to the assigned contributor.
 - Folders that move money or hold user data have their own `AGENTS.md` with
   stricter rules. Read it before editing there:
   `contracts/`, `backend/migrations/`, `backend/src/controllers/`,
