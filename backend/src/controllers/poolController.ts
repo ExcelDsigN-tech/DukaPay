@@ -27,16 +27,6 @@ const SHARE_PRICE_CACHE_TTL_SECONDS = 30;
 const ANNUAL_APY = 0.08; // 8% annual yield paid to depositors
 
 /**
- * Parse a database value to a finite number, returning `fallback` (default 0)
- * when the input is null, undefined, an empty string, or non-finite (NaN / Infinity).
- * Prevents silent NaN propagation when SQL aggregations return null for empty tables.
- */
-function safeFloat(value: unknown, fallback = 0): number {
-  const n = parseFloat(String(value ?? fallback));
-  return Number.isFinite(n) ? n : fallback;
-}
-
-/**
  * GET /api/pool/stats
  * Returns aggregate pool statistics for the lender dashboard.
  */
@@ -67,7 +57,8 @@ export const getPoolStats = asyncHandler(async (_req: Request, res: Response) =>
   // Indexed amounts are stroops; the API returns whole tokens.
   const totalDeposits = stroopsToAmount(depositResult.rows[0]?.total_deposits);
   const totalOutstanding = stroopsToAmount(loanResult.rows[0]?.total_outstanding);
-  const activeLoansCount = Math.trunc(safeFloat(loanResult.rows[0]?.active_loans_count));
+  const rawLoansCount = Number.parseInt(String(loanResult.rows[0]?.active_loans_count ?? 0), 10);
+  const activeLoansCount = Number.isFinite(rawLoansCount) ? rawLoansCount : 0;
 
   const utilizationRate = totalDeposits > 0 ? Math.min(totalOutstanding / totalDeposits, 1) : 0;
 
@@ -76,7 +67,7 @@ export const getPoolStats = asyncHandler(async (_req: Request, res: Response) =>
     data: {
       totalDeposits,
       totalOutstanding,
-      utilizationRate: parseFloat(utilizationRate.toFixed(4)),
+      utilizationRate: Number(utilizationRate.toFixed(4)),
       apy: ANNUAL_APY,
       activeLoansCount,
       poolTokenAddress: process.env.POOL_TOKEN_ADDRESS,
@@ -136,8 +127,8 @@ export const getDepositorPortfolio = asyncHandler(async (req: Request, res: Resp
     data: {
       address,
       depositAmount,
-      sharePercent: parseFloat(sharePercent.toFixed(6)),
-      estimatedYield: parseFloat(estimatedYield.toFixed(7)),
+      sharePercent: Number(sharePercent.toFixed(6)),
+      estimatedYield: stroopsToAmount(amountToStroops(estimatedYield)),
       apy: ANNUAL_APY,
       firstDepositAt,
       lastDepositAt,
@@ -498,8 +489,8 @@ export const getAgentDashboard = asyncHandler(async (req: Request, res: Response
   };
   const dashboardData = {
     agentAddress,
-    floatBalance: safeFloat(vault.float_balance),
-    collateralBalance: safeFloat(vault.collateral_balance),
+    floatBalance: stroopsToAmount(vault.float_balance),
+    collateralBalance: stroopsToAmount(vault.collateral_balance),
     isActive: Boolean(vault.is_active),
     activeLoans: parseInt(loansResult.rows[0]?.active_loans || '0', 10),
     updatedAt: new Date().toISOString(),

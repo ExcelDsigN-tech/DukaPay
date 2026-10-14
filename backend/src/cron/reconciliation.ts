@@ -3,7 +3,7 @@ import { query } from '../db/connection.js';
 import { sorobanService } from '../services/sorobanService.js';
 import { cacheService } from '../services/cacheService.js';
 import logger from '../utils/logger.js';
-import { STROOP_SCALE } from '../money/decimal.js';
+import { STROOP_SCALE, toWholeStroops } from '../money/decimal.js';
 
 export interface ReconciliationDiscrepancy {
   entityType: 'loan_balance' | 'float_balance' | 'collateral_ratio' | 'agent_status';
@@ -28,8 +28,25 @@ export interface ReconciliationRunResult {
 }
 
 // Balances compared below are on-chain stroops, so the $100 threshold is too.
-const DRIFT_ALERT_AMOUNT_THRESHOLD = 100 * Number(STROOP_SCALE);
-const DRIFT_ALERT_PERCENT_THRESHOLD = 0.01; // 1%
+const DRIFT_ALERT_AMOUNT_THRESHOLD_STROOPS = 100n * STROOP_SCALE;
+const BPS_SCALE = 10_000n;
+const DRIFT_ALERT_BPS_THRESHOLD = 100n; // 1% = 100 bps
+const DRIFT_MIN_STROOPS = 0n;
+
+function absBigInt(value: bigint): bigint {
+  return value < 0n ? -value : value;
+}
+
+function maxPositiveStroops(a: bigint, b: bigint): bigint {
+  const max = a > b ? a : b;
+  return max > 1n ? max : 1n;
+}
+
+function formatStroopValue(value: bigint): number | string {
+  return value <= BigInt(Number.MAX_SAFE_INTEGER) && value >= BigInt(Number.MIN_SAFE_INTEGER)
+    ? Number(value)
+    : value.toString();
+}
 
 /**
  * Ensures the reconciliation_logs table exists.
@@ -80,23 +97,23 @@ export async function runReconciliationPass(): Promise<ReconciliationRunResult> 
       try {
         const onChainLoan = await sorobanService.getLoanDetails(loanId);
         if (onChainLoan) {
-          const dbAmount = parseFloat(loan.amount || '0');
-          const onChainAmount = parseFloat(onChainLoan.amount || '0');
-          const diffAmount = Math.abs(dbAmount - onChainAmount);
-          const maxVal = Math.max(dbAmount, onChainAmount, 1);
-          const diffPercent = diffAmount / maxVal;
+          const dbStroops = toWholeStroops(loan.amount || '0');
+          const onChainStroops = toWholeStroops(onChainLoan.amount || '0');
+          const diffStroops = absBigInt(dbStroops - onChainStroops);
+          const maxStroops = maxPositiveStroops(dbStroops, onChainStroops);
+          const diffPercent = Number((diffStroops * BPS_SCALE) / maxStroops) / Number(BPS_SCALE);
 
-          if (diffAmount > 0.01) {
+          if (diffStroops > DRIFT_MIN_STROOPS) {
             const isMajor =
-              diffAmount > DRIFT_ALERT_AMOUNT_THRESHOLD ||
-              diffPercent > DRIFT_ALERT_PERCENT_THRESHOLD;
+              diffStroops > DRIFT_ALERT_AMOUNT_THRESHOLD_STROOPS ||
+              diffStroops * BPS_SCALE > maxStroops * DRIFT_ALERT_BPS_THRESHOLD;
             let autoCorrected = false;
 
             if (!isMajor) {
               // Auto-correct minor drift in DB
               await query(
                 `UPDATE loans SET amount = $1, updated_at = CURRENT_TIMESTAMP WHERE loan_id = $2`,
-                [onChainAmount, loanId],
+                [onChainStroops.toString(), loanId],
               );
               autoCorrected = true;
               autoCorrectedCount++;
@@ -105,9 +122,9 @@ export async function runReconciliationPass(): Promise<ReconciliationRunResult> 
             discrepancies.push({
               entityType: 'loan_balance',
               entityId: String(loanId),
-              onChainValue: onChainAmount,
-              dbValue: dbAmount,
-              diffAmount,
+              onChainValue: formatStroopValue(onChainStroops),
+              dbValue: formatStroopValue(dbStroops),
+              diffAmount: Number(diffStroops),
               diffPercent,
               isMajor,
               autoCorrected,
@@ -131,22 +148,23 @@ export async function runReconciliationPass(): Promise<ReconciliationRunResult> 
       try {
         const onChainVault = await sorobanService.getAgentVaultDetails(agentAddress);
         if (onChainVault) {
-          const dbFloat = parseFloat(agent.float_balance || '0');
-          const onChainFloat = parseFloat(onChainVault.floatBalance || '0');
-          const diffFloat = Math.abs(dbFloat - onChainFloat);
-          const maxFloat = Math.max(dbFloat, onChainFloat, 1);
-          const diffPercent = diffFloat / maxFloat;
+          const dbFloatStroops = toWholeStroops(agent.float_balance || '0');
+          const onChainFloatStroops = toWholeStroops(onChainVault.floatBalance || '0');
+          const diffFloatStroops = absBigInt(dbFloatStroops - onChainFloatStroops);
+          const maxFloatStroops = maxPositiveStroops(dbFloatStroops, onChainFloatStroops);
+          const diffPercent =
+            Number((diffFloatStroops * BPS_SCALE) / maxFloatStroops) / Number(BPS_SCALE);
 
-          if (diffFloat > 0.01) {
+          if (diffFloatStroops > DRIFT_MIN_STROOPS) {
             const isMajor =
-              diffFloat > DRIFT_ALERT_AMOUNT_THRESHOLD ||
-              diffPercent > DRIFT_ALERT_PERCENT_THRESHOLD;
+              diffFloatStroops > DRIFT_ALERT_AMOUNT_THRESHOLD_STROOPS ||
+              diffFloatStroops * BPS_SCALE > maxFloatStroops * DRIFT_ALERT_BPS_THRESHOLD;
             let autoCorrected = false;
 
             if (!isMajor) {
               await query(
                 `UPDATE agent_vaults SET float_balance = $1, updated_at = CURRENT_TIMESTAMP WHERE agent_address = $2`,
-                [onChainFloat, agentAddress],
+                [onChainFloatStroops.toString(), agentAddress],
               );
               await cacheService.delete(`agent:dashboard:${agentAddress}`);
               autoCorrected = true;
@@ -156,9 +174,9 @@ export async function runReconciliationPass(): Promise<ReconciliationRunResult> 
             discrepancies.push({
               entityType: 'float_balance',
               entityId: agentAddress,
-              onChainValue: onChainFloat,
-              dbValue: dbFloat,
-              diffAmount: diffFloat,
+              onChainValue: formatStroopValue(onChainFloatStroops),
+              dbValue: formatStroopValue(dbFloatStroops),
+              diffAmount: Number(diffFloatStroops),
               diffPercent,
               isMajor,
               autoCorrected,

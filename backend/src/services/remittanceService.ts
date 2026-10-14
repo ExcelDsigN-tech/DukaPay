@@ -11,6 +11,7 @@ import { query } from '../db/connection.js';
 import { withTransaction } from '../db/transaction.js';
 import { AppError } from '../errors/AppError.js';
 import logger from '../utils/logger.js';
+import { fromStroops, toStroops } from '../money/decimal.js';
 import { complianceService } from './complianceService.js';
 import { toRemittance } from './remittanceMapper.js';
 
@@ -170,7 +171,7 @@ export const remittanceService = {
           id: record.id,
           senderId: record.sender_id,
           recipientAddress: record.recipient_address,
-          amount: parseFloat(record.amount),
+          amount: Number(fromStroops(toStroops(String(record.amount)))),
           fromCurrency: record.from_currency,
           toCurrency: record.to_currency,
           memo: record.memo,

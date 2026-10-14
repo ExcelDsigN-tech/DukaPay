@@ -77,4 +77,73 @@ describe('State Synchronization & Automated Reconciliation', () => {
     expect(result.discrepancies[0].isMajor).toBe(true);
     expect(result.discrepancies[0].autoCorrected).toBe(false);
   });
+
+  it('detects 1-stroop drift above 2^53 stroops without IEEE 754 float precision loss', async () => {
+    // 2^53 + 1 = 9007199254740993 and 2^53 = 9007199254740992 collapse to the same
+    // IEEE 754 double under parseFloat(), but differ by 1 stroop in BigInt math.
+    mockQuery
+      .mockResolvedValueOnce({ rows: [] } as never) // ensure table
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            loan_id: '42',
+            borrower: 'GBORROWER',
+            amount: '9007199254740992',
+            status: 'active',
+          },
+        ],
+      } as never)
+      .mockResolvedValueOnce({ rows: [] } as never) // agents
+      .mockResolvedValue({ rows: [] } as never); // update/insert log
+
+    mockGetLoanDetails.mockResolvedValue({
+      amount: '9007199254740993',
+    } as never);
+
+    const result = await runReconciliationPass();
+    expect(result.discrepanciesCount).toBe(1);
+    expect(result.discrepancies[0].diffAmount).toBe(1);
+    expect(result.discrepancies[0].onChainValue).toBe('9007199254740993');
+    expect(result.discrepancies[0].dbValue).toBe('9007199254740992');
+    expect(result.discrepancies[0].autoCorrected).toBe(true);
+  });
+
+  it('reports zero discrepancies when values above 2^53 stroops match exactly', async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [] } as never)
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            loan_id: '43',
+            borrower: 'GBORROWER',
+            amount: '9007199254740993',
+            status: 'active',
+          },
+        ],
+      } as never)
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            agent_address: 'GAGENT',
+            float_balance: '9007199254740993',
+            collateral_balance: '9007199254740993',
+            is_active: true,
+          },
+        ],
+      } as never)
+      .mockResolvedValue({ rows: [] } as never);
+
+    mockGetLoanDetails.mockResolvedValue({
+      amount: '9007199254740993',
+    } as never);
+    mockGetAgentVaultDetails.mockResolvedValue({
+      floatBalance: '9007199254740993',
+      isActive: true,
+    } as never);
+
+    const result = await runReconciliationPass();
+    expect(result.status).toBe('SUCCESS');
+    expect(result.discrepanciesCount).toBe(0);
+    expect(result.majorAlertsCount).toBe(0);
+  });
 });
