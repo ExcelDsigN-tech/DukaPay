@@ -32,14 +32,14 @@ The MVP is done when all of these hold on Stellar testnet:
 - [ ] The backend indexes the agent contracts and the `agent_vaults` table exists (#774)
 - [ ] An agent can register and be activated from the app (step 1, #775)
 - [ ] An agent can manage collateral and do cash-in / cash-out from the app (step 2, #776)
-- [ ] A remittance is credited to a recipient as agent e-money and redeemed for cash (step 3, issue not written yet)
+- [ ] A remittance is credited to a recipient as agent e-money and redeemed for cash (step 3, #778)
 - [ ] An agent can borrow from the pool and repay (step 4)
 - [ ] Repayment and default move the score in the right direction, including after a reorg (#746, #770)
 - [ ] The app shows the solvency check for any agent, read-only (step 6, #777)
 - [ ] Money values stay exact end to end (#748, #767, #727)
 - [ ] The full loop runs as one Playwright e2e test in CI
 
-Step 3 still needs an issue; see the remittance decision below.
+Every step now has an issue.
 
 ## Not in the MVP
 
@@ -64,17 +64,18 @@ recipient's wallet. The receiving agent's float rises when the money arrives
 (`mint_float`) and falls when the recipient redeems it (`burn_float`), so the
 solvency rule covers money waiting to be collected.
 
-Still open for step 3:
+For the MVP (#778):
 
-- **Where the recipient's balance is recorded.** The vault only stores each
-  agent's total float, not who it is owed to. Either an off-chain ledger in the
-  backend (custodial, no contract change) or per-customer balances on-chain (a
-  contract change inside the audit scope).
-- **Who signs the mint.** `mint_float` is operator-only today, so every
-  remittance would need the operator key, unless receiving agents are allowed
-  to mint against their own collateral.
-- **Routing.** How the receiving agent is chosen, and what happens when no
-  nearby agent has enough collateral headroom.
+- **Recipient balances** are kept in an off-chain ledger in the backend. The
+  vault only stores each agent's total float, not who it is owed to.
+  Per-customer balances on-chain come later, inside the audit scope.
+- **The mint is signed by the operator key** on the server. Letting receiving
+  agents mint against their own collateral comes later.
+- **Routing** picks an active agent in the recipient's region with enough
+  collateral headroom, or rejects the remittance before the sender pays.
+
+Still open:
+
 - **Licensing.** Issuing e-money that people hold is regulated in the target
   markets. Check before mainnet.
 
