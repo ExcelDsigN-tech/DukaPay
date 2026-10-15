@@ -321,7 +321,7 @@ export function WalletProvider({ children }: WalletProviderProps) {
           }
         }
 
-        // Clear Cache Storage (all caches) — especially PWA cached responses
+        // Clear Cache Storage (all caches), especially PWA cached responses
         if (typeof caches !== "undefined") {
           try {
             const cacheKeys = await caches.keys();

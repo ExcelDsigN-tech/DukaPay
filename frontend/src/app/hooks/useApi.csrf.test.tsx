@@ -23,7 +23,7 @@ function createWrapper() {
 }
 
 function clearCsrfCookie() {
-  // Assigning "" is a no-op in jsdom (as in real browsers) — deleting a
+  // Assigning "" is a no-op in jsdom (as in real browsers); deleting a
   // cookie requires expiring it explicitly, otherwise it leaks into
   // subsequent tests.
   document.cookie = `${CSRF_COOKIE_NAME}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;

@@ -273,7 +273,7 @@ export function useTransaction(id: string) {
     isSubmitted: transaction?.status === "submitted",
     isConfirming: transaction?.status === "confirming",
     isSuccess: transaction?.status === "confirmed",
-    /** Queued offline and waiting for background sync — not yet paid. */
+    /** Queued offline and waiting for background sync, not yet paid. */
     isQueued: transaction?.status === "queued",
     isError: transaction?.status === "failed",
   };

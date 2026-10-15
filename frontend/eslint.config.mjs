@@ -9,7 +9,7 @@ export default defineConfig([
   noHardcodedStrings,
   {
     rules: {
-      // React Compiler optimization hints — not correctness bugs.
+      // React Compiler optimization hints, not correctness bugs.
       "react-hooks/preserve-manual-memoization": "warn",
       "react-hooks/purity": "warn",
       "react-hooks/static-components": "warn",

@@ -1732,12 +1732,12 @@ export function useResolveAdminDispute() {
 // ─── Optimistic mutations ─────────────────────────────────────────────────────
 
 /**
- * Builds an unsigned deposit transaction XDR. Does NOT deposit — it only calls
+ * Builds an unsigned deposit transaction XDR. Does NOT deposit; it only calls
  * `/pool/build-deposit` and returns `{ unsignedTxXdr, networkPassphrase }`.
  *
  * Callers must pair this with `signTransaction` + `submitPoolTransaction` to
  * complete the deposit (see `useDepositOperation` in useRepaymentOperation.ts).
- * The optimistic UI update fires on build success, not on-chain confirmation —
+ * The optimistic UI update fires on build success, not on-chain confirmation;
  * treat it as a UX hint only and always confirm via `onSettled` refetch.
  */
 export function useDepositToPool() {
@@ -1806,12 +1806,12 @@ export function useDepositToPool() {
 }
 
 /**
- * Builds an unsigned withdrawal transaction XDR. Does NOT withdraw — it only calls
+ * Builds an unsigned withdrawal transaction XDR. Does NOT withdraw; it only calls
  * `/pool/build-withdraw` and returns `{ unsignedTxXdr, networkPassphrase }`.
  *
  * Callers must pair this with `signTransaction` + `submitPoolTransaction` to
  * complete the withdrawal (see `useWithdrawalOperation` in useRepaymentOperation.ts).
- * The optimistic UI update fires on build success, not on-chain confirmation —
+ * The optimistic UI update fires on build success, not on-chain confirmation;
  * treat it as a UX hint only and always confirm via `onSettled` refetch.
  */
 export function useWithdrawFromPool() {

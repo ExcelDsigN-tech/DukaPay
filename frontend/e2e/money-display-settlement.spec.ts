@@ -1,11 +1,11 @@
 // e2e coverage: the "Pay Full Amount" button must fill in the
-// exact same amount the UI displays as "Total Owed" — no half-up vs
+// exact same amount the UI displays as "Total Owed", with no half-up vs
 // half-even mismatch, and no residual dust left after a full repayment.
 //
 // Built on the same wallet/loan mocking harness as
 // `e2e/borrower-repay-flow.spec.ts`. That file carries a note that its
 // mocks (wallet-connect state, /api/* paths, Zustand hydration) have
-// drifted from the current app and is itself `.skip`'d for that reason —
+// drifted from the current app and is itself `.skip`'d for that reason;
 // running this spec against the same harness hits the identical drift (the
 // mocked "Repay" entry point never renders), independent of anything in
 // this money-policy change. It is skipped here for the same reason and with
@@ -18,7 +18,7 @@ const MOCK_BORROWER_ADDRESS = "GCJPBXSE6WCQDCEYZW6C3YVZCSSCHC4AE72L5KWKCYL2CLLL7
 const MOCK_LOAN_ID = 77;
 
 // 500.125 has a fractional cent that a half-up `.toFixed(2)` display would
-// round differently (500.13) than a half-even settlement (500.12) —
+// round differently (500.13) than a half-even settlement (500.12);
 // this is the exact drift described for the frontend layer.
 const TOTAL_OWED = 500.125;
 
@@ -115,8 +115,8 @@ test.describe.skip("Money display/settlement agreement", () => {
     const inputValue = await page.locator('input[type="number"]').inputValue();
 
     // The prefilled amount must not exceed the displayed total (no
-    // "amount cannot exceed total owed" validation error), and — the actual
-    // money-policy invariant — must equal it to display precision rather
+    // "amount cannot exceed total owed" validation error), and (the actual
+    // money-policy invariant) must equal it to display precision rather
     // than a half-up-rounded neighbor.
     expect(displayedTotalOwedText).toBeTruthy();
     const displayedNumeric = Number((displayedTotalOwedText ?? "").replace(/[^0-9.]/g, ""));

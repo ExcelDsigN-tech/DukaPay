@@ -49,7 +49,7 @@ export function useLogout() {
             headers,
           });
         } catch {
-          // Ignore network/CSRF failures — local state is cleared regardless.
+          // Ignore network/CSRF failures; local state is cleared regardless.
         }
       })();
 

@@ -38,7 +38,7 @@ async function main() {
   try {
     files = await walk(BUILD_DIR);
   } catch (err) {
-    console.error(`bundle check: build output not found at ${BUILD_DIR} — run npm run build first`);
+    console.error(`bundle check: build output not found at ${BUILD_DIR}; run npm run build first`);
     process.exit(1);
   }
   if (files.length === 0) {

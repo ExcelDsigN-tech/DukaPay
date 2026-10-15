@@ -283,8 +283,8 @@ export default function RepayLoanPage() {
 // ─── Wallet connection indicator ──────────────────────────────────────────────
 
 /**
- * Shows which wallet the repayment will be signed with, or — when nothing is
- * connected yet — a `Connect Wallet` CTA so the user can fix the blocker inline
+ * Shows which wallet the repayment will be signed with, or (when nothing is
+ * connected yet) a `Connect Wallet` CTA so the user can fix the blocker inline
  * instead of only discovering it after pressing submit.
  */
 function WalletConnectionIndicator({

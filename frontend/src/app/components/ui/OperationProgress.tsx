@@ -37,7 +37,7 @@ const statusIcons: Record<TransactionStatus, React.ReactNode> = {
   confirming: <Loader aria-hidden="true" className="h-5 w-5 animate-spin text-indigo-500" />,
   confirmed: <CheckCircle2 aria-hidden="true" className="h-5 w-5 text-green-500" />,
   // Queued offline: the clock reads as "waiting", not "done", and must not
-  // spin — nothing is in flight until the service worker replays it.
+  // spin: nothing is in flight until the service worker replays it.
   queued: <Clock aria-hidden="true" className="h-5 w-5 text-amber-500" />,
   failed: <AlertCircle aria-hidden="true" className="h-5 w-5 text-red-500" />,
 };
@@ -60,7 +60,7 @@ export function OperationProgress({ transaction, type = "generic" }: OperationPr
   };
 
   // Only show progress bar for non-terminal states. "queued" is terminal for
-  // this UI — the replay happens in the background with its own feedback.
+  // this UI; the replay happens in the background with its own feedback.
   const showProgress =
     status !== "confirmed" && status !== "queued" && status !== "failed" && status !== "idle";
 

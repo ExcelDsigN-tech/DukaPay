@@ -15,8 +15,8 @@ export type ConnectWalletButtonProps = Omit<
 /**
  * Shared "Connect Wallet" CTA.
  *
- * The connect action lives in `WalletProvider` — the only place that talks to
- * Freighter — so the resulting state flows back into `useWalletStore` and the
+ * The connect action lives in `WalletProvider` (the only place that talks to
+ * Freighter), so the resulting state flows back into `useWalletStore` and the
  * calling page re-renders. Surrounding copy stays with the page, but the
  * button's own accessible name is always `Connect Wallet`, which E2E tests
  * locate it by.

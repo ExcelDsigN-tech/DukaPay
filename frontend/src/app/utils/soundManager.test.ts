@@ -1,5 +1,5 @@
 /**
- * #1523 — soundManagerCore.ts (the actual SoundManager class, including its
+ * #1523: soundManagerCore.ts (the actual SoundManager class, including its
  * eager Audio-element setup) must only be dynamically imported after a real
  * sound trigger, not merely because a component called useSoundEffect().
  */

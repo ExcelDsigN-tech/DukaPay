@@ -27,7 +27,7 @@ export function QueryProvider({ children }: QueryProviderProps) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            // Data is considered fresh for 60 seconds — avoids unnecessary refetches
+            // Data is considered fresh for 60 seconds; avoids unnecessary refetches
             staleTime: 60 * 1000,
             // Retry failed requests (but don't spin when offline)
             retry: (failureCount) => {

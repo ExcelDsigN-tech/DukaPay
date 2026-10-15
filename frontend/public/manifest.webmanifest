@@ -1,7 +1,7 @@
 {
   "name": "DukaPay",
   "short_name": "DukaPay",
-  "description": "Decentralized lending for migrant workers — remittance-based credit scoring",
+  "description": "Decentralized lending for migrant workers, with remittance-based credit scoring",
   "start_url": "/en",
   "display": "standalone",
   "background_color": "#ffffff",

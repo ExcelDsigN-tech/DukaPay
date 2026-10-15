@@ -7,7 +7,7 @@
  * without spinning up a full Next.js server.
  */
 
-// The `headers` function is async — we resolve it synchronously in tests.
+// The `headers` function is async; we resolve it synchronously in tests.
 // We test the *shape* of the config, not the HTTP response, which keeps the
 // suite fast and free of server dependencies.
 
@@ -23,7 +23,7 @@ const REQUIRED_KEYS = [
 ] as const;
 
 // Inline the header definitions so the test remains independent of the build
-// pipeline — we want to assert the *values* we intend to ship.
+// pipeline; we want to assert the *values* we intend to ship.
 const EXPECTED_HEADERS: Record<string, string> = {
   "Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload",
   "Cross-Origin-Opener-Policy": "same-origin",
@@ -44,7 +44,7 @@ describe("next.config.ts security headers (#535)", () => {
     process.env.NODE_ENV = "production";
 
     // We cannot easily import the exported-default (wrapped) config, so we
-    // replicate the logic under test directly here — this keeps the test
+    // replicate the logic under test directly here; this keeps the test
     // deterministic and avoids ESM interop issues with next-intl / Sentry.
     const apiUrl = "http://localhost:3001";
     const isDev = false;

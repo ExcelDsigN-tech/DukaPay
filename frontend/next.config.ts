@@ -16,7 +16,7 @@ const withSerwist = withSerwistInit({
 // (Now handled in middleware.ts for nonce-based CSP)
 
 // Next.js dev mode (webpack and Turbopack alike) executes hot-reloaded
-// module chunks via eval() — without 'unsafe-eval' the dev bundle can't run
+// module chunks via eval(); without 'unsafe-eval' the dev bundle can't run
 // at all, so nothing hydrates. Production builds don't need it.
 // (Now handled in middleware.ts)
 

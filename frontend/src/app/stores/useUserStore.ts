@@ -49,7 +49,7 @@ interface UserState {
 interface UserActions {
   /** Call this after a successful login or session hydration */
   setUser: (user: User) => void;
-  /** Call this on logout or session expiry — clears all user data */
+  /** Call this on logout or session expiry; clears all user data */
   clearUser: () => void;
   /** Call this to update individual fields (e.g. after KYC verification) */
   updateUser: (partial: Partial<User>) => void;
@@ -109,7 +109,7 @@ export const useUserStore = create<UserStore>()(
       }),
       {
         name: "dukapay-user",
-        // Only persist the user object — never the JWT (it lives in an
+        // Only persist the user object, never the JWT (it lives in an
         // httpOnly cookie) and not transient loading/error state.
         partialize: (state) => ({
           user: state.user,

@@ -22,7 +22,7 @@ const TERM_OPTIONS = [
 ];
 
 const ASSETS = [
-  { value: "USDC", label: "USDC", description: "USD Coin — Stellar Testnet" },
+  { value: "USDC", label: "USDC", description: "USD Coin on Stellar Testnet" },
 ] as const;
 
 function getScoreBandLabel(score: number): string {

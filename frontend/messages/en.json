@@ -48,7 +48,7 @@
       "connectButton": "Connect Wallet"
     },
     "reminder": {
-      "due": "Repayment due in {hours}h — Loan #{loanId}",
+      "due": "Repayment due in {hours}h (Loan #{loanId})",
       "repayNow": "Repay now",
       "dismiss": "Dismiss repayment reminder",
       "more": "+{count} more",

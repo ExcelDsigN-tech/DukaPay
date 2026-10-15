@@ -20,7 +20,7 @@ describe("formatCurrency (#536)", () => {
   it("formats correctly for es locale", () => {
     const result = formatCurrency(1234.5, "es");
     // Spanish uses period as thousands separator, comma as decimal in most
-    // es variants — the key assertion is that the numeric value is present.
+    // es variants: the key assertion is that the numeric value is present.
     expect(result).toMatch(/1[\s.,]?234/);
     // Should contain USD currency indicator
     expect(result).toMatch(/US\$|USD|\$/);
@@ -32,7 +32,7 @@ describe("formatCurrency (#536)", () => {
   });
 
   it("falls back to en-US for an unsupported locale tag", () => {
-    // Should not throw — resolveLocale catches invalid tags
+    // Should not throw; resolveLocale catches invalid tags
     expect(() => formatCurrency(100, "zz-INVALID")).not.toThrow();
     const fallback = formatCurrency(100, "zz-INVALID");
     const enUS = formatCurrency(100, "en-US");

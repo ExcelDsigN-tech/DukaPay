@@ -11,9 +11,9 @@ import { LoanStatusBadge } from "../ui/LoanStatusBadge";
 export interface LoanCardProps {
   loan: BorrowerLoan;
   /**
-   * compact — raw status badge, no progress bar, responsive grid.
+   * compact: raw status badge, no progress bar, responsive grid.
    *           Used by LoanDashboard.
-   * detailed — urgency badge, repayment progress bar, fixed 3-col grid.
+   * detailed: urgency badge, repayment progress bar, fixed 3-col grid.
    *            Used by ActiveLoansTracker.
    */
   variant?: "compact" | "detailed";

@@ -42,7 +42,7 @@ const FILTER_IDS = [
   "filter-max-amount",
 ] as const;
 
-describe("Remittances page — filter input accessibility (#537)", () => {
+describe("Remittances page: filter input accessibility (#537)", () => {
   let Page: React.ComponentType;
 
   beforeAll(async () => {
