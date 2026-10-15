@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Sora } from "next/font/google";
+import localFont from "next/font/local";
 import "./[locale]/globals.css";
 import { QueryProvider } from "./components/providers/QueryProvider";
 import { WalletProvider } from "./components/providers/WalletProvider";
@@ -15,20 +15,24 @@ import { THEME_STORAGE_KEY } from "./lib/theme";
 import { headers } from "next/headers";
 import { getSiteUrl } from "./lib/metadata";
 
-const geistSans = Geist({
+// Self-hosted (latin subset) so builds don't depend on fonts.googleapis.com.
+// Licences: src/app/fonts/OFL-*.txt
+const geistSans = localFont({
+  src: "./fonts/Geist-Variable.woff2",
   variable: "--font-geist-sans",
-  subsets: ["latin"],
+  weight: "100 900",
 });
 
-const geistMono = Geist_Mono({
+const geistMono = localFont({
+  src: "./fonts/GeistMono-Variable.woff2",
   variable: "--font-geist-mono",
-  subsets: ["latin"],
+  weight: "100 900",
 });
 
-const sora = Sora({
+const sora = localFont({
+  src: "./fonts/Sora-Variable.woff2",
   variable: "--font-sora",
-  subsets: ["latin"],
-  weight: ["600", "700"],
+  weight: "600 700",
 });
 
 export const metadata: Metadata = {
