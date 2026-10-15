@@ -50,7 +50,7 @@ describe('requireLoanOwner (#1365 IDOR)', () => {
     expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining('loan_events'), ['loan-1']);
   });
 
-  it('rejects a different caller with 403 — compares loan owner to caller, not caller to itself', async () => {
+  it('rejects a different caller with 403: compares loan owner to caller, not caller to itself', async () => {
     mockQuery.mockResolvedValueOnce({ rows: [{ address: OWNER_PK }] });
 
     const { error } = await runRequireLoanOwner({

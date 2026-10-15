@@ -1,5 +1,5 @@
 /**
- * Regression tests for issue #641 — SSRF guard at dispatch time.
+ * Regression tests for issue #641: SSRF guard at dispatch time.
  *
  * Verifies that postWebhook (called from sendToWebhook / retryWebhookDelivery)
  * re-validates the resolved IP on every dispatch, not just the hostname at

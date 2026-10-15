@@ -1,5 +1,5 @@
 /**
- * #670 — `validateSignedXdr` rejects envelopes that do not pay the
+ * #670: `validateSignedXdr` rejects envelopes that do not pay the
  * remittance's recipient the exact amount and asset from the sender.
  */
 import { jest } from '@jest/globals';

@@ -71,7 +71,7 @@ async function assertCallbackUrlSafe(callbackUrl: string): Promise<void> {
     throw new Error('Invalid webhook callback URL');
   }
 
-  // Skip resolution for IP literals — validate directly.
+  // Skip resolution for IP literals; validate directly.
   const bare = hostname.replace(/^\[|\]$/g, '');
   if (net.isIP(bare) !== 0) {
     if (isPrivateIp(bare)) {
@@ -104,10 +104,10 @@ async function assertCallbackUrlSafe(callbackUrl: string): Promise<void> {
   }
 }
 
-// #1520 — this array is the single source of truth for which event types
+// #1520: this array is the single source of truth for which event types
 // external webhook subscribers can register for. docs/webhooks.md's
 // "Supported Event Types" section is a human-readable mirror of this list
-// (kept manually in sync) — update both together whenever an entry is
+// (kept manually in sync); update both together whenever an entry is
 // added, removed, or renamed here.
 export const SUPPORTED_WEBHOOK_EVENT_TYPES = [
   'LoanRequested',
@@ -475,7 +475,7 @@ async function postWebhook(
   nonce: string,
 ): Promise<Response> {
   // Re-validate the resolved IP at dispatch time to close the DNS-rebinding
-  // window (registration-time hostname check alone is insufficient — see #641).
+  // window (registration-time hostname check alone is insufficient; see #641).
   // ponytail: the checked IP isn't pinned, so a DNS answer that changes
   // between this lookup and fetch() still gets through. Pin it with an undici
   // Agent `connect.lookup` if webhook registration ever opens beyond admins.

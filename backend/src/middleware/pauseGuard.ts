@@ -9,12 +9,12 @@ import { pauseGuardFallbackTotal, pauseGuardSource } from '../metrics/index.js';
 /**
  * Where the guard's current answer came from.
  *
- * - `database`    — read from (or just written to) the `pause_state` table. Authoritative.
- * - `cache`       — the database was unreachable; the last state mirrored to Redis was used.
- * - `memory`      — the database and Redis were unreachable; the last state this process
+ * - `database`:    read from (or just written to) the `pause_state` table. Authoritative.
+ * - `cache`:       the database was unreachable; the last state mirrored to Redis was used.
+ * - `memory`:      the database and Redis were unreachable; the last state this process
  *                   knew about is being kept.
- * - `fail-closed` — a load failed and no earlier state is known; writes are blocked.
- * - `unloaded`    — no load has been attempted yet (only before `initializePauseState`).
+ * - `fail-closed`: a load failed and no earlier state is known; writes are blocked.
+ * - `unloaded`:    no load has been attempted yet (only before `initializePauseState`).
  */
 export type PauseStateSource = 'database' | 'cache' | 'memory' | 'fail-closed' | 'unloaded';
 

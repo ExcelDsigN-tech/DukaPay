@@ -448,7 +448,7 @@ export const buildRepaymentPreviewSchedule = (
 
 /**
  * GET /api/loans/:id/repayment-preview
- * Returns exact repayment schedule before committing — amortization table with
+ * Returns exact repayment schedule before committing: amortization table with
  * principal, interest, fees, remaining balance per period.
  */
 export const getLoanRepaymentPreview = asyncHandler(async (req: Request, res: Response) => {

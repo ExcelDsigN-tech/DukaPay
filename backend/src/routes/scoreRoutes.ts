@@ -264,7 +264,7 @@ router.get(
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  *       401:
- *         description: Unauthorised — missing or invalid API key.
+ *         description: Unauthorised (missing or invalid API key).
  *         content:
  *           application/json:
  *             schema:

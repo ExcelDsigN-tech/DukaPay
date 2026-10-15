@@ -138,7 +138,7 @@ export const getRemittanceHistorySchema = z.object({
   }),
 });
 
-// Schema for POST /simulate — userId is derived from the JWT, not the request body
+// Schema for POST /simulate: userId is derived from the JWT, not the request body
 export const simulatePaymentSchema = z.object({
   body: z.object({
     amount: z
@@ -148,7 +148,7 @@ export const simulatePaymentSchema = z.object({
   }),
 });
 
-// Schema for POST /simulate/transaction — pre-execution validation
+// Schema for POST /simulate/transaction: pre-execution validation
 export const simulateTransactionSchema = z.object({
   body: z.object({
     contractId: z

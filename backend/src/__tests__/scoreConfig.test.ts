@@ -1,5 +1,5 @@
 /**
- * Tests for issue #469 — score deltas sourced from config, not hardcoded.
+ * Tests for issue #469: score deltas sourced from config, not hardcoded.
  */
 import { jest } from '@jest/globals';
 
@@ -78,7 +78,7 @@ jest.unstable_mockModule('../services/notificationService.js', () => ({
   },
 }));
 
-// ── SorobanService.getScoreConfig — tests the env-var reading logic ───────
+// ── SorobanService.getScoreConfig: tests the env-var reading logic ───────
 describe('SorobanService.getScoreConfig()', () => {
   afterEach(() => {
     delete process.env.SCORE_REPAYMENT_DELTA;
@@ -135,7 +135,7 @@ describe('EventIndexer score delta wiring', () => {
       contractId: 'CTEST',
     });
 
-    // Bypass XDR parsing — return the event as-is so storeEvents can process it
+    // Bypass XDR parsing; return the event as-is so storeEvents can process it
     (indexer as unknown as { parseEvent: (e: unknown) => unknown }).parseEvent = jest
       .fn()
       .mockImplementation((e: unknown) => e);

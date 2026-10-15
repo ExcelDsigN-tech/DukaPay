@@ -59,7 +59,7 @@ describe('JWT revocation and role-change propagation', () => {
     const wallet = Keypair.random().publicKey();
     process.env.ADMIN_WALLETS = wallet;
 
-    // Minted while the wallet was an admin — embeds scopes: ["admin:all"].
+    // Minted while the wallet was an admin; embeds scopes: ["admin:all"].
     const token = generateJwtToken(wallet);
     const app = buildApp();
 

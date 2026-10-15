@@ -48,14 +48,14 @@ describe('Request ID middleware', () => {
     infoSpy.mockRestore();
   });
 
-  // #1522 — the tests above only assert shape/presence/propagation for a
+  // #1522: the tests above only assert shape/presence/propagation for a
   // single request; none of them prove IDs stay unique when many requests
   // are actually in flight concurrently (the scenario createRequestId is
   // used for in practice, under real traffic).
   it('generates a unique x-request-id for every request in a concurrent burst', async () => {
     const BURST_SIZE = 200;
 
-    // Burst against a minimal app mounting only the middleware under test —
+    // Burst against a minimal app mounting only the middleware under test;
     // going through the full app would trip the global rate limiter
     // (100 req/15 min) long before exercising ID uniqueness.
     const burstApp = express();
@@ -80,7 +80,7 @@ describe('Request ID middleware', () => {
   it('never reuses an ID across overlapping request-scoped async contexts', async () => {
     // Fires requests through a route that awaits inside the handler, so
     // multiple requests' async-context work is genuinely interleaved on
-    // the event loop rather than trivially serialized — a stronger check
+    // the event loop rather than trivially serialized, a stronger check
     // than a burst of already-synchronous responses.
     const tempApp = express();
     tempApp.use(requestIdMiddleware);

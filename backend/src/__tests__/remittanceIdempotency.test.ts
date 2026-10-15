@@ -117,7 +117,7 @@ describe('POST /api/remittances idempotency', () => {
     expect(second.headers['x-idempotent-replayed']).toBe('true');
     expect(second.body).toEqual(first.body);
 
-    // The underlying service — and therefore the DB insert — only ran once.
+    // The underlying service (and therefore the DB insert) only ran once.
     expect(mockCreateRemittance).toHaveBeenCalledTimes(1);
   });
 

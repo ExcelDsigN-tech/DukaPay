@@ -108,7 +108,7 @@ function makeRawLoanApprvEvent(id = 'apprv-001'): Record<string, unknown> {
     pagingToken: id,
     topic: [
       makeSym('LoanApprv'),
-      // admin address — _val makes scValToNative return a string
+      // admin address; _val makes scValToNative return a string
       {
         _val: 'GADMIN123',
         sym: () => {
@@ -403,7 +403,7 @@ describe('EventIndexer – transaction atomicity via ingestRawEvents', () => {
     expect([...updates.entries()]).toEqual([['addr', 10]]);
   });
 
-  it('score update failure propagates — the whole operation throws', async () => {
+  it('score update failure propagates: the whole operation throws', async () => {
     const mockClient: MockClient = {
       query: jest.fn().mockResolvedValue({
         rowCount: 1,
@@ -487,7 +487,7 @@ describe('EventIndexer – transaction atomicity via ingestRawEvents', () => {
     expect(updates.get('addr')).toBe(20);
   });
 
-  it("withTransaction is called — not the legacy query('BEGIN') approach", async () => {
+  it("withTransaction is called, not the legacy query('BEGIN') approach", async () => {
     const mockQuery = (await import('../../db/connection.js')).query as jest.Mock;
 
     const mockClient: MockClient = {

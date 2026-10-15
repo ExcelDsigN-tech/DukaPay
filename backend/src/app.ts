@@ -165,8 +165,8 @@ app.get('/', (_req: Request, res: Response) => {
  * backend version deployed can be determined without shelling into the container.
  *
  * Environment variables (injected at Docker build time via ARG/ENV):
- *   GIT_SHA    — full git commit SHA of the build (falls back to "unknown")
- *   BUILD_TIME — ISO-8601 UTC timestamp of the build (falls back to "unknown")
+ *   GIT_SHA     full git commit SHA of the build (falls back to "unknown")
+ *   BUILD_TIME  ISO-8601 UTC timestamp of the build (falls back to "unknown")
  */
 app.get('/version', (_req: Request, res: Response) => {
   res.json({

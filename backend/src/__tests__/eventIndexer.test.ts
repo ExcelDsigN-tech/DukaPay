@@ -665,7 +665,7 @@ describe('EventIndexer', () => {
           // updateLastIndexedLedger fallback: VALUES ($1, $2, $2)
           stateWrites.push(Number(params[1] ?? 0));
         } else {
-          // getLastIndexedLedger initial insert: VALUES ($1, 0, 0) — extract the hardcoded 0
+          // getLastIndexedLedger initial insert: VALUES ($1, 0, 0); extract the hardcoded 0
           const match = sql.match(/VALUES\s*\(\s*\$\d+\s*,\s*(\d+)/);
           stateWrites.push(match ? Number(match[1]) : 0);
         }

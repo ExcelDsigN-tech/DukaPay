@@ -156,7 +156,7 @@ describe('CSRF Protection Middleware', () => {
   it('end-to-end: fetch CSRF token via header then use it to complete a mutating request', async () => {
     const app = createTestApp();
 
-    // Step 1: GET the CSRF endpoint — server sets httpOnly cookie and exposes token in header
+    // Step 1: GET the CSRF endpoint; server sets httpOnly cookie and exposes token in header
     const getResp = await request(app).get('/api/auth/csrf').expect(200);
 
     const setCookieHeader: string[] = getResp.headers['set-cookie'] as string[];

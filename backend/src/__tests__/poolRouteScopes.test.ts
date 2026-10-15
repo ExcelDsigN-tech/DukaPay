@@ -159,7 +159,7 @@ describe('Pool write route authorization', () => {
           .send(route.body);
 
         // borrower also fails requireLender (role check) before even reaching
-        // requireScopes — expect 403 either way
+        // requireScopes: expect 403 either way
         expect(res.status).toBe(403);
       });
     }
@@ -181,7 +181,7 @@ describe('Pool write route authorization', () => {
         .get('/api/pool/stats')
         .set('Authorization', `Bearer ${lenderToken}`);
 
-      // Auth layer passes (not 401/403) — downstream may 500 without DB
+      // Auth layer passes (not 401/403); downstream may 500 without DB
       expect(res.status).not.toBe(401);
       expect(res.status).not.toBe(403);
     });

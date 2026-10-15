@@ -134,7 +134,7 @@ async function anchorEpoch(epoch: Record<string, unknown>): Promise<void> {
   const secret = process.env.AUDIT_ANCHOR_SOURCE_SECRET;
   if (!contractId || !secret) {
     throw new Error(
-      'AUDIT_ANCHOR_ENABLED is "true" but AUDIT_ANCHOR_CONTRACT_ID / AUDIT_ANCHOR_SOURCE_SECRET is missing — refusing to silently skip anchoring',
+      'AUDIT_ANCHOR_ENABLED is "true" but AUDIT_ANCHOR_CONTRACT_ID / AUDIT_ANCHOR_SOURCE_SECRET is missing; refusing to silently skip anchoring',
     );
   }
   const signer = Keypair.fromSecret(secret);

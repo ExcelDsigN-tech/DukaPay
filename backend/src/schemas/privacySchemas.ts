@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-// Schema for POST /privacy/dsar/access — request data access (DSAR)
+// Schema for POST /privacy/dsar/access: request data access (DSAR)
 export const dsarAccessSchema = z.object({
   body: z.object({
     publicKey: z.string().min(1, 'Wallet public key is required'),
@@ -11,7 +11,7 @@ export const dsarAccessSchema = z.object({
   }),
 });
 
-// Schema for POST /privacy/dsar/delete — request account deletion
+// Schema for POST /privacy/dsar/delete: request account deletion
 export const dsarDeleteSchema = z.object({
   body: z.object({
     publicKey: z.string().min(1, 'Wallet public key is required'),
@@ -25,7 +25,7 @@ export const dsarDeleteSchema = z.object({
   }),
 });
 
-// Schema for POST /privacy/anonymize — anonymize user data for analytics
+// Schema for POST /privacy/anonymize: anonymize user data for analytics
 export const anonymizeSchema = z.object({
   body: z.object({
     publicKey: z.string().min(1, 'Wallet public key is required'),
@@ -36,7 +36,7 @@ export const anonymizeSchema = z.object({
   }),
 });
 
-// Schema for GET /privacy/export/:publicKey — export user data
+// Schema for GET /privacy/export/:publicKey: export user data
 export const exportDataSchema = z.object({
   params: z.object({
     publicKey: z.string().min(1, 'Wallet public key is required'),

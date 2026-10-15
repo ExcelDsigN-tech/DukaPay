@@ -194,7 +194,7 @@ export const resolveLoanDispute = asyncHandler(async (req, res) => {
       loanId: dispute.loan_id,
     });
   } catch {
-    // Log and continue — resolution shouldn't fail because of notifications
+    // Log and continue: resolution shouldn't fail because of notifications
     // notificationService already logs errors internally
   }
 

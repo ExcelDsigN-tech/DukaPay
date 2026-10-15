@@ -114,7 +114,7 @@ describe('Agent route RBAC', () => {
       expect(res.status).toBe(201);
     });
 
-    it('rejects an agent with 403 — agents cannot mutate assignments', async () => {
+    it('rejects an agent with 403: agents cannot mutate assignments', async () => {
       const res = await assign().set('Authorization', `Bearer ${agentToken()}`);
       expect(res.status).toBe(403);
     });

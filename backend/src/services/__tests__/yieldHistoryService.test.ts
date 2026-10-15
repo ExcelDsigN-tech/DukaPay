@@ -77,7 +77,7 @@ describe('yieldHistoryService', () => {
     expect(latest.netYield).toBeGreaterThanOrEqual(0);
   });
 
-  // Issue #1171 — previously uncovered paths
+  // Issue #1171: previously uncovered paths
 
   it('Withdraw reduces cost basis proportionally', async () => {
     const now = new Date();
@@ -191,7 +191,7 @@ describe('yieldHistoryService', () => {
       ],
     });
 
-    // Should not throw — falls back to assetAmount as shares
+    // Should not throw; falls back to assetAmount as shares
     await expect(buildDepositorYieldHistory('GDep', 'GTok', 7)).resolves.toBeDefined();
   });
 });

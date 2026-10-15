@@ -28,7 +28,7 @@ function mintToken(publicKey: string, scopes: string[]): string {
 
 // Borrower-scope token that can read loans but holds no write capability.
 const readOnlyToken = mintToken(BORROWER, ['read:loans']);
-// Full borrower write scope — passes the scope gate (downstream may still fail
+// Full borrower write scope: passes the scope gate (downstream may still fail
 // on missing DB, but must not be rejected by the authz layer).
 const writeToken = mintToken(BORROWER, ['read:loans', 'write:loans']);
 

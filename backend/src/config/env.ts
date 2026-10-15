@@ -27,7 +27,7 @@ const REQUIRED_ENV_VARS = [
 
 /**
  * Compliance flags that must be explicitly enabled outside development.
- * KYC defaults to `false` (dev default) — staging/production deploys must
+ * KYC defaults to `false` (dev default); staging/production deploys must
  * set it to `"true"`. AUDIT_ANCHOR is recommended but must not block boot:
  * when it is off in production we log a warning; when it is on, both
  * AUDIT_ANCHOR_CONTRACT_ID and AUDIT_ANCHOR_SOURCE_SECRET are required.
@@ -52,7 +52,7 @@ export function validateProductionComplianceFlags(): void {
 
   if (process.env.AUDIT_ANCHOR_ENABLED !== 'true') {
     const message =
-      'AUDIT_ANCHOR_ENABLED is off in production — audit anchoring disabled (recommended: "true")';
+      'AUDIT_ANCHOR_ENABLED is off in production; audit anchoring disabled (recommended: "true")';
     console.warn(
       `\n\x1b[1;33mWARNING: ${message}\x1b[0m\nSee docs/ENVIRONMENT.md launch posture.\n`,
     );

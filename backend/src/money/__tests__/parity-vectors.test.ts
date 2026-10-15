@@ -14,8 +14,8 @@ import {
  * Money-policy parity tests against the on-chain implementation (issue #432).
  *
  * `backend/src/money/decimal.ts` and `contracts/money` are two implementations
- * of one policy — `money-policy.json` fixes the scale, rounding mode, display
- * precision and allocation strategy they must both honour — so the two layers
+ * of one policy (`money-policy.json` fixes the scale, rounding mode, display
+ * precision and allocation strategy they must both honour), so the two layers
  * have to produce byte-identical results for the same stroop amount, or the
  * off-chain settlement path can disagree with what the chain settles. Until now
  * nothing checked that: this file's sibling `decimal.test.ts` mirrors a handful
@@ -26,9 +26,9 @@ import {
  * `roundDiv` against each mode's *definition* rather than a second copy of the
  * algorithm, and fuzzes `splitProRata` for the invariants the policy promises.
  *
- * The remaining shared vectors — malformed case strings, which live in the
+ * The remaining shared vectors (malformed case strings, which live in the
  * runner's case format rather than this module's API, and the `compute_fee` /
- * `calculate_interest` / `round_amount` reductions — are replayed by
+ * `calculate_interest` / `round_amount` reductions) are replayed by
  * `scripts/money-parity.ts`, which diffs every case against the Rust kernel and
  * fails the build on any divergence.
  */

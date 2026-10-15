@@ -3,7 +3,7 @@
  * EventIndexer.recordCheckpoint (called from pollOnce) and
  * EventIndexer.getSuspectRanges.
  *
- * Mocking pattern mirrors eventIndexer.test.ts's ESM module mocks — this
+ * Mocking pattern mirrors eventIndexer.test.ts's ESM module mocks; this
  * suite needs `node --experimental-vm-modules` (the project's `npm test`
  * script already passes it; a bare `npx jest` invocation will not).
  */
@@ -173,7 +173,7 @@ describe('EventIndexer gap detection (contiguous-cursor invariant)', () => {
 
     await indexer.pollOnce();
 
-    // Contiguous — exactly one insert (the new verified range), no suspect gap row.
+    // Contiguous: exactly one insert (the new verified range), no suspect gap row.
     expect(inserted).toHaveLength(1);
     expect(inserted[0]?.sql).toContain("'verified'");
     expect(inserted[0]?.params?.[0]).toBe('CONTRACT001');
@@ -185,10 +185,10 @@ describe('EventIndexer gap detection (contiguous-cursor invariant)', () => {
     const inserted: Array<{ sql: string; params: unknown[] }> = [];
 
     mockQuery.mockImplementation(async (sql: string, params: unknown[] = []) => {
-      // lastIndexedLedger is stale/clamped ahead — this is the exact
+      // lastIndexedLedger is stale/clamped ahead. This is the exact
       // scenario from the issue's walkthrough: indexer_state says we're
       // caught up to 1000, but the last verified checkpoint only covers
-      // up to ledger 999... no — model it as: indexer_state (last_ledger)
+      // up to ledger 999... no, model it as: indexer_state (last_ledger)
       // has jumped ahead to 1039 (simulating a clamp to RPC retention
       // floor) while the checkpoint history only confirms up to 1000.
       if (sql.includes('FROM indexer_state')) return { rows: [{ last_ledger: 1039 }], rowCount: 1 };

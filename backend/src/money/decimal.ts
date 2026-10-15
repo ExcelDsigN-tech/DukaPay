@@ -1,5 +1,5 @@
 /**
- * Cross-layer money policy — backend implementation.
+ * Cross-layer money policy: backend implementation.
  *
  * This module is the *only* sanctioned place in the backend to divide, round
  * or split a stroop-denominated (`bigint`) amount. Every service that reads
@@ -39,7 +39,7 @@ export const STROOP_SCALE = SCALE;
 export const STROOP_DECIMALS = SCALE_DECIMALS;
 /** Default rounding mode every layer agrees on for settlement math. */
 export const DEFAULT_MODE = MODE as RoundingMode;
-/** Fractional digits used for *display only* — settlement always uses {@link STROOP_DECIMALS}. */
+/** Fractional digits used for *display only*; settlement always uses {@link STROOP_DECIMALS}. */
 export const DISPLAY_DECIMAL_PLACES = DISPLAY_DP;
 
 /**
@@ -171,7 +171,7 @@ export function stroopsToAmount(value: string | number | bigint | null | undefin
 
 /**
  * Format an exact stroop amount as a full-precision decimal string (no
- * rounding — this is the settlement-precision representation, not the
+ * rounding; this is the settlement-precision representation, not the
  * display-truncated one). Inverse of {@link toStroops} for values that fit
  * exactly at stroop precision: `toStroops(fromStroops(x)) === x`.
  */

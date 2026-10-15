@@ -87,7 +87,7 @@ export const getScore = asyncHandler(async (req: Request, res: Response) => {
  * POST /api/score/update
  *
  * Updates a user's credit score based on a single repayment event.
- * Protected by the `requireApiKey` middleware — only authorised internal
+ * Protected by the `requireApiKey` middleware; only authorised internal
  * services (e.g. LoanManager workers) may call this endpoint.
  *
  * Body: { userId: string, repaymentAmount: number, onTime: boolean }

@@ -1,5 +1,5 @@
 /**
- * #670 — the submit handler must only mark a remittance `failed` when the
+ * #670: the submit handler must only mark a remittance `failed` when the
  * Stellar submission itself fails. Rejected requests (403, already submitted,
  * mismatched XDR) must leave the record untouched.
  */

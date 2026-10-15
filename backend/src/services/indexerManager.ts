@@ -22,7 +22,7 @@ export const startIndexer = (): void => {
 
   for (const [envVar, value] of Object.entries(contractEnvMap)) {
     if (!value || value.trim().length === 0) {
-      logger.warn(`${envVar} is not set — events for that contract will not be indexed`);
+      logger.warn(`${envVar} is not set; events for that contract will not be indexed`);
     }
   }
 

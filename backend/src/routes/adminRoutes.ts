@@ -806,7 +806,7 @@ function cacheServiceMiddleware(cacheKeyPrefix: string, ttlSeconds: number) {
         return;
       }
     } catch {
-      // Cache miss or error — proceed normally
+      // Cache miss or error: proceed normally
     }
 
     const originalJson = res.json.bind(res);

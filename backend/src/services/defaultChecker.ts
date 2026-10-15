@@ -21,7 +21,7 @@ import { hasUnresolvedLedgerGaps } from './ledgerCheckpoints.js';
  * `bigint` stroops (see `backend/src/money/decimal.ts`). `owedStroops` is
  * the originally approved principal; `paidStroops` is every `LoanRepaid`
  * amount summed to date. `driftStroops` is `owedStroops - paidStroops`
- * clamped at zero once the loan is fully repaid — a nonzero value here
+ * clamped at zero once the loan is fully repaid; a nonzero value here
  * after a `LoanRepaid`/`LoanDefaulted` terminal event indicates the kind of
  * cross-layer rounding drift issue #1378 closes.
  */
@@ -37,7 +37,7 @@ export interface LoanReconciliation {
 /**
  * Sums the `LoanApproved` principal and every `LoanRepaid` amount recorded
  * for `loanId` in `contract_events`, in exact integer stroops. Every
- * comparison here is `bigint` arithmetic — never `Number` — so the result
+ * comparison here is `bigint` arithmetic (never `Number`), so the result
  * agrees with the on-chain pool balance to the stroop, regardless of how
  * large the amount is.
  */
@@ -105,8 +105,8 @@ export interface DefaultCheckRunResult {
   ledgersPastOldestDue?: number;
   batches: DefaultCheckBatchResult[];
   /**
-   * True when this run was deliberately skipped instead of evaluating loans
-   * — currently only set when the indexer has an unresolved ('suspect')
+   * True when this run was deliberately skipped instead of evaluating loans.
+   * Currently only set when the indexer has an unresolved ('suspect')
    * ledger gap for the loan manager contract. Conclusions
    * drawn from `contract_events` are unreliable until the gap is
    * reconciled, so no defaults are submitted for this run.
@@ -215,8 +215,8 @@ export class DefaultChecker {
    * Whether the indexer has an unresolved ('suspect') ledger gap for the
    * loan manager contract. `fetchOverdueLoanIds`/`fetchOverdueStats` derive
    * loan state entirely from indexed `contract_events`, so a gap means a
-   * `LoanApproved`, `LoanRepaid`, or `LoanDefaulted` event could be missing
-   * — submitting `check_defaults` against that view risks a false default
+   * `LoanApproved`, `LoanRepaid`, or `LoanDefaulted` event could be missing;
+   * submitting `check_defaults` against that view risks a false default
    * Extracted as its own method so tests can stub it out
    * without needing a live database.
    */
@@ -499,7 +499,7 @@ export class DefaultChecker {
         logger
           .withContext()
           .warn(
-            'default_checker: lock already expired or owned by another instance — skipping delete',
+            'default_checker: lock already expired or owned by another instance; skipping delete',
           );
       }
     } catch (error) {

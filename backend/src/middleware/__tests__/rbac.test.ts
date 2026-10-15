@@ -247,7 +247,7 @@ describe('RBAC middleware (#411 / #412)', () => {
       expect(styleError(error).statusCode).toBe(403);
     });
 
-    it('does not hard-fail when the assignment lookup errors — falls back to JWT claims', async () => {
+    it('does not hard-fail when the assignment lookup errors; falls back to JWT claims', async () => {
       mockQuery.mockRejectedValue(new Error('db down'));
       const req = user({ publicKey: AGENT_PK, role: 'agent', assignedBorrowers: [OTHER] });
       req.params = { borrower: OTHER };

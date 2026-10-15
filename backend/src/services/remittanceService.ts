@@ -86,7 +86,7 @@ export const remittanceService = {
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
 
-    // Validate before opening a DB transaction — avoids holding a connection
+    // Validate before opening a DB transaction; avoids holding a connection
     // while doing synchronous checks.
     if (!isValidStellarAddress(payload.recipientAddress)) {
       throw AppError.badRequest(

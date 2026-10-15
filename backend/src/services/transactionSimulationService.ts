@@ -81,19 +81,19 @@ function extractWarnings(simulation: unknown): string[] {
   if (sim.cost?.cpuInsns) {
     const cpuInsns = BigInt(sim.cost.cpuInsns);
     if (cpuInsns > 100_000_000n) {
-      warnings.push('High CPU instruction count — transaction may be slow or exceed ledger limits');
+      warnings.push('High CPU instruction count: transaction may be slow or exceed ledger limits');
     }
   }
 
   if (sim.cost?.memBytes) {
     const memBytes = BigInt(sim.cost.memBytes);
     if (memBytes > 5_000_000n) {
-      warnings.push('High memory usage — transaction may exceed ledger limits');
+      warnings.push('High memory usage: transaction may exceed ledger limits');
     }
   }
 
   if (sim.events && sim.events.length > 20) {
-    warnings.push('Large number of events — review for unexpected side effects');
+    warnings.push('Large number of events: review for unexpected side effects');
   }
 
   return warnings;

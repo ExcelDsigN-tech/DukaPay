@@ -12,7 +12,7 @@ const isProduction = process.env.NODE_ENV === 'production';
  *
  * In production, internal errors return a generic message. Operational
  * errors (bad request, not found, etc.) still return their specific
- * message because they're expected failures — not information leaks.
+ * message because they're expected failures, not information leaks.
  *
  * The correlation ID (`requestId`) is always included so operators can
  * trace the full error in server logs without exposing internals.

@@ -42,7 +42,7 @@ export const getRemittanceHistory = asyncHandler(async (req: Request, res: Respo
   const events = eventsResult.rows;
 
   // 3. Group by month for display. Accrue in stroops (bigint) so repeated
-  // `+=` across many repayments never accumulates float drift — previously
+  // `+=` across many repayments never accumulates float drift. Previously
   // this summed `parseFloat(amount) / 10000000` per event, which both loses
   // sub-stroop precision per event and compounds float rounding error across
   // the reduce. The exact stroop total is only converted to a display string

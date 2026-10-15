@@ -183,7 +183,7 @@ describe('Auth API', () => {
     // The in-memory login limiter allows 5 requests/min per IP and the suites
     // above already use the default supertest IP. X-Forwarded-For is only
     // honoured when Express trusts the proxy, so enable it for these tests
-    // only — restoring it afterwards keeps the rate-limiting suite intact.
+    // only; restoring it afterwards keeps the rate-limiting suite intact.
     let originalTrustProxy: unknown;
 
     const CLIENT_IP = '198.51.100.7';

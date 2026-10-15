@@ -2,7 +2,7 @@ import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 import type { Request, Response, NextFunction } from 'express';
 
 // pauseGuard.ts talks to the database via query() (to load/persist pause
-// state) and to logger — mock both so these tests exercise only the
+// state) and to logger; mock both so these tests exercise only the
 // guard's own decision logic.
 const mockQuery = jest.fn();
 jest.unstable_mockModule('../../db/connection.js', () => ({
@@ -107,7 +107,7 @@ describe('pauseGuard middleware (#1521)', () => {
       try {
         pauseGuard(mockRequest as Request, mockResponse as Response, mockNext);
       } catch {
-        // expected — asserted separately above
+        // expected; asserted separately above
       }
 
       expect(mockLogger.warn).toHaveBeenCalledWith(

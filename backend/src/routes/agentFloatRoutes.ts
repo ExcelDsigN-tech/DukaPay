@@ -8,7 +8,7 @@ import { AppError } from '../errors/AppError.js';
 const router = Router();
 
 /**
- * POST /float-transfer — Initiate a new agent-to-agent float transfer
+ * POST /float-transfer: Initiate a new agent-to-agent float transfer
  */
 router.post(
   '/float-transfer',
@@ -32,7 +32,7 @@ router.post(
 );
 
 /**
- * POST /float-transfer/:id/approve — Approve a pending float transfer
+ * POST /float-transfer/:id/approve: Approve a pending float transfer
  */
 router.post(
   '/float-transfer/:id/approve',
@@ -53,7 +53,7 @@ router.post(
 );
 
 /**
- * POST /float-transfer/:id/reject — Reject a pending float transfer
+ * POST /float-transfer/:id/reject: Reject a pending float transfer
  */
 router.post(
   '/float-transfer/:id/reject',
@@ -74,7 +74,7 @@ router.post(
 );
 
 /**
- * GET /float-transfer/limits — Get pair limits for a agent pair
+ * GET /float-transfer/limits: Get pair limits for a agent pair
  */
 router.get(
   '/float-transfer/limits',
@@ -96,7 +96,7 @@ router.get(
 );
 
 /**
- * PUT /float-transfer/limits — Set or update pair limits (Admin only)
+ * PUT /float-transfer/limits: Set or update pair limits (Admin only)
  */
 router.put(
   '/float-transfer/limits',

@@ -85,7 +85,7 @@ export async function setAbsoluteUserScoresBulk(scores: Map<string, number>): Pr
 
   if (valuePlaceholders.length === 0) return;
 
-  // Reconciliation writes are absolute — they overwrite with on-chain truth.
+  // Reconciliation writes are absolute: they overwrite with on-chain truth.
   // No application-level clamping here so a score that legitimately falls
   // outside the normal 300..850 band (e.g. mid-migration during a contract
   // upgrade) still lands verbatim instead of being silently rewritten.

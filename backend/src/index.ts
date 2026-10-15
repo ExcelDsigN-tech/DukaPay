@@ -111,7 +111,7 @@ const server = app.listen(port, () => {
   pubsubService.initSubscriber((payload) => {
     try {
       // Forward to local SSE clients. The payload crossed a Redis round-trip, so
-      // it arrives untyped — narrow it to the event shape `broadcast` expects.
+      // it arrives untyped; narrow it to the event shape `broadcast` expects.
       eventStreamService.broadcast(payload as LoanEventPayload);
     } catch (e) {
       logger.withContext().error('Failed to forward pubsub SSE payload', { err: e });

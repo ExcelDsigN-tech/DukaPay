@@ -62,7 +62,7 @@ const router = Router();
  *       400:
  *         description: Invalid log ID.
  *       401:
- *         description: Unauthorised — missing or invalid API key.
+ *         description: Unauthorised (missing or invalid API key).
  *       404:
  *         description: Audit proof not found.
  */
