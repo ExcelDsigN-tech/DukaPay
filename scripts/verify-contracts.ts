@@ -6,15 +6,15 @@
  * truth. Mirrors the finding/reporting conventions of drift-check.ts.
  *
  * Checks per recorded contract
- *   1. Address format       — every recorded address is a valid Stellar
+ *   1. Address format:        every recorded address is a valid Stellar
  *                             contract ID (StrKey C…).
- *   2. Env consistency      — the address matches the value set for its
+ *   2. Env consistency:       the address matches the value set for its
  *                             backend env var (backend/.env / .env.example) and
  *                             the token/pool address in deploy-config.json.
- *   3. On-chain existence   — POST to the network RPC to confirm the contract
+ *   3. On-chain existence:    POST to the network RPC to confirm the contract
  *                             exists (best-effort; skipped when the recorded
  *                             address is a placeholder or RPC is unreachable).
- *   4. Metadata completeness— ABI version, upgrade authority, timelock,
+ *   4. Metadata completeness: ABI version, upgrade authority, timelock,
  *                             deployer and deploy tx hash are recorded for every
  *                             deployed contract.
  *

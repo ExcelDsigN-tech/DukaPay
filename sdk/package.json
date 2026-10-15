@@ -1,7 +1,7 @@
 {
   "name": "@dukapay/sdk",
   "version": "0.1.0",
-  "description": "TypeScript SDK for the DukaPay lending & remittance protocol — typed API client, wallet adapters, contract helpers and React hooks.",
+  "description": "TypeScript SDK for the DukaPay lending & remittance protocol: typed API client, wallet adapters, contract helpers and React hooks.",
   "license": "MIT",
   "repository": {
     "type": "git",

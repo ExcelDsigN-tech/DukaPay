@@ -70,12 +70,12 @@ if (!stagingCompose.includes("KYC_ENFORCEMENT_ENABLED=true")) {
 }
 
 // 2b. If staging enables audit anchoring, it must also pass the anchor config
-// through — otherwise the cron job runs hourly and silently skips every epoch.
+// through; otherwise the cron job runs hourly and silently skips every epoch.
 if (stagingCompose.includes("AUDIT_ANCHOR_ENABLED=true")) {
   for (const v of ["AUDIT_ANCHOR_CONTRACT_ID", "AUDIT_ANCHOR_SOURCE_SECRET"]) {
     if (!stagingCompose.includes(v)) {
       console.error(
-        `❌ docker-compose.staging.yml sets AUDIT_ANCHOR_ENABLED=true but does not pass ${v} through — anchoring would silently no-op.`,
+        `❌ docker-compose.staging.yml sets AUDIT_ANCHOR_ENABLED=true but does not pass ${v} through, so anchoring would silently no-op.`,
       );
       failed = true;
     }

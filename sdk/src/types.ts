@@ -91,7 +91,7 @@ export interface BorrowerLoans {
   loans: BorrowerLoan[];
 }
 
-/** Response of `POST /loans/{loanId}/repay` — an unsigned XDR to be signed. */
+/** Response of `POST /loans/{loanId}/repay`: an unsigned XDR to be signed. */
 export interface RepayTransaction {
   success: boolean;
   loanId: number;

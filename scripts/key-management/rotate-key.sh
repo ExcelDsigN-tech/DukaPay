@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# rotate-key.sh — provision a new key version for a DukaPay signing key.
+# rotate-key.sh: provision a new key version for a DukaPay signing key.
 #
 # This is a provider-agnostic scaffold. It shells out to the provider adapter
 # (AWS CloudHSM or Fireblocks) via `scripts/key-management/provider.sh`. No key
@@ -9,7 +9,7 @@
 # Usage:
 #   ./rotate-key.sh <deployer|admin|oracle|operator|jwt>
 #
-# Environment (references only — never secrets):
+# Environment (references only, never secrets):
 #   DUKAPAY_DEPLOYER_KEYREF   opaque HSM/MPC reference for the deployer key
 #   DUKAPAY_ADMIN_KEYREF      opaque reference for the governance admin key
 #   DUKAPAY_ORACLE_KEYREF     opaque reference for the oracle signer key

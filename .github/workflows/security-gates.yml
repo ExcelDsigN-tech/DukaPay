@@ -60,7 +60,7 @@ jobs:
         with:
           fetch-depth: 0
       # Pinned to a commit SHA (not the `v2` tag) so the action's code can't
-      # change under us without a reviewed bump here — a tag can be
+      # change under us without a reviewed bump here: a tag can be
       # repointed by whoever controls the upstream repo.
       - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
         env:
@@ -73,7 +73,7 @@ jobs:
     continue-on-error: true
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      # Was pinned to `@master`, a mutable branch — the least hermetic
+      # Was pinned to `@master`, a mutable branch, the least hermetic
       # reference possible for a security-scanning action. Pinned to a
       # commit SHA on a tagged release instead.
       - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0

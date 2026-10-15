@@ -133,7 +133,7 @@ export class PoolResource {
   /**
    * Aggregate protocol analytics. Public endpoint, cached server-side for 5 minutes.
    *
-   * Resolves to the response envelope — read the snapshot from `.analytics`.
+   * Resolves to the response envelope; read the snapshot from `.analytics`.
    */
   analytics(): Promise<PoolAnalyticsResponse> {
     return this.http.get('/pool/analytics', { anonymous: true });

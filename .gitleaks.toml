@@ -10,7 +10,7 @@ title = "DukaPay gitleaks config"
   # Test files may contain example secrets. Docs, README, and .env.example
   # files are expected to contain placeholder credentials (your_jwt_secret,
   # sample/dummy/xxx/changeme, etc.) so they're exempted wholesale rather
-  # than pattern-matched — a [[rules]] block with these regexes would
+  # than pattern-matched: a [[rules]] block with these regexes would
   # *flag* every doc mentioning "example" or "test" as a leak instead of
   # allowing it (see issue caught in commit 0178aed's weekly gitleaks scan:
   # ~4,835 false positives from this exact mistake).

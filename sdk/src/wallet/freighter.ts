@@ -129,7 +129,7 @@ function toBase64(bytes: Uint8Array): string {
   for (const b of bytes) bin += String.fromCharCode(b);
   const g = globalThis as { btoa?: (s: string) => string };
   if (typeof g.btoa === 'function') return g.btoa(bin);
-  // Node without btoa in scope — fall back to a minimal encoder.
+  // Node without btoa in scope; fall back to a minimal encoder.
   const nodeBuffer = (globalThis as { Buffer?: { from(d: Uint8Array): { toString(enc: string): string } } })
     .Buffer;
   if (nodeBuffer) return nodeBuffer.from(bytes).toString('base64');

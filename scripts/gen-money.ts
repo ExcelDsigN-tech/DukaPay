@@ -12,8 +12,8 @@
  * mode, display precision, allocation strategy). The actual conversion
  * logic (`money::round_div` / `split_pro_rata` in Rust, `decimal.ts` in the
  * backend, `format.ts` in the frontend) is hand-authored and imports these
- * constants, so there is exactly one place — this file plus
- * `money-policy.json` — that decides what "correct" rounding means.
+ * constants, so there is exactly one place (this file plus
+ * `money-policy.json`) that decides what "correct" rounding means.
  *
  * Usage (from the repo root):
  *   npx ts-node scripts/gen-money.ts          # regenerate in place
@@ -67,7 +67,7 @@ function loadPolicy(): MoneyPolicy {
 }
 
 const GENERATED_HEADER = [
-  '// GENERATED FILE — do not edit by hand.',
+  '// GENERATED FILE: do not edit by hand.',
   '//',
   '// Derived from `money-policy.json` at the repository root by',
   '// `scripts/gen-money.ts`. Run `npx ts-node scripts/gen-money.ts` from the',
@@ -104,7 +104,7 @@ pub const ALLOCATION_STRATEGY: &str = "${policy.allocation}";
 /**
  * `backend/.prettierrc` and `frontend/.prettierrc` disagree on quote style
  * (single vs. double), and each workspace's `lint`/`format:check` enforces
- * its own — so the two generated files can't share one literal template
+ * its own, so the two generated files can't share one literal template
  * byte-for-byte. `quote` picks the right one per target; every other line is
  * identical between the two outputs.
  */
@@ -116,7 +116,7 @@ function genTs(policy: MoneyPolicy, quote: '"' | "'"): string {
 // Deliberately dependency-free (no imports from hand-authored modules like
 // decimal.ts/format.ts) so this file can never form an import cycle with the
 // logic that consumes it. \`MODE\` is a plain string union rather than the
-// \`RoundingMode\` enum for the same reason — consumers map it to their own
+// \`RoundingMode\` enum for the same reason; consumers map it to their own
 // enum.
 //
 // Uses \`BigInt(...)\` rather than a \`123n\` literal so this file type-checks
@@ -133,7 +133,7 @@ export const SCALE: bigint = BigInt(${scale});
 export const MODE = ${q(policy.mode)} as const;
 
 /**
- * Fractional digits used for *display only* — settlement always uses
+ * Fractional digits used for *display only*; settlement always uses
  * \`SCALE_DECIMALS\` (full stroop precision).
  */
 export const DISPLAY_DP = ${policy.display_dp};
@@ -145,7 +145,7 @@ export const ALLOCATION_STRATEGY = ${q(policy.allocation)} as const;
 
 function readFileIfExists(targetPath: string): string | null {
   // Read directly and handle ENOENT, rather than `existsSync` followed by a
-  // separate `readFileSync` — the latter is a check-then-use race (the file
+  // separate `readFileSync`: the latter is a check-then-use race (the file
   // could be created/removed between the two calls) that CodeQL flags as a
   // TOCTOU file system race condition.
   try {

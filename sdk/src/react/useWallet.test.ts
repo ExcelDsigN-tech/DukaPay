@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * Tests for the useWallet hook — verifies the cancelled-flag pattern added
+ * Tests for the useWallet hook; verifies the cancelled-flag pattern added
  * in fix #534 (no state update after component unmounts while getAddress()
  * is pending).
  */
@@ -34,13 +34,13 @@ function wrapper(client: DukaPayClient) {
 
 // ── tests ─────────────────────────────────────────────────────────────────────
 
-describe('useWallet — unmount safety (#534)', () => {
+describe('useWallet: unmount safety (#534)', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
   });
 
   it('does not update address state after the component unmounts', async () => {
-    // Arrange: a promise we control — getAddress resolves only after unmount.
+    // Arrange: a promise we control; getAddress resolves only after unmount.
     let resolveAddress!: (addr: string) => void;
     const pendingAddress = new Promise<string>((res) => { resolveAddress = res; });
 
@@ -54,7 +54,7 @@ describe('useWallet — unmount safety (#534)', () => {
     // address starts null
     expect(result.current.address).toBeNull();
 
-    // Unmount before the promise resolves — this is the scenario that triggered
+    // Unmount before the promise resolves; this is the scenario that triggered
     // the React warning before fix #534.
     unmount();
 

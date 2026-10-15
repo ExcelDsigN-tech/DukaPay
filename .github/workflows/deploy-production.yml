@@ -81,7 +81,7 @@ jobs:
         run: |
           echo "Checking scripts/deploy-config.json has mainnet block..."
           if ! jq -e '.mainnet' scripts/deploy-config.json > /dev/null; then
-            echo "::error::scripts/deploy-config.json missing mainnet block — add per docs/deployed-contracts.md"
+            echo "::error::scripts/deploy-config.json missing mainnet block; add per docs/deployed-contracts.md"
             exit 1
           fi
           echo "Checking mainnet network passphrase..."
@@ -203,7 +203,7 @@ jobs:
         working-directory: scripts
         env:
           STELLAR_RPC_URL: ${{ vars.STELLAR_RPC_URL }}
-      - name: Note — full mainnet verification requires real deployment
+      - name: Full mainnet verification requires real deployment
         run: |
           echo "Before mainnet contracts are deployed, verify-contracts reports SKIPPED (placeholders)."
           echo "After 'npm run deploy -- mainnet' and registry population, re-run: npm run verify:contracts -- --network mainnet"

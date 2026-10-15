@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# emergency-revoke.sh — disable / zeroize a compromised DukaPay signing key.
+# emergency-revoke.sh: disable / zeroize a compromised DukaPay signing key.
 #
 # Run this IMMEDIATELY after tripping the CircuitBreaker (pause_all) when a key
 # is suspected compromised. This disables the key in the HSM/MPC so it can no

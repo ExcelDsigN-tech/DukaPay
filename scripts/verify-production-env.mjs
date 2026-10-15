@@ -67,7 +67,7 @@ function isPlaceholder(v) {
   if (!v) return true;
   const s = String(v).trim();
   if (s === "") return true;
-  // __SET_VIA_SECRETS_MANAGER__ is intentional for .env.production.example — it signals
+  // __SET_VIA_SECRETS_MANAGER__ is intentional for .env.production.example; it signals
   // that the live secret is injected via secrets manager. Only treat it as non-placeholder
   // when explicitly validating the .example template file; in live production it must be a real value.
   if (s.includes("__SET_VIA_SECRETS_MANAGER__")) {
@@ -110,61 +110,61 @@ const warnings = [];
 function requireTrue(key, message) {
   const val = env[key];
   if (val !== "true") {
-    errors.push(`${key} must be "true" for production mainnet (got: ${JSON.stringify(val)}) — ${message}`);
+    errors.push(`${key} must be "true" for production mainnet (got: ${JSON.stringify(val)}); ${message}`);
   }
 }
 
 function requireSet(key, message) {
   const val = env[key];
   if (isPlaceholder(val)) {
-    errors.push(`${key} must be set to a real production value (got: ${JSON.stringify(val)}) — ${message}`);
+    errors.push(`${key} must be set to a real production value (got: ${JSON.stringify(val)}); ${message}`);
   }
 }
 
 function requireNumeric(key, min, max, message) {
   const val = env[key];
   if (isPlaceholder(val)) {
-    errors.push(`${key} must be set (got: ${JSON.stringify(val)}) — ${message}`);
+    errors.push(`${key} must be set (got: ${JSON.stringify(val)}); ${message}`);
     return;
   }
   const n = Number(val);
   if (!Number.isFinite(n) || n < min || n > max) {
-    errors.push(`${key} must be numeric in [${min}, ${max}] (got: ${JSON.stringify(val)}) — ${message}`);
+    errors.push(`${key} must be numeric in [${min}, ${max}] (got: ${JSON.stringify(val)}); ${message}`);
   }
 }
 
 function requireHighRiskCountries(message) {
   const val = env["AML_HIGH_RISK_COUNTRIES"];
   if (isPlaceholder(val)) {
-    errors.push(`AML_HIGH_RISK_COUNTRIES must be set to a list requiring compliance sign-off (got: ${JSON.stringify(val)}) — ${message}`);
+    errors.push(`AML_HIGH_RISK_COUNTRIES must be set to a list requiring compliance sign-off (got: ${JSON.stringify(val)}); ${message}`);
     return;
   }
   const codes = val.split(",").map((s) => s.trim().toUpperCase()).filter(Boolean);
   if (codes.length < 5) {
-    errors.push(`AML_HIGH_RISK_COUNTRIES must contain at least 5 codes (got: ${codes.length}: ${val}) — ${message}`);
+    errors.push(`AML_HIGH_RISK_COUNTRIES must contain at least 5 codes (got: ${codes.length}: ${val}); ${message}`);
   }
   const bad = codes.filter((c) => !/^[A-Z]{2}$/.test(c));
   if (bad.length) {
-    errors.push(`AML_HIGH_RISK_COUNTRIES contains invalid codes: ${bad.join(", ")} — expected ISO 3166-1 alpha-2`);
+    errors.push(`AML_HIGH_RISK_COUNTRIES contains invalid codes: ${bad.join(", ")}; expected ISO 3166-1 alpha-2`);
   }
 }
 
 // ── Production mainnet posture checks (#565) ─────────────────────────────────
 console.log("\n🔒 Verifying production mainnet posture...\n");
 
-// 1. KYC enforcement — hard requirement (#565)
+// 1. KYC enforcement: hard requirement (#565)
 requireTrue(
   "KYC_ENFORCEMENT_ENABLED",
   "Hard requirement for mainnet (#565); set explicitly in prod env/secrets (not relying on code default false)."
 );
 
-// 2. Audit anchoring — recommended, not blocking (#565); required config when on
+// 2. Audit anchoring: recommended, not blocking (#565); required config when on
 if (env["AUDIT_ANCHOR_ENABLED"] !== "true") {
-  warnings.push(`AUDIT_ANCHOR_ENABLED is ${JSON.stringify(env["AUDIT_ANCHOR_ENABLED"])} — audit anchoring disabled (recommended: "true", not blocking per #565)`);
+  warnings.push(`AUDIT_ANCHOR_ENABLED is ${JSON.stringify(env["AUDIT_ANCHOR_ENABLED"])}, so audit anchoring is disabled (recommended: "true", not blocking per #565)`);
 } else {
   const cid = env["AUDIT_ANCHOR_CONTRACT_ID"];
   if (isPlaceholder(cid)) {
-    errors.push(`AUDIT_ANCHOR_CONTRACT_ID must be set when AUDIT_ANCHOR_ENABLED=true (got: ${JSON.stringify(cid)}) — deploy audit_anchor to mainnet first`);
+    errors.push(`AUDIT_ANCHOR_CONTRACT_ID must be set when AUDIT_ANCHOR_ENABLED=true (got: ${JSON.stringify(cid)}); deploy audit_anchor to mainnet first`);
   } else if (!isValidContractId(cid)) {
     // Allow placeholder DUMMY for example files, but flag in warnings
     if (!String(cid).includes("DUMMY")) {
@@ -175,13 +175,13 @@ if (env["AUDIT_ANCHOR_ENABLED"] !== "true") {
   }
   const secret = env["AUDIT_ANCHOR_SOURCE_SECRET"];
   if (isPlaceholder(secret)) {
-    errors.push(`AUDIT_ANCHOR_SOURCE_SECRET must be set when AUDIT_ANCHOR_ENABLED=true — Stellar secret for anchoring account`);
+    errors.push(`AUDIT_ANCHOR_SOURCE_SECRET must be set when AUDIT_ANCHOR_ENABLED=true (Stellar secret for anchoring account)`);
   } else if (!isValidSecret(secret) && !String(secret).includes("DUMMY") && !String(secret).includes("__SET")) {
-    warnings.push(`AUDIT_ANCHOR_SOURCE_SECRET format unexpected (expected S... 56-char) — got length ${String(secret).length}`);
+    warnings.push(`AUDIT_ANCHOR_SOURCE_SECRET format unexpected (expected S... 56-char); got length ${String(secret).length}`);
   }
 }
 
-// 3. AML thresholds — placeholders requiring compliance sign-off
+// 3. AML thresholds: placeholders requiring compliance sign-off
 requireNumeric("AML_REPORTING_THRESHOLD", 1000, 1000000, "Placeholder threshold; requires compliance sign-off for launch jurisdictions. Must not be blank/default.");
 requireNumeric("AML_DAILY_TX_LIMIT", 1, 100, "Placeholder velocity limit; requires compliance sign-off. Must not be blank/default.");
 requireHighRiskCountries("Placeholder list; requires compliance sign-off. Must be non-empty comma-separated ISO 3166-1 alpha-2; previously included UA (not FATF-listed) and omitted KE/NG (grey list early 2025).");
@@ -197,7 +197,7 @@ if (passphrase !== "Public Global Stellar Network ; September 2015") {
 }
 const rpcUrl = env["STELLAR_RPC_URL"];
 if (rpcUrl) {
-  // CodeQL js/incomplete-url-substring-sanitization — validate via URL hostname, not substring.
+  // CodeQL js/incomplete-url-substring-sanitization: validate via URL hostname, not substring.
   let hostname = "";
   try {
     hostname = new URL(rpcUrl).hostname;
@@ -206,7 +206,7 @@ if (rpcUrl) {
     hostname = "";
   }
   if (hostname && hostname !== "soroban-rpc.stellar.org" && !hostname.endsWith(".stellar.org")) {
-    warnings.push(`STELLAR_RPC_URL hostname is ${hostname} — expected soroban-rpc.stellar.org for production`);
+    warnings.push(`STELLAR_RPC_URL hostname is ${hostname}; expected soroban-rpc.stellar.org for production`);
   }
 }
 
@@ -216,9 +216,9 @@ if (env["KYC_ENFORCEMENT_ENABLED"] === "true") {
   requireSet("COMPLYADVANTAGE_SEARCH_PROFILE", "Search profile must be set to include OFAC, UN, EU, PEP and adverse-media sources.");
 }
 
-// 6. SAR filing gateway — warn if unset (reports remain pending, not filed)
+// 6. SAR filing gateway: warn if unset (reports remain pending, not filed)
 if (isPlaceholder(env["SAR_FILING_API_URL"])) {
-  warnings.push("SAR_FILING_API_URL is not set — SAR reports will remain pending and not auto-file to regulator/provider. Set for production if auto-filing is required.");
+  warnings.push("SAR_FILING_API_URL is not set, so SAR reports will remain pending and not auto-file to regulator/provider. Set for production if auto-filing is required.");
 }
 
 // ── Report ───────────────────────────────────────────────────────────────────
@@ -229,12 +229,12 @@ if (warnings.length) {
 }
 
 if (errors.length) {
-  console.error("❌ Production posture guard FAILED — deploy must be blocked:\n");
+  console.error("❌ Production posture guard FAILED; deploy must be blocked:\n");
   for (const e of errors) console.error(`   ✗ ${e}`);
   console.error("\nFix: set explicitly in production env/secrets per backend/.env.production.example and docs/ENVIRONMENT.md#production-mainnet-posture.");
   console.error("This guard is scaffolding pending #565; coordinate with the #565/#570 assignee before continuing.\n");
   process.exit(1);
 }
 
-console.log("✅ Production posture guard PASSED — scaffolding values present (pending #565 decision and compliance sign-off).\n");
+console.log("✅ Production posture guard PASSED: scaffolding values present (pending #565 decision and compliance sign-off).\n");
 process.exit(0);

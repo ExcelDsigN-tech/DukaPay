@@ -64,9 +64,9 @@ jobs:
         run: npx ts-node gen-money.ts --check
         working-directory: scripts
 
-  # Issue #432: the stroop-integer money kernel exists twice on purpose — once in
+  # Issue #432: the stroop-integer money kernel exists twice on purpose: once in
   # Rust (`contracts/money`, what the chain executes) and once in TypeScript
-  # (`backend/src/money/decimal.ts`, the off-chain settlement path) — and the two
+  # (`backend/src/money/decimal.ts`, the off-chain settlement path). The two
   # must agree bit-for-bit for the same amount, or an off-chain confirmation can
   # disagree with what actually settles. This job runs both halves of the parity
   # harness and fails the build the moment they diverge: the shared vectors in
@@ -501,7 +501,7 @@ jobs:
       #
       # Restricted to `push` (i.e. post-merge on main): GitHub does not
       # issue OIDC tokens to `pull_request` runs triggered from a fork, so
-      # this step cannot succeed there — and attesting a build from an
+      # this step cannot succeed there, and attesting a build from an
       # unmerged fork PR isn't meaningful provenance anyway.
       - name: Attest wasm build provenance
         if: github.event_name == 'push'

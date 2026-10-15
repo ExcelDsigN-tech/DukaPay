@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# provider.sh — thin wrapper around the provider adapter (provider.ts).
+# provider.sh: thin wrapper around the provider adapter (provider.ts).
 # Dispatches key lifecycle commands to AWS CloudHSM or Fireblocks based on
 # DUKAPAY_PROVIDER. No key material is printed.
 #

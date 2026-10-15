@@ -4,12 +4,12 @@
  * Environment drift sweep: verifies config parity between staging and production.
  *
  * Checks
- *   1. Env-var keys      — presence parity of every key in backend/.env.example
+ *   1. Env-var keys:       presence parity of every key in backend/.env.example
  *                          across each environment's dotenv file (values never printed).
- *   2. Feature flags      — value parity for the flags listed in the config.
- *   3. Service versions   — GET /version on each environment: nodeVersion, gitSha,
+ *   2. Feature flags:       value parity for the flags listed in the config.
+ *   3. Service versions:    GET /version on each environment: nodeVersion, gitSha,
  *                          contract IDs.
- *   4. Database schema    — information_schema.columns + applied migrations,
+ *   4. Database schema:     information_schema.columns + applied migrations,
  *                          compared row-for-row between the two databases.
  *
  * Differences declared in `expectedDifferences` (network-specific config) are
@@ -233,7 +233,7 @@ async function dumpSchema(dsn: string): Promise<{ columns: string[]; migrations:
       const m = await client.query(MIGRATIONS_QUERY);
       migrations = m.rows.map((r: any) => r.name);
     } catch {
-      /* pgmigrations table absent — report columns only */
+      /* pgmigrations table absent; report columns only */
     }
     return { columns, migrations };
   } finally {
@@ -295,7 +295,7 @@ function render(findings: Finding[], format: string): string {
     lines.push(md ? `## ${sev} (${group.length})` : `${sev} (${group.length})`);
     for (const f of group) {
       const loc = f.key ? ` [${f.key}]` : '';
-      const vals = f.staging !== undefined ? ` — staging=${f.staging} production=${f.production}` : '';
+      const vals = f.staging !== undefined ? ` (staging=${f.staging} production=${f.production})` : '';
       lines.push(`${md ? '- ' : '  '}${f.check}${loc}: ${f.detail}${vals}`);
     }
     lines.push('');

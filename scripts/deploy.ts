@@ -20,7 +20,7 @@ dotenv.config();
 const CONFIG_PATH = path.join(__dirname, 'deploy-config.json');
 const POLL_INTERVAL_MS = 2000;
 
-// Compute the SHA-256 hash of WASM bytes — this is the on-chain upload key.
+// Compute the SHA-256 hash of WASM bytes; this is the on-chain upload key.
 function computeWasmHash(wasm: Buffer): Buffer {
     return createHash('sha256').update(wasm).digest();
 }
@@ -325,7 +325,7 @@ async function main() {
         invoke(server, poolContractId, 'initialize', [adminAddr], account, passphrase),
     );
 
-    // LoanManager — validates minter authorization on-chain during this call.
+    // LoanManager: validates minter authorization on-chain during this call.
     // initialize(nft, pool, token, admin, governance)
     await initOnce('LoanManager.initialize', 1, () =>
         invoke(
@@ -342,17 +342,17 @@ async function main() {
     console.log('  LendingPool.set_loan_manager(LoanManager)');
     await invoke(server, poolContractId, 'set_loan_manager', [managerContractId], account, passphrase);
 
-    // Governance — target is LoanManager (the core protocol contract).
+    // Governance: target is LoanManager (the core protocol contract).
     await initOnce('Governance.initialize(target=LoanManager)', 4001, () =>
         invoke(server, govContractId, 'initialize', [adminAddr, managerContractId], account, passphrase),
     );
 
-    // AgentRegistry — no cross-contract deps. Deployer acts as operator for now.
+    // AgentRegistry: no cross-contract deps. Deployer acts as operator for now.
     await initOnce('AgentRegistry.init(owner=admin, operator=admin)', 1, () =>
         invoke(server, registryContractId, 'init', [adminAddr, adminAddr], account, passphrase),
     );
 
-    // AgentVault — USDC collateral vault backing agent float.
+    // AgentVault: USDC collateral vault backing agent float.
     await initOnce('AgentVault.init(owner=admin, operator=admin, token, max_haircut, min_collateral)', 1, () =>
         invoke(
             server,
@@ -374,7 +374,7 @@ async function main() {
     console.log('\n[4/4] Writing contract addresses to .env files…');
 
     // Variable names each app reads (docs/ENVIRONMENT.md).
-    const header = `\n# DukaPay contracts — ${network} — ${new Date().toISOString()}`;
+    const header = `\n# DukaPay contracts (${network}, ${new Date().toISOString()})`;
     const frontendEnv = [
         header,
         `NEXT_PUBLIC_NFT_CONTRACT_ID=${nftContractId}`,
