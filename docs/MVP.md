@@ -15,7 +15,7 @@ already exists.
 |---|---|---|---|---|---|
 | 1 | An agent registers with a KYC reference and a USDC bond, and is activated by the operator | `agent_registry`: `register`, `top_up_bond`, `activate` | No | No | No |
 | 2 | The agent locks USDC collateral and does cash-in / cash-out, with `float ≤ collateral × haircut` checked on every action | `agent_vault`: `deposit_collateral`, `mint_float`, `burn_float` | No | No | No |
-| 3 | A sender's remittance lands with a receiving agent as e-money for the recipient, and the recipient redeems it for cash | `agent_vault`: `mint_float` on arrival, `burn_float` at cash-out | Send: yes. Receiving agent and redemption: no | Send: yes. Receiving agent and redemption: no | No |
+| 3 | A sender chooses cash pickup: the remittance lands with a receiving agent as e-money for the recipient, who redeems it for cash | `agent_vault`: `mint_float` on arrival, `burn_float` at cash-out | Send: yes. Receiving agent and redemption: no | Send: yes. Receiving agent and redemption: no | No |
 | 4 | An agent takes a working-capital loan from the pool and repays it | `loan_manager`: `request_loan`, `repay`; `lending_pool`: `deposit`, `disburse` | Yes | Yes | Yes |
 | 5 | Repaying raises the agent's credit score; a default lowers it | `remittance_nft`: `apply_score_delta` | Yes, but the sign is wrong (#746) | Yes | Yes |
 | 6 | Anyone can check `Σ float ≤ Σ collateral` without trusting the operator | `agent_vault`: `check_invariant`, `check_invariants` | No | No | No |
@@ -48,6 +48,7 @@ is done.
 
 - **Gamification:** XP, achievements, Kingdom tiers, level-up modal, sounds
 - **Notifications beyond in-app:** email (SendGrid) and SMS (Twilio)
+- **Remittances to a wallet:** today's direct USDC send to the recipient's address stays as the **Wallet** delivery method next to cash pickup, unchanged
 - **Agent-to-agent float transfer** (`transfer_float`, `agentFloatRoutes.ts`)
 - **Batch net settlement** (`settle_net`)
 - **Admin extras:** webhooks, analytics, contract-upgrade approval in the UI
@@ -58,11 +59,16 @@ They are deployed and wired in #758, but the MVP loop does not depend on them.
 
 ## Decided: how a remittance is cashed out
 
-A remittance is credited to the recipient as e-money issued by a receiving
-agent and backed by that agent's collateral, not paid out as USDC to the
-recipient's wallet. The receiving agent's float rises when the money arrives
+When the sender chooses **cash pickup**, the remittance is credited to the
+recipient as e-money issued by a receiving agent and backed by that agent's
+collateral. The receiving agent's float rises when the money arrives
 (`mint_float`) and falls when the recipient redeems it (`burn_float`), so the
 solvency rule covers money waiting to be collected.
+
+When the sender chooses **wallet**, USDC goes straight to the recipient's
+Stellar address, as it does today. No agent owes the recipient anything in
+that case, so the solvency rule has nothing to cover. Both are delivery
+methods the sender picks; wallet is not a fallback for cash pickup.
 
 For the MVP (#778):
 
