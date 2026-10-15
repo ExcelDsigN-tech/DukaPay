@@ -3,7 +3,7 @@
 //!
 //! Holds each agent's USDC collateral and tracks their on-chain float
 //! (stablecoin credit issued against that collateral). The solvency
-//! invariant: float <= collateral * haircut_bps / 10_000 at all times —
+//! invariant: float <= collateral * haircut_bps / 10_000 at all times:
 //! an agent can never be short against their own collateral. A global
 //! `min_collateral` floor keeps live agents meaningfully capitalised while
 //! any float is outstanding; full exit is only possible at float == 0.
@@ -336,7 +336,7 @@ impl AgentVault {
         let params = Self::params(&env)?;
         let mut vault = Self::read_vault(&env, &agent);
         // Checked arithmetic (issue #513): the debit is its own underflow
-        // guard — `checked_sub` returns `None` on underflow, and the remainder
+        // guard: `checked_sub` returns `None` on underflow, and the remainder
         // is additionally required to stay non-negative, because a vault
         // balance below zero is never a valid state regardless of how the
         // subtraction behaved. The reentrancy lock still has to be released on
@@ -436,7 +436,7 @@ impl AgentVault {
         let mut from_vault = Self::read_vault(&env, &from);
         let mut to_vault = Self::read_vault(&env, &to);
         // Checked arithmetic (issue #513): the sender's debit is the underflow
-        // guard, and the sender's float is never allowed to go negative — so a
+        // guard, and the sender's float is never allowed to go negative, so a
         // rejected transfer cannot leave the pair half-applied.
         let from_float = match from_vault.float.checked_sub(amount) {
             Some(remaining) if remaining >= 0 => remaining,

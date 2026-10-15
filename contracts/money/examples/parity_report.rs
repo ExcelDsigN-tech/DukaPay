@@ -5,7 +5,7 @@
 //! inputs. This is a CI/test driver only: it is not part of any contract's
 //! footprint and adds nothing to the compiled WASM.
 //!
-//! Cases are given either as argv, or — when invoked with no arguments — one per
+//! Cases are given either as argv, or (when invoked with no arguments) one per
 //! line on stdin, which is how `scripts/money-parity.ts` feeds large randomized
 //! batches without running into the OS argument-list limit.
 //!
@@ -26,7 +26,7 @@
 //! ```
 //!
 //! The `derived:` cases are the stroop reductions the policy's money operations
-//! bottom out in — `compute_fee`, `calculate_interest` and `round_amount` — so
+//! bottom out in (`compute_fee`, `calculate_interest` and `round_amount`), so
 //! the fee/interest/rounding vectors have a name on both sides of the harness
 //! without inventing a second production API next to the contract's `round_div`.
 

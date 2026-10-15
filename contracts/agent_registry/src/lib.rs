@@ -224,7 +224,7 @@ impl AgentRegistry {
         Ok(())
     }
 
-    /// Operator withdraws an agent's bond. Frozen while the agent is Active —
+    /// Operator withdraws an agent's bond. Frozen while the agent is Active:
     /// a live agent must stay bonded. (The vault enforces float == 0 before
     /// releasing custody on the real USDC.)
     pub fn withdraw_bond(env: Env, agent: Address) -> Result<(), RegistryError> {

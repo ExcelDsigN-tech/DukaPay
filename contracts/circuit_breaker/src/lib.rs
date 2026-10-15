@@ -3,9 +3,9 @@
 //!
 //! Provides a defense-in-depth kill switch for the protocol:
 //!
-//! * **Global pause** — halts every guarded function across all contracts.
-//! * **Contract pause** — halts every guarded function of a single contract.
-//! * **Function pause** — halts a single function on a single contract.
+//! * **Global pause**: halts every guarded function across all contracts.
+//! * **Contract pause**: halts every guarded function of a single contract.
+//! * **Function pause**: halts a single function on a single contract.
 //!
 //! Any member of the governance signer set (the "security council", by
 //! default 5 members) may trip a pause. Lifting a pause requires a
@@ -203,11 +203,11 @@ impl CircuitBreaker {
 
     /// Initialize the circuit breaker.
     ///
-    /// `admin`    — protocol admin (may rotate signers, threshold, timelock,
+    /// `admin`:    protocol admin (may rotate signers, threshold, timelock,
     ///              cancel proposals). Need not be a signer.
-    /// `signers`  — governance security-council members (1..=MAX_SIGNERS).
-    /// `threshold`— approvals required to execute an override (default 3).
-    /// `override_timelock` — seconds the override must wait before executing
+    /// `signers`:  governance security-council members (1..=MAX_SIGNERS).
+    /// `threshold`: approvals required to execute an override (default 3).
+    /// `override_timelock`: seconds the override must wait before executing
     ///              (default 24h, minimum 1h).
     pub fn initialize(
         env: Env,

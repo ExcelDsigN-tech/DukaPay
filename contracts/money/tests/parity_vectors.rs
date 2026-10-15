@@ -1,7 +1,7 @@
 //! Money-policy parity tests against the off-chain implementation (issue #432).
 //!
 //! `contracts/money` and `backend/src/money/decimal.ts` are two implementations
-//! of one policy — `money-policy.json` fixes the scale, rounding mode, display
+//! of one policy: `money-policy.json` fixes the scale, rounding mode, display
 //! precision and allocation strategy they must agree on, and both layers must
 //! produce byte-identical results for the same stroop amount, or the off-chain
 //! settlement path can disagree with what the chain actually settles. Until now
@@ -17,9 +17,9 @@
 //!      exhaustive small domain plus a remainder sweep that hits every tie,
 //!   3. the `split_pro_rata` invariants under randomized input.
 //!
-//! The remaining shared vectors — malformed case strings, which live in the
+//! The remaining shared vectors (malformed case strings, which live in the
 //! runner's case format rather than the kernel API, and the `compute_fee` /
-//! `calculate_interest` / `round_amount` reductions — are replayed through this
+//! `calculate_interest` / `round_amount` reductions) are replayed through this
 //! crate by `scripts/money-parity.ts`, which also diffs every case against
 //! `decimal.ts` and fails the build on any divergence.
 
@@ -267,7 +267,7 @@ fn round_div_matches_its_definition_on_a_small_domain() {
 
 /// Remainder sweep: for every remainder at every quotient parity, `half_even`
 /// must land on the even side of an exact tie, and the two half modes must agree
-/// everywhere else — the tie is the only place they are allowed to differ.
+/// everywhere else; the tie is the only place they are allowed to differ.
 #[test]
 fn half_modes_agree_away_from_exact_ties() {
     for den in 2i128..=41 {

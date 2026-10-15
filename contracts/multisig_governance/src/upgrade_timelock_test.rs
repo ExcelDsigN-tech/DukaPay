@@ -72,7 +72,7 @@ fn setup() -> Ctx {
 
     let target_id = env.register(MockUpgradeable, ());
     let target_client = MockUpgradeableClient::new(&env, &target_id);
-    // Governance is the admin of the target — upgrades must route through it.
+    // Governance is the admin of the target: upgrades must route through it.
     target_client.set_admin(&gov_id);
 
     let admin = Address::generate(&env);

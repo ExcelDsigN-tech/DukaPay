@@ -19,7 +19,7 @@ use soroban_sdk::{
 /// Minimum timelock: 24 hours. Cannot be overridden by the proposing admin.
 const MIN_TIMELOCK_SECONDS: u64 = 86_400;
 
-/// Maximum signers in a quorum — keeps storage and iteration bounded.
+/// Maximum signers in a quorum; keeps storage and iteration bounded.
 const MAX_SIGNERS: u32 = 20;
 
 /// Time-to-live for proposals before they expire (7 days in seconds).
@@ -176,8 +176,8 @@ impl GovernanceContract {
     // ── Initialization ────────────────────────────────────────────────────────
 
     /// Initialize the governance contract.
-    /// `admin`           — current DukaPay admin.
-    /// `target_contract` — the DukaPay contract whose admin will be updated
+    /// `admin`:           current DukaPay admin.
+    /// `target_contract`: the DukaPay contract whose admin will be updated
     ///                     when finalize_admin_transfer is called.
     pub fn initialize(
         env: Env,
@@ -328,7 +328,7 @@ impl GovernanceContract {
 
     /// Record an approval from a designated signer.
     ///
-    /// Idempotent — calling twice from the same signer records one approval.
+    /// Idempotent: calling twice from the same signer records one approval.
     /// Soroban's require_auth guarantees the caller genuinely controls `signer`.
     pub fn approve_transfer(env: Env, signer: Address) -> Result<(), GovernanceError> {
         signer.require_auth();
@@ -348,7 +348,7 @@ impl GovernanceContract {
             return Err(GovernanceError::SignerNotAllowed);
         }
 
-        // Map::set is idempotent — duplicate calls do not increment the count
+        // Map::set is idempotent; duplicate calls do not increment the count
         pending.approvals.set(signer.clone(), true);
 
         let approvals_so_far = pending.approvals.len();

@@ -1586,7 +1586,7 @@ fn test_deposit_collateral_moves_funds_from_borrower_to_contract() {
     // Regression test for #1353: deposit_collateral's token transfer was
     // reported as paying the borrower instead of taking collateral from
     // them. That direction is already correct on main (verified via git
-    // blame: fixed in a prior, unrelated commit — see PR description) — this
+    // blame: fixed in a prior, unrelated commit; see PR description). This
     // test pins the exact expected balance movement on both sides so any
     // future regression here is caught immediately: the borrower's balance
     // must decrease by the deposited amount and the contract's must
@@ -2110,7 +2110,7 @@ fn test_pending_loans_count_against_cap() {
     // Set cap to 2
     client.set_max_loans_per_borrower(&2);
 
-    // Request two loans (both pending) — should consume the full cap
+    // Request two loans (both pending); should consume the full cap
     let _loan_id_1 = client.request_loan(&borrower, &500, &17280);
     let _loan_id_2 = client.request_loan(&borrower, &500, &17280);
 
@@ -2493,7 +2493,7 @@ fn test_oracle_rate_within_bounds_accepted() {
     // Set the oracle on the loan manager
     manager.set_rate_oracle(&oracle_id);
 
-    // Request loan — the oracle branch should be taken
+    // Request loan: the oracle branch should be taken
     let loan_id = manager.request_loan(&borrower, &1000, &17280);
     let loan = manager.get_loan(&loan_id);
 
@@ -2666,7 +2666,7 @@ fn test_oracle_rate_below_min_falls_back_to_default() {
     manager.set_rate_oracle(&oracle_id);
     manager.set_min_rate_bps(&500);
 
-    // Request loan — oracle returns 100 which is below min_rate_bps=500
+    // Request loan: oracle returns 100 which is below min_rate_bps=500
     let loan_id = manager.request_loan(&borrower, &1000, &17280);
     let loan = manager.get_loan(&loan_id);
 
@@ -2702,7 +2702,7 @@ fn test_oracle_rate_above_max_falls_back_to_default() {
     manager.set_rate_oracle(&oracle_id);
     manager.set_max_rate_bps(&2_000);
 
-    // Request loan — oracle returns 5000 which is above max_rate_bps=2000
+    // Request loan: oracle returns 5000 which is above max_rate_bps=2000
     let loan_id = manager.request_loan(&borrower, &1000, &17280);
     let loan = manager.get_loan(&loan_id);
 
@@ -3035,7 +3035,7 @@ fn test_refinance_loan_increases_principal_draws_from_pool() {
     let borrower_balance_before = token_client.balance(&borrower);
     let pool_balance_before = token_client.balance(&pool_client);
 
-    // Refinance to 2_000 — pool should disburse the extra 1_000.
+    // Refinance to 2_000: pool should disburse the extra 1_000.
     manager.refinance_loan(&loan_id, &2_000, &17_280);
 
     let loan = manager.get_loan(&loan_id);
@@ -3057,7 +3057,7 @@ fn test_refinance_loan_increases_principal_draws_from_pool() {
 fn test_refinance_loan_increasing_amount_increases_total_outstanding() {
     // Regression test for #1354: refinancing to a larger amount (borrowing
     // more) must INCREASE total_outstanding by the borrowed delta, not
-    // decrease it — a flipped sign here would let a borrower's recorded debt
+    // decrease it; a flipped sign here would let a borrower's recorded debt
     // shrink while the pool actually pays them more.
     let env = Env::default();
     env.mock_all_auths_allowing_non_root_auth();
@@ -3091,7 +3091,7 @@ fn test_refinance_loan_increasing_amount_increases_total_outstanding() {
 
     let total_outstanding_before = manager.get_total_outstanding(&token_id);
 
-    // Refinance from 1_000 to 2_000 — total_outstanding must grow by 1_000.
+    // Refinance from 1_000 to 2_000: total_outstanding must grow by 1_000.
     manager.refinance_loan(&loan_id, &2_000, &17_280);
 
     let total_outstanding_after = manager.get_total_outstanding(&token_id);
@@ -3136,7 +3136,7 @@ fn test_refinance_loan_decreases_principal_returns_excess_to_pool() {
 
     let pool_balance_before = token_client.balance(&pool_client);
 
-    // Refinance down to 1_000 — borrower returns 1_000 to the pool.
+    // Refinance down to 1_000: borrower returns 1_000 to the pool.
     manager.refinance_loan(&loan_id, &1_000, &17_280);
 
     let loan = manager.get_loan(&loan_id);
@@ -3187,7 +3187,7 @@ fn test_refinance_loan_decreasing_amount_decreases_total_outstanding() {
 
     let total_outstanding_before = manager.get_total_outstanding(&token_id);
 
-    // Refinance down from 2_000 to 1_000 — total_outstanding must shrink by 1_000.
+    // Refinance down from 2_000 to 1_000: total_outstanding must shrink by 1_000.
     manager.refinance_loan(&loan_id, &1_000, &17_280);
 
     let total_outstanding_after = manager.get_total_outstanding(&token_id);

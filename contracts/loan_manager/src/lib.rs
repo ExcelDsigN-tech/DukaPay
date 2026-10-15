@@ -1325,7 +1325,7 @@ impl LoanManager {
             .expect("token not set");
         let term_ledgers = Self::read_default_term(&env);
 
-        // Cross-contract READ for liquidity check — still in the CHECKS phase.
+        // Cross-contract READ for liquidity check, still in the CHECKS phase.
         let pool_client = PoolClient::new(&env, &lending_pool);
         let pool_balance = pool_client.pool_balance(&token);
         let total_outstanding = Self::total_outstanding(&env, &token);
@@ -2190,7 +2190,7 @@ impl LoanManager {
             core::cmp::Ordering::Equal => {}
         }
 
-        // #1354: delta must be new minus prior, not prior minus new — adjust_total_outstanding
+        // #1354: delta must be new minus prior, not prior minus new: adjust_total_outstanding
         // adds the delta to the running total, so borrowing more must produce a positive delta.
         let outstanding_delta = new_amount
             .checked_sub(loan.amount)
@@ -2429,7 +2429,7 @@ impl LoanManager {
     }
 
     /// Set a new admin address. Only callable by the multisig governance contract.
-    /// This is the exclusive admin transfer path — direct propose/accept is not supported.
+    /// This is the exclusive admin transfer path; direct propose/accept is not supported.
     pub fn set_admin(env: Env, new_admin: Address) {
         let current_admin = Self::admin(&env);
         // Only the governance contract can call this function

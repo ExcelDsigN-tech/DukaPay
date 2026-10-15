@@ -553,7 +553,7 @@ impl RemittanceNFT {
         metadata_uri: String,
         recipient_commitment: BytesN<32>,
     ) -> Result<(), NftError> {
-        // Admin-only — no minter bypass allowed for remints.
+        // Admin-only: no minter bypass allowed for remints.
         Self::admin(&env).require_auth();
         Self::assert_not_paused(&env)?;
 
@@ -565,7 +565,7 @@ impl RemittanceNFT {
         // Validate metadata URI format
         Self::validate_metadata_uri(&env, &metadata_uri)?;
 
-        // Must be a previously burned account — not a first-time mint.
+        // Must be a previously burned account, not a first-time mint.
         let burned_key = DataKey::Burned(user.clone());
         if !env.storage().persistent().has(&burned_key) {
             return Err(NftError::NftNotFound);
@@ -617,7 +617,7 @@ impl RemittanceNFT {
             .set(&commitment_key, &recipient_commitment);
         Self::bump_persistent_ttl(&env, &commitment_key);
 
-        // Emit a distinct AdminRemint event — auditably separate from Mint events.
+        // Emit a distinct AdminRemint event, auditably separate from Mint events.
         env.events().publish(
             (symbol_short!("AdmRemint"), user.clone()),
             (initial_score, recipient_commitment),
@@ -953,7 +953,7 @@ impl RemittanceNFT {
             return Err(NftError::SelfTransfer);
         }
 
-        // #1358: the current owner must consent to giving up their own asset —
+        // #1358: the current owner must consent to giving up their own asset;
         // requiring the recipient's auth instead let anyone pull any victim's
         // NFT (and its score) to themselves.
         from.require_auth();
@@ -1065,7 +1065,7 @@ impl RemittanceNFT {
     ///
     /// This must be called by the admin before `mint()` can succeed for a
     /// previously-burned user. The approval is consumed on use and cannot
-    /// be reused — a new `approve_remint()` call is required for each
+    /// be reused; a new `approve_remint()` call is required for each
     /// subsequent remint attempt.
     ///
     /// Reverts with `ContractPaused` if the contract is paused.

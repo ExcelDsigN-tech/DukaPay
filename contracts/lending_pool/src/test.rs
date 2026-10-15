@@ -91,7 +91,7 @@ fn test_deposit_flow() {
 
     // First deposit: 1:1 share minting.
     assert_eq!(pool_client.get_shares(&provider, &token_id), 3000);
-    // No yield yet — asset value equals shares.
+    // No yield yet: asset value equals shares.
     assert_eq!(pool_client.get_deposit(&provider, &token_id), 3000);
     assert_eq!(pool_client.get_total_shares(&token_id), 3000);
 }
@@ -747,7 +747,7 @@ fn test_subsequent_depositor_does_not_dilute_existing_holders() {
 
     // provider_b deposits 1100 at the new exchange rate:
     //   shares_minted = 1100 * (1000 + 1000) / (1100 + 1000) = 1047
-    //   (rounded down — provider_b is *not* credited the pre-existing yield).
+    //   (rounded down; provider_b is *not* credited the pre-existing yield).
     pool_client.deposit(&provider_b, &token_id, &1_100, &0);
     // Managed assets: 2200 | Shares: 2047
 

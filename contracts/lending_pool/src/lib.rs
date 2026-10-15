@@ -53,7 +53,7 @@ pub enum PoolError {
 /// v2 replaces the accumulator-style keys (Deposit, RewardDebt, ClaimableYield,
 /// AccYieldPerDeposit, UnclaimedYieldPool) with a share-based (LP-token) model.
 /// Yield is now implicit in the exchange rate between shares and underlying
-/// assets — no separate accumulation or claim step is required.
+/// assets; no separate accumulation or claim step is required.
 ///
 /// All per-token keys carry the token address so one contract instance can
 /// serve multiple token liquidity pools.
@@ -188,7 +188,7 @@ impl LendingPool {
     /// ledger by transferring tokens directly to the pool's address,
     /// without going through `deposit`/`redeem`. It is mutated
     /// only by `deposit` (+amount), `redeem`/`withdraw` (-assets_to_return),
-    /// and `distribute_yield` (+amount) — never by `adjust_outstanding`,
+    /// and `distribute_yield` (+amount), never by `adjust_outstanding`,
     /// since moving principal between "idle" and "outstanding" does not
     /// change the total value under management.
     fn total_managed_assets(env: &Env, token: &Address) -> i128 {
@@ -444,7 +444,7 @@ impl LendingPool {
 
         let cur_total_shares = Self::total_shares(env, token);
         // Pricing is derived from internally tracked accounting, never from
-        // the live token balance — see `total_managed_assets`.
+        // the live token balance; see `total_managed_assets`.
         let total_managed_before = Self::total_managed_assets(env, token);
         let assets_to_return =
             Self::calc_assets_to_redeem(shares, total_managed_before, cur_total_shares);
@@ -749,7 +749,7 @@ impl LendingPool {
 
         // Snapshot pool state *before* the transfer so the share price
         // reflects internally tracked accounting, never the live token
-        // balance — see `total_managed_assets`.
+        // balance; see `total_managed_assets`.
         let total_managed_before = Self::total_managed_assets(&env, &token);
         let cur_total_shares = Self::total_shares(&env, &token);
 
@@ -981,7 +981,7 @@ impl LendingPool {
     ///
     /// The redemption value is derived from internally tracked accounting
     /// (`total_managed_assets`), which automatically includes any yield
-    /// realized via `distribute_yield` since the shares were minted — no
+    /// realized via `distribute_yield` since the shares were minted, with no
     /// separate claim step is required.
     ///
     /// `min_assets_out` is the caller's slippage bound: if the computed
@@ -1200,7 +1200,7 @@ impl LendingPool {
             return Ok(());
         }
 
-        // #1356: delta must be added, not subtracted — a positive delta means
+        // #1356: delta must be added, not subtracted: a positive delta means
         // outstanding debt grew (e.g. a new disbursement), a negative delta
         // means it shrank (e.g. a repayment). Subtracting inverted both cases.
         let key = DataKey::TotalOutstanding(token.clone());

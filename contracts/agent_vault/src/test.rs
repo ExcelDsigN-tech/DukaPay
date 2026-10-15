@@ -59,7 +59,7 @@ fn fund(s: &Setup, a: &Address, amount: i128) {
 }
 
 /// `env.events().all()` returns only the events of the MOST RECENT top-level
-/// invocation — previous call frames' events are gone. Call this immediately
+/// invocation; previous call frames' events are gone. Call this immediately
 /// after the event-emitting call, before any read/other call.
 fn last_event_topic0(env: &Env) -> Symbol {
     let events = env.events().all();
@@ -256,7 +256,7 @@ fn test_transfer_float_atomic() {
 /// `write_vault`. When `from == to` both reads observe the same starting
 /// balance and the second write clobbers the first, so a naive
 /// implementation nets the agent `+amount` float per call with no
-/// corresponding mint or collateral movement — an unbounded free-float
+/// corresponding mint or collateral movement: an unbounded free-float
 /// exploit that also breaks the global solvency invariant.
 #[test]
 fn test_transfer_float_rejects_self_transfer() {
@@ -269,7 +269,7 @@ fn test_transfer_float_rejects_self_transfer() {
         s.client.try_transfer_float(&a, &a, &100),
         Err(Ok(VaultError::InvalidParams))
     );
-    // Float must be unchanged — no free minting via self-transfer.
+    // Float must be unchanged: no free minting via self-transfer.
     assert_eq!(s.client.get_vault(&a).float, 500);
 }
 

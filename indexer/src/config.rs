@@ -39,9 +39,9 @@ pub struct Config {
 
 #[derive(Clone, Debug)]
 pub enum CheckpointBackend {
-    /// JSON file on a persistent volume — fine for single-replica deployments.
+    /// JSON file on a persistent volume, fine for single-replica deployments.
     File { path: String },
-    /// Postgres row per (shard, contract) — required for multi-replica.
+    /// Postgres row per (shard, contract), required for multi-replica.
     Postgres { url: String },
 }
 

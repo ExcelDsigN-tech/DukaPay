@@ -69,7 +69,7 @@ pub async fn run(cfg: Config) -> Result<()> {
 
     metrics::set_ready(true);
 
-    // If any fetcher exits it is fatal — let the process restart under the orchestrator.
+    // If any fetcher exits it is fatal; let the process restart under the orchestrator.
     for f in fetchers {
         f.await??;
     }

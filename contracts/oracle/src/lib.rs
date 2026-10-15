@@ -581,7 +581,7 @@ impl Oracle {
     }
 
     /// The effective manipulation-resistant price for `asset` as a fallible
-    /// result — useful for off-chain tools and tests.
+    /// result; useful for off-chain tools and tests.
     pub fn get_price_result(env: &Env, asset: Address) -> Result<i128, OracleError> {
         Self::assert_not_paused(env)?;
         let now = env.ledger().timestamp();
@@ -606,7 +606,7 @@ impl Oracle {
     /// The effective manipulation-resistant price for `asset`. Reverts with
     /// [`OracleError::StalePrice`] when the feed is older than 1 hour and with
     /// [`OracleError::InsufficientSources`] when fewer than two sources are
-    /// fresh — consumers (e.g. `loan_manager` liquidation) can call this and
+    /// fresh. Consumers (e.g. `loan_manager` liquidation) can call this and
     /// rely on the revert to refuse stale or degraded prices.
     pub fn get_price(env: Env, asset: Address) -> i128 {
         match Self::get_price_result(&env, asset) {

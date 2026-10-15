@@ -816,7 +816,7 @@ fn test_score_history_tracks_and_caps_recent_updates() {
         &None,
     );
 
-    // Add 52 updates — exceeds MAX_SCORE_HISTORY_ENTRIES (50)
+    // Add 52 updates, which exceeds MAX_SCORE_HISTORY_ENTRIES (50)
     for sequence in 1..=52u32 {
         env.ledger().set_sequence_number(sequence);
         client.update_score(&user, &usdc(100), &None);
@@ -899,7 +899,7 @@ fn test_approve_remint_allows_authorized_minter_remint() {
     );
     client.burn(&user, &None);
 
-    // Reminting a burned user via mint() is rejected even for authorized minters —
+    // Reminting a burned user via mint() is rejected even for authorized minters;
     // burned account recovery must go through admin_remint() only.
     let result = client.try_mint(
         &user,
@@ -1599,7 +1599,7 @@ fn test_remint_approval_is_single_use() {
         &create_test_commitment(&env, 1),
     );
 
-    // Approval was consumed — burn and try again without new approval
+    // Approval was consumed; burn and try again without new approval
     client.burn(&user, &None);
     let result = client.try_admin_remint(
         &user,
@@ -1760,7 +1760,7 @@ fn test_admin_remint_fails_for_non_burned_user() {
 
     client.initialize(&admin);
 
-    // User was never burned — admin_remint should fail
+    // User was never burned, so admin_remint should fail
     let result = client.try_admin_remint(
         &user,
         &500,
@@ -1792,7 +1792,7 @@ fn test_mint_rejects_burned_user_and_redirects_to_admin_remint() {
     );
     client.burn(&user, &None);
 
-    // mint() must reject burned users — even with approval
+    // mint() must reject burned users, even with approval
     client.approve_remint(&user);
     let result = client.try_mint(
         &user,

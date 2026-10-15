@@ -3,7 +3,7 @@
 // Fuzz target for #492/#493/#494: prove that the value-moving and
 // state-mutating entry points on `LendingPool` can never execute while the
 // DukaPay `CircuitBreaker` is tripped (global, contract-wide, or function-level
-// pause). A bypass here is a critical invariant violation — the breaker exists
+// pause). A bypass here is a critical invariant violation: the breaker exists
 // to halt fund movement during an incident response.
 
 use arbitrary::Arbitrary;
