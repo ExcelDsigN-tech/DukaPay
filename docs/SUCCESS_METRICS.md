@@ -1,8 +1,8 @@
-# DukaPay — Target Success Metrics
+# DukaPay: Target Success Metrics
 
 > **Status**: Seed document (issue #567).  
 > Quantitative targets marked **TBD** must be confirmed by a product
-> owner/stakeholder — the candidates below are derived from the codebase and
+> owner/stakeholder. The candidates below are derived from the codebase and
 > are intentionally conservative starting-points, not mandates.  
 > This file is the single source of truth for "is this working?".
 > Update targets here when they are agreed; link them from sprint planning and
@@ -126,7 +126,7 @@ open disputes > 7 days).
 - [ ] Set numeric targets for all **TBD** cells above.
 - [ ] Confirm the definition of "active agent" (any float tx? or minimum volume?).
 - [ ] Agree on the KPI review cadence (weekly? fortnightly sprint retro?).
-- [ ] Decide whether `circuit_breaker` and `settlement-netter` contracts are in-scope for the current success window (both are currently incomplete — see PRD §"Nice to Have").
+- [ ] Decide whether `circuit_breaker` and `settlement-netter` contracts are in-scope for the current success window (both are currently incomplete; see PRD §"Nice to Have").
 - [ ] Define the cohort window for retention and tier-progression metrics.
 
 ---

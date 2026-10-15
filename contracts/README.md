@@ -23,7 +23,7 @@ DukaPay uses three core smart contracts:
 | `soroban-sdk` | 22.0.0 |
 | `soroban-cli` | 22.0.0+ |
 
-> These versions are pinned in `contracts/Cargo.toml` — keep the two files in sync when upgrading.
+> These versions are pinned in `contracts/Cargo.toml`. Keep the two files in sync when upgrading.
 
 ### The pinned toolchain
 
@@ -41,7 +41,7 @@ components = ["rustfmt", "clippy"]
 command run from inside `contracts/` is intercepted by `rustup`, which reads
 this file, downloads the pinned toolchain and the `wasm32-unknown-unknown`
 target on first use, and runs the real command with them. The first build after
-cloning will therefore pause to download a toolchain — that is expected, not a
+cloning will therefore pause to download a toolchain. That is expected, not a
 failure.
 
 **Build for deployment with `wasm32v1-none`** (`scripts/build.sh` does this).
@@ -55,7 +55,7 @@ version can differ byte-for-byte, which breaks on-chain hash verification even
 when the source is identical. Do not work around it by overriding the channel.
 
 **Minimum rustup version: 1.23.0**, the release that added `rust-toolchain.toml`
-support. On anything older the file is ignored and you get confusing errors —
+support. On anything older the file is ignored and you get confusing errors,
 typically a compile failure against your system toolchain, or
 `error: target 'wasm32-unknown-unknown' not found`, rather than a clear message
 about the pin. Check and upgrade with:
@@ -65,7 +65,7 @@ rustup --version
 rustup self update
 ```
 
-If you must confirm the pin is active, run `rustup show` from `contracts/` —
+If you must confirm the pin is active, run `rustup show` from `contracts/`:
 the pinned version should be listed as the active toolchain, with `overridden
 by` pointing at `rust-toolchain.toml`.
 
@@ -76,7 +76,7 @@ by` pointing at `rust-toolchain.toml`.
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 # Add wasm32 target.
-# Optional here — rust-toolchain.toml already declares it, so rustup installs
+# Optional here: rust-toolchain.toml already declares it, so rustup installs
 # it automatically for the pinned toolchain on first build. Harmless to run,
 # and useful if you also build outside this directory.
 rustup target add wasm32-unknown-unknown

@@ -6,18 +6,18 @@ This directory contains all Express middleware used by the backend.
 
 Applied in this order for every request:
 
-1. `helmet` (third-party) — security headers, CSP.
-2. `cors` (third-party) — origin allowlist enforcement.
-3. `compression` (third-party) — response gzip/deflate.
-4. `express.json` (third-party) — JSON body parsing, capped at 100kb.
-5. **`globalRateLimiter`** (`rateLimiter.ts`) — global per-IP request rate limit.
-6. **`requestIdMiddleware`** (`requestId.ts`) — assigns/propagates `x-request-id`.
-7. **`requestLogger`** (`requestLogger.ts`) — structured request/response logging.
-8. **`metricsMiddleware`** (`metrics.ts`) — records Prometheus HTTP metrics.
-9. **`pauseGuard`** (`pauseGuard.ts`) — rejects state-mutating requests while contracts are paused. It fails closed: if the pause state cannot be read from the database it falls back to the Redis copy, then to the last known state, and otherwise blocks writes. Any fallback raises an alert, and `/api/status/pause` and `/health/deep` report the state's `source` (`database`, `cache`, `memory`, `fail-closed`). `PAUSE_STATE_REFRESH_MS` (default 30000, `0` disables) sets how often it re-reads the database.
+1. `helmet` (third-party): security headers, CSP.
+2. `cors` (third-party): origin allowlist enforcement.
+3. `compression` (third-party): response gzip/deflate.
+4. `express.json` (third-party): JSON body parsing, capped at 100kb.
+5. **`globalRateLimiter`** (`rateLimiter.ts`): global per-IP request rate limit.
+6. **`requestIdMiddleware`** (`requestId.ts`): assigns/propagates `x-request-id`.
+7. **`requestLogger`** (`requestLogger.ts`): structured request/response logging.
+8. **`metricsMiddleware`** (`metrics.ts`): records Prometheus HTTP metrics.
+9. **`pauseGuard`** (`pauseGuard.ts`): rejects state-mutating requests while contracts are paused. It fails closed: if the pause state cannot be read from the database it falls back to the Redis copy, then to the last known state, and otherwise blocks writes. Any fallback raises an alert, and `/api/status/pause` and `/health/deep` report the state's `source` (`database`, `cache`, `memory`, `fail-closed`). `PAUSE_STATE_REFRESH_MS` (default 30000, `0` disables) sets how often it re-reads the database.
 10. _(routes mounted here)_
-11. **`Sentry.setupExpressErrorHandler`** — captures forwarded errors for Sentry.
-12. **`errorHandler`** (`errorHandler.ts`) — final centralized error handler, must stay last.
+11. **`Sentry.setupExpressErrorHandler`**: captures forwarded errors for Sentry.
+12. **`errorHandler`** (`errorHandler.ts`): final centralized error handler, must stay last.
 
 Additional middleware below are applied per-route (not globally in `app.ts`) via individual router files.
 
@@ -26,18 +26,18 @@ Additional middleware below are applied per-route (not globally in `app.ts`) via
 | File                     | Description                                                                                                           |
 | ------------------------ | --------------------------------------------------------------------------------------------------------------------- |
 | `auditLog.ts`            | Sanitizes and logs mutating requests for the audit trail, stripping sensitive fields from the body before persisting. |
-| `auth.ts`                | `requireApiKey` — validates admin API keys and enforces scope-based access for internal/admin routes.                 |
+| `auth.ts`                | `requireApiKey`: validates admin API keys and enforces scope-based access for internal/admin routes.                  |
 | `errorHandler.ts`        | Centralized Express error handler; formats and returns all forwarded errors. Must be registered last.                 |
 | `idempotency.ts`         | Handles `Idempotency-Key` headers, returning a cached response when a key has already been processed.                 |
-| `jwtAuth.ts`             | `requireJwtAuth` — validates JWTs and caps embedded scopes to the wallet's current on-chain role.                     |
+| `jwtAuth.ts`             | `requireJwtAuth`: validates JWTs and caps embedded scopes to the wallet's current on-chain role.                      |
 | `loanAccess.ts`          | Used after `requireJwtAuth`; ensures `req.params.loanId` belongs to the authenticated borrower.                       |
-| `metrics.ts`             | `metricsMiddleware`/`metricsHandler` — records and exposes Prometheus HTTP metrics.                                   |
+| `metrics.ts`             | `metricsMiddleware`/`metricsHandler`: records and exposes Prometheus HTTP metrics.                                    |
 | `pauseGuard.ts`          | Blocks state-mutating requests when the relevant on-chain contract is paused.                                         |
-| `rateLimiter.ts`         | `globalRateLimiter`/`strictRateLimiter` — general-purpose per-IP rate limiting used in `app.ts`.                      |
+| `rateLimiter.ts`         | `globalRateLimiter`/`strictRateLimiter`: general-purpose per-IP rate limiting used in `app.ts`.                       |
 | `rateLimitMiddleware.ts` | Configurable rate limiting middleware for specific routes, with pluggable request-identifier extraction.              |
 | `requestId.ts`           | Assigns/propagates a unique `x-request-id` per request for tracing.                                                   |
 | `requestLogger.ts`       | Logs structured HTTP request fields (method, url, statusCode, durationMs).                                            |
-| `validation.ts`          | `validateBody`/`validateQuery`/`validateParams` — validates request data against Zod schemas.                         |
+| `validation.ts`          | `validateBody`/`validateQuery`/`validateParams`: validates request data against Zod schemas.                          |
 
 ## Usage
 

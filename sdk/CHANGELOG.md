@@ -30,7 +30,7 @@ breaking signature changes, made before 1.0:
 - `loans.buildRepay(loanId, amount, borrowerPublicKey)` now calls
   `POST /loans/{loanId}/repay` (there is no `build-repay` route) and returns
   `RepayTransaction`. `amount` is a positive integer in the asset's base units
-  and `borrowerPublicKey` must match the authenticated wallet — both are required
+  and `borrowerPublicKey` must match the authenticated wallet; both are required
   by the API. Previously it took a decimal string and hit a 404.
 - `scores.get(address)` now calls `GET /score/{userId}` (the route is mounted at
   `/score`, singular) and returns `Score`

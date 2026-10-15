@@ -58,17 +58,17 @@ Kafka support requires building with `--features kafka`.
 
 ## Metrics
 
-- `indexer_ledger_lag{contract_id}` — ledgers behind the safe tip (HPA signal)
+- `indexer_ledger_lag{contract_id}`: ledgers behind the safe tip (HPA signal)
 - `indexer_last_processed_ledger{contract_id}`
-- `indexer_events_processed_total{contract_id,event_type}` — throughput
-- `indexer_fetch_errors_total`, `indexer_process_errors_total` — error rate
-- `indexer_failed_events_total`, `indexer_dead_letter_events_total` — exhausted event retries and durable dead-letter writes
+- `indexer_events_processed_total{contract_id,event_type}`: throughput
+- `indexer_fetch_errors_total`, `indexer_process_errors_total`: error rate
+- `indexer_failed_events_total`, `indexer_dead_letter_events_total`: exhausted event retries and durable dead-letter writes
 - `indexer_sink_writes_total`
-- `indexer_lag_ok` — 1/0 against `INDEXER_LAG_ALERT_THRESHOLD`
+- `indexer_lag_ok`: 1/0 against `INDEXER_LAG_ALERT_THRESHOLD`
 
 ## Deploy
 
-`infra/kubernetes/indexer/deployment.yaml` — StatefulSet (one pod per shard) +
+`infra/kubernetes/indexer/deployment.yaml`: StatefulSet (one pod per shard) +
 HPA scaling on `indexer_ledger_lag`. Requires a `dukapay-indexer` Secret
 (`rpc-url`, `checkpoint-dsn`) and ConfigMap (`contract-ids`, `kafka-brokers`).
 
@@ -78,5 +78,5 @@ At-least-once. A checkpoint for `(shard, contract)` only advances after every
 event in the range has been emitted to the sink. Exhausted events are stored in
 `INDEXER_DEAD_LETTER_FILE`, but the checkpoint remains held until the event can
 be emitted successfully. Dead-letter records are deduplicated by contract and
-event ID. Consumers must dedupe on `(id)` — `shard` is included on each event to
+event ID. Consumers must dedupe on `(id)`; `shard` is included on each event to
 make cross-replica dedupe trivial.

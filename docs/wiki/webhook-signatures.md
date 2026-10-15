@@ -36,30 +36,30 @@ registered.
 
 ## Verification recipe
 
-### Step 1 — Reconstruct the signed payload
+### Step 1: Reconstruct the signed payload
 
 ```
 signedPayload = `${timestamp}.${nonce}.${body_hex}`
 ```
 
-### Step 2 — Compute the expected signature
+### Step 2: Compute the expected signature
 
 ```
 expected = "sha256=" + HMAC-SHA256(secret, signedPayload)
 ```
 
-### Step 3 — Compare with `timingSafeEqual`
+### Step 3: Compare with `timingSafeEqual`
 
 Reject the request if `expected !== received`.
 
-### Step 4 — Timestamp check (replay protection)
+### Step 4: Timestamp check (replay protection)
 
 Compare `X-DukaPay-Timestamp` to the current time.  If the difference
 exceeds **300 seconds** (5 minutes), reject the request.  DukaPay
 accepts `WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS` as an upper bound;
 subscribers should enforce an equivalent window on their side.
 
-### Step 5 — Nonce deduplication
+### Step 5: Nonce deduplication
 
 Track every nonce you have seen within the timestamp-tolerance window
 (e.g. in Redis with a TTL).  If a nonce recurs, reject the request.
@@ -74,7 +74,7 @@ import crypto from "node:crypto";
 const SECRET = YOUR_SUBSCRIPTION_SECRET;
 const MAX_AGE_SECONDS = 300;
 
-// Express with raw body — parse the body BEFORE JSON-decoding.
+// Express with raw body: parse the body BEFORE JSON-decoding.
 app.post("/webhook", express.raw({ type: "application/json" }), (req, res) => {
   const sig = req.headers["x-dukapay-signature"];
   const ts = req.headers["x-dukapay-timestamp"];
@@ -143,7 +143,7 @@ def verify_webhook(request_body: bytes, headers: dict) -> bool:
     ts_str = headers.get("x-dukapay-timestamp", "")
     nonce = headers.get("x-dukapay-nonce", "")
 
-    # Step 4 — timestamp check
+    # Step 4: timestamp check
     try:
         ts = int(ts_str)
     except (TypeError, ValueError):
@@ -152,14 +152,14 @@ def verify_webhook(request_body: bytes, headers: dict) -> bool:
     if age > MAX_AGE_SECONDS:
         return False
 
-    # Step 1 + 2 — reconstruct & compute
+    # Step 1 + 2: reconstruct & compute
     body_hex = request_body.decode("utf-8").encode("utf-8").hex()
     signed_payload = f"{ts_str}.{nonce}.{body_hex}"
     expected = "sha256=" + hmac.new(
         SECRET.encode(), signed_payload.encode(), hashlib.sha256
     ).hexdigest()
 
-    # Step 3 — compare
+    # Step 3: compare
     return hmac.compare_digest(expected, sig)
 ```
 
@@ -176,7 +176,7 @@ The server-side `WEBHOOK_SECRET` environment variable holds the primary
 secret.  Additional previously-used secrets can be listed in
 `WEBHOOK_ROTATION_SECRETS` (comma-separated) so that the internal
 delivery pipeline can sign with the primary secret while consumers
-migrate.  See `webhookService.ts` — the exported `verifyWebhookSignature`
+migrate.  See `webhookService.ts`: the exported `verifyWebhookSignature`
 function accepts a list of `candidateSecrets` and returns `true` on the
 first match.
 

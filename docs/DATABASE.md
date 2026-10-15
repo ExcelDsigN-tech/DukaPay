@@ -55,11 +55,11 @@ Renamed from `loan_events` by migration 1788000000018. A backward-compat view na
 - `idx_contract_events_loan_id_event_type` (renamed from `idx_loan_events_loan_id_event_type`)
 - `idx_contract_events_event_type_loan_id` (renamed from `idx_loan_events_event_type_loan_id`)
 - `idx_contract_events_pool_deposits_withdraws` (renamed from `idx_loan_events_pool_deposits_withdraws`)
-- `uq_contract_events_loan_type_ledger` — UNIQUE on `(loan_id, event_type, ledger)` (added by migration 1789000000001)
-- `loan_events_unique_approved_event_per_loan` — UNIQUE partial index on `loan_id` WHERE `event_type = 'LoanApproved'`
+- `uq_contract_events_loan_type_ledger`: UNIQUE on `(loan_id, event_type, ledger)` (added by migration 1789000000001)
+- `loan_events_unique_approved_event_per_loan`: UNIQUE partial index on `loan_id` WHERE `event_type = 'LoanApproved'`
 - `idx_loan_events_type_created_at` on `(event_type, created_at)` (on the `loan_events` view)
 
-**View**: `loan_events` — SELECT from `contract_events` with `address AS borrower`.
+**View**: `loan_events`, a SELECT from `contract_events` with `address AS borrower`.
 
 ---
 

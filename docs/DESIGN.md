@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-DukaPay transforms traditional lending and borrowing into an immersive, quest-driven experience. The goal is to bridge the gap between complex Web3 financial data and a high-engagement RPG-style interface — making DeFi accessible, rewarding, and sticky.
+DukaPay transforms traditional lending and borrowing into an immersive, quest-driven experience. The goal is to bridge the gap between complex Web3 financial data and a high-engagement RPG-style interface, making DeFi accessible, rewarding, and sticky.
 
 **Related documentation:**
 - [Lender Dashboard Design](../LENDERS_DASHBOARD_DESIGN.md)
@@ -13,7 +13,7 @@ DukaPay transforms traditional lending and borrowing into an immersive, quest-dr
 
 ### Credit Visualisation
 
-Designed the **Reliability Score** engine — a central data visualization hub that translates on-chain creditworthiness into a dynamic circular progress metric with real-time growth indicators. Users can immediately understand their standing without needing to parse raw chain data.
+Designed the **Reliability Score** engine, a central data visualization hub that translates on-chain creditworthiness into a dynamic circular progress metric with real-time growth indicators. Users can immediately understand their standing without needing to parse raw chain data.
 
 ### Gamified Retention
 
@@ -25,7 +25,7 @@ Built the **Quest Log** and **Kingdom Tier Roadmap** systems to incentivize time
 
 ### Complex Financial States
 
-Streamlined the **Expansion Loan** interface to present critical data — repayment deadlines, USDC amounts, interest rates — within a clean, high-contrast dark mode layout. Reduced cognitive load by grouping related financial states into scannable card components.
+Streamlined the **Expansion Loan** interface to present critical data (repayment deadlines, USDC amounts, interest rates) within a clean, high-contrast dark mode layout. Reduced cognitive load by grouping related financial states into scannable card components.
 
 ### System Design
 
@@ -39,10 +39,10 @@ Developed a cohesive visual language built around:
 
 ## Design Principles
 
-- Clarity over complexity — financial data should never feel overwhelming
-- Progression as motivation — every interaction should feel like it moves the user forward
-- Dark mode first — optimized for extended sessions and Web3 aesthetics
-- Consistency — shared component language across all dashboard views
+- Clarity over complexity: financial data should never feel overwhelming
+- Progression as motivation: every interaction should feel like it moves the user forward
+- Dark mode first: optimized for extended sessions and Web3 aesthetics
+- Consistency: shared component language across all dashboard views
 
 ---
 
@@ -109,7 +109,7 @@ App-shell buttons and focus stay on indigo `#4F46E5` (white text 6.29:1). For ac
 > `GamificationSettings`, `LevelUpModal`, `XPGainAnimation`), the quest/tier
 > modules described here, and the disconnected-wallet landing page
 > (`components/landing/LandingPage.tsx`). It is formalized as reusable tokens
-> under the `.kingdom` scope in `globals.css` — new code must use those
+> under the `.kingdom` scope in `globals.css`. New code must use those
 > variables instead of ad hoc hex/Tailwind classes.
 
 | Role | Value |
@@ -122,7 +122,7 @@ App-shell buttons and focus stay on indigo `#4F46E5` (white text 6.29:1). For ac
 | Warning | `#F59E0B` |
 | Danger | `#EF4444` |
 | Text Primary | `#F1F5F9` |
-| Text Muted | `#64748B` (large text / decorative only — see contrast table) |
+| Text Muted | `#64748B` (large text / decorative only; see contrast table) |
 | Text Muted (body-safe) | `#9AA4B5` (`--kingdom-text-muted-aa`) |
 | Primary Text on dark | `#A78BFA` (`--kingdom-primary-text`; raw `#7C3AED` as text fails AA) |
 

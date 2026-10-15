@@ -3,10 +3,10 @@
 TypeScript SDK for the [DukaPay](https://github.com/ExcelDsigN-tech/dukapay)
 lending & remittance protocol.
 
-- **`DukaPayClient`** — typed client for every API resource (loans, pool, scores, remittance, auth)
-- **Wallet adapters** — `FreighterAdapter`, `AlbedoAdapter`, or your own via the `WalletAdapter` interface
-- **`ContractHelpers`** — stroop/bps conversions, address formatting, network constants
-- **React hooks** — `useWallet`, `useLoans`, `useFloat` (import from `@dukapay/sdk/react`)
+- **`DukaPayClient`**: typed client for every API resource (loans, pool, scores, remittance, auth)
+- **Wallet adapters**: `FreighterAdapter`, `AlbedoAdapter`, or your own via the `WalletAdapter` interface
+- **`ContractHelpers`**: stroop/bps conversions, address formatting, network constants
+- **React hooks**: `useWallet`, `useLoans`, `useFloat` (import from `@dukapay/sdk/react`)
 
 ## Install
 

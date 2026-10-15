@@ -84,7 +84,7 @@ stricter rate limit (10 requests/minute/IP) to prevent abuse.
 | `SCORE_RECONCILIATION_AUTOCORRECT_THRESHOLD` | ✓ | ✓ | ✓ | `50` | Max points auto-corrected per run | `backend/src/config/scores.ts` |
 | `JWT_SECRET` | ✓ | ✓ | ✓ | `your-super-secret-jwt-key-change-in-production` | JWT signing/verification secret | `backend/src/middleware/jwtAuth.ts` |
 | `INTERNAL_API_KEY` | ✓ | ✓ | ✓ | `change-me` | API key for internal endpoints | `backend/src/middleware/auth.ts` |
-| `PII_KEK_KEY` | ✓ | ✓ | ✓ | — | PII field-level encryption Key-Encryption-Key (64-character hex string; generate with `openssl rand -hex 32`). **Required in all environments — hard boot requirement** (enforced by `validateEnvVars`). | `backend/src/config/env.ts`, `backend/src/services/piiCrypto.ts` |
+| `PII_KEK_KEY` | ✓ | ✓ | ✓ | — | PII field-level encryption Key-Encryption-Key (64-character hex string; generate with `openssl rand -hex 32`). **Required in all environments: hard boot requirement** (enforced by `validateEnvVars`). | `backend/src/config/env.ts`, `backend/src/services/piiCrypto.ts` |
 | `ADMIN_WALLETS` | ✓ | ✓ | ✓ | — | Comma-separated Stellar public keys granted the `admin` role (`admin:all` scope). **Security-critical**: any wallet listed here receives full admin privileges. Unlisted wallets default to `borrower`. | `backend/src/auth/rbac.ts` |
 | `LENDER_WALLETS` | ✓ | ✓ | ✓ | — | Comma-separated Stellar public keys granted the `lender` role (`read:loans`, `read:pool` scopes). Unlisted wallets default to `borrower`. | `backend/src/auth/rbac.ts` |
 | `AGENT_WALLETS` | ✓ | ✓ | ✓ | — | Comma-separated Stellar public keys granted the `agent` role (own data + assigned borrowers). Unlisted wallets default to `borrower`. | `backend/src/auth/rbac.ts` |
@@ -96,7 +96,7 @@ stricter rate limit (10 requests/minute/IP) to prevent abuse.
 | `WEBHOOK_REQUEST_TIMEOUT_MS` | ✓ | ✓ | ✓ | `30000` | Outgoing webhook request timeout | `backend/src/services/webhookService.ts` |
 | `INDEXER_FINALITY_DEPTH` | ✓ | ✓ | ✓ | `5` | Number of confirmed ledgers before an event is considered final | `backend/src/config/indexer.ts` |
 | `INDEXER_LAG_ALERT_THRESHOLD` | ✓ | ✓ | ✓ | `100` | Ledger lag threshold that triggers an alert | `backend/src/config/indexer.ts` |
-| `KYC_ENFORCEMENT_ENABLED` | — | ✓ | ✓ | `false` | Enable KYC/AML enforcement on borrower onboarding. **Intended default: `false` in dev only; must be `true` in staging and production — hard boot requirement** (enforced by `validateProductionComplianceFlags` + CI `check-prod-flags`). | `backend/src/services/complianceService.ts` |
+| `KYC_ENFORCEMENT_ENABLED` | — | ✓ | ✓ | `false` | Enable KYC/AML enforcement on borrower onboarding. **Intended default: `false` in dev only; must be `true` in staging and production (hard boot requirement)** (enforced by `validateProductionComplianceFlags` + CI `check-prod-flags`). | `backend/src/services/complianceService.ts` |
 | `COMPLYADVANTAGE_API_KEY` | — | ✓ | ✓ | — | ComplyAdvantage API key for AML screening | `backend/src/services/complyAdvantageService.ts` |
 | `COMPLYADVANTAGE_API_URL` | — | ✓ | ✓ | `https://api.complyadvantage.com` | ComplyAdvantage API base URL | `backend/src/services/complyAdvantageService.ts` |
 | `COMPLYADVANTAGE_SEARCH_PROFILE` | — | ✓ | ✓ | — | ComplyAdvantage search profile configured for OFAC, UN, EU, PEP and adverse-media sources | `backend/src/services/complyAdvantageService.ts` |
@@ -121,7 +121,7 @@ stricter rate limit (10 requests/minute/IP) to prevent abuse.
 
 ### Production Mainnet Posture
 
-> **#565 decision:** `KYC_ENFORCEMENT_ENABLED` is a hard requirement in production — backend boot (`validateProductionComplianceFlags`) and the deploy guard (`scripts/verify-production-env.mjs`) both fail when it is not `true`. `AUDIT_ANCHOR_ENABLED` is recommended but not blocking — both warn when it is off, and both fail when it is on without `AUDIT_ANCHOR_CONTRACT_ID` / `AUDIT_ANCHOR_SOURCE_SECRET`.
+> **#565 decision:** `KYC_ENFORCEMENT_ENABLED` is a hard requirement in production: backend boot (`validateProductionComplianceFlags`) and the deploy guard (`scripts/verify-production-env.mjs`) both fail when it is not `true`. `AUDIT_ANCHOR_ENABLED` is recommended but not blocking. Both warn when it is off, and both fail when it is on without `AUDIT_ANCHOR_CONTRACT_ID` / `AUDIT_ANCHOR_SOURCE_SECRET`.
 
 AML values below are still placeholders that require compliance sign-off. All values must be set explicitly in production env/secrets, not left to code defaults.
 
@@ -131,19 +131,19 @@ AML values below are still placeholders that require compliance sign-off. All va
 | `AUDIT_ANCHOR_ENABLED` | `true` (recommended) | Not blocking (#565): warns when off. When on, `AUDIT_ANCHOR_CONTRACT_ID` (`C...`) and `AUDIT_ANCHOR_SOURCE_SECRET` (`S...`) are required. |
 | `AML_REPORTING_THRESHOLD` | `10000` (placeholder) | Placeholder amount; requires compliance sign-off for launch jurisdictions. Guard checks numeric `>=1000`, not blank. |
 | `AML_DAILY_TX_LIMIT` | `10` (placeholder) | Placeholder velocity limit; requires compliance sign-off. Guard checks `1..100`, not blank. |
-| `AML_HIGH_RISK_COUNTRIES` | `AF,BY,CF,CD,CU,ER,GN,HT,IR,KE,KP,LB,LY,MM,NG,NI,RU,SO,SS,SD,SY,VE,YE,ZW` (placeholder) | **Not reviewed** — placeholder list only. Previously included `UA` (not FATF-listed) and omitted `KE`/`NG` (on FATF grey list as of early 2025). Requires compliance sign-off before mainnet; see `backend/.env.production.example` and `complianceService.ts` which reads this value directly. |
+| `AML_HIGH_RISK_COUNTRIES` | `AF,BY,CF,CD,CU,ER,GN,HT,IR,KE,KP,LB,LY,MM,NG,NI,RU,SO,SS,SD,SY,VE,YE,ZW` (placeholder) | **Not reviewed**: placeholder list only. Previously included `UA` (not FATF-listed) and omitted `KE`/`NG` (on FATF grey list as of early 2025). Requires compliance sign-off before mainnet; see `backend/.env.production.example` and `complianceService.ts` which reads this value directly. |
 | `STELLAR_NETWORK` / `STELLAR_NETWORK_PASSPHRASE` / `STELLAR_RPC_URL` | `mainnet` / `Public Global Stellar Network ; September 2015` / `https://soroban-rpc.stellar.org` | Mainnet network constants; guard checks exact match. |
 | `COMPLYADVANTAGE_API_KEY` + `COMPLYADVANTAGE_SEARCH_PROFILE` | real key + search profile via secrets | Required when KYC enforcement is on; guard requires both set when `KYC_ENFORCEMENT_ENABLED=true`. |
 
 **How it is enforced**
 
-1. **Explicit production config** — `backend/.env.production.example` (template, committed) and `backend/.env.production` (live, gitignored + secrets manager) will set the decided values explicitly; they are **not** left to the code fallback (`false` / blank). Also set in GitHub `production` environment `vars`/`secrets`.
+1. **Explicit production config**: `backend/.env.production.example` (template, committed) and `backend/.env.production` (live, gitignored + secrets manager) will set the decided values explicitly; they are **not** left to the code fallback (`false` / blank). Also set in GitHub `production` environment `vars`/`secrets`.
 
-2. **Deploy-time guard** — `scripts/verify-production-env.mjs` validates the posture. It is run:
+2. **Deploy-time guard**: `scripts/verify-production-env.mjs` validates the posture. It is run:
    - locally: `node scripts/verify-production-env.mjs --env-file backend/.env.production`
    - in CI: `.github/workflows/deploy-production.yml` `production-guard` job (with `KYC_ENFORCEMENT_ENABLED`, `AUDIT_ANCHOR_ENABLED`, `AML_*`, etc. injected from `secrets`/`vars`). The job **fails the deploy** (non-zero exit) on mismatch, preventing an unintentional `false`/blank from ever reaching mainnet.
 
-3. **AML thresholds require compliance sign-off** — they must not be left blank/default. Placeholders like `__SET_VIA_SECRETS_MANAGER__` are only allowed in the `.example` template for secrets — live `production` secrets must hold real values reviewed by compliance.
+3. **AML thresholds require compliance sign-off**: they must not be left blank/default. Placeholders like `__SET_VIA_SECRETS_MANAGER__` are only allowed in the `.example` template for secrets; live `production` secrets must hold real values reviewed by compliance.
 
 **Reference**
 

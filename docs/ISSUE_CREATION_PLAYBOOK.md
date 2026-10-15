@@ -3,7 +3,7 @@
 How maintainers draft and file issues on the DukaPay repo. Contributors can
 use the Standard Issue form instead; it has the same sections minus Points.
 
-## Key Context — DukaPay Monorepo
+## Key Context: DukaPay Monorepo
 
 - **Protocol:** On-chain agent-banking float protocol on Stellar (Soroban)
 - **Core Invariant:** Σ float ≤ Σ collateral × haircut
@@ -15,7 +15,7 @@ use the Standard Issue form instead; it has the same sections minus Points.
 
 ## Analysis Phase (Do First)
 
-Gather evidence and classify severity — the goal is accurate findings, not a
+Gather evidence and classify severity. The goal is accurate findings, not a
 point total.
 
 ```bash
@@ -34,14 +34,14 @@ find . -name "*.test.*" -o -name "*.spec.*" | wc -l
 #    - Read contracts/ for: overflow/underflow paths, access control gaps, reentrancy,
 #      and any code path that could violate Σ float ≤ Σ collateral × haircut
 #    - Read auth/session/settlement flows in backend/ for the same class of issue
-#    - If this pass finds few or no invariant-breaking bugs, report that honestly —
+#    - If this pass finds few or no invariant-breaking bugs, report that honestly;
 #      don't inflate other findings to compensate
 
 # 5. Recent commits, for context on what's already in flight
 git log --oneline -50
 ```
 
-## Output Format — Exact Template (Non-Negotiable)
+## Output Format: Exact Template (Non-Negotiable)
 
 ```
 [{COMPONENT}] {DESCRIPTION}
@@ -79,11 +79,11 @@ All official decisions, reviews and coordination happen right here on GitHub.
 
 | Points | Complexity |
 |---|---|
-| 200 | High — critical security, core bugs, consensus changes |
-| 150 | Medium-High — enhancements, security updates, test suites |
-| 100 | Trivial/Simple — docs, cosmetic, config |
+| 200 | High: critical security, core bugs, consensus changes |
+| 150 | Medium-High: enhancements, security updates, test suites |
+| 100 | Trivial/Simple: docs, cosmetic, config |
 
-### Definition of Done — Component-Specific (pick one set)
+### Definition of Done: Component-Specific (pick one set)
 
 - **Security:** No hardcoded secrets remain in source (grep scan clean) · Authentication flow verified and tested · Security headers (CSP, etc.) configured · No PII exposed in logs or error messages
 - **Bug:** Bug reproduced and root cause identified · Fix implemented and tested · Edge cases covered by existing tests · No regression introduced
@@ -127,12 +127,12 @@ gh issue create \
 families for 4 of them: `borrower` (own rows), `agent` (own + assigned
 borrowers via `agent_assignments`), `auditor` (read-only, all rows), `admin`
 (unrestricted). `lender` has no corresponding `dukapay_request_is_lender()`-
-style policy — it's unclear whether lender requests fall through
+style policy, so it's unclear whether lender requests fall through
 agent-shaped policies, borrower-shaped policies, or are default-denied by
 Postgres RLS (deny-by-default when no policy matches).
 
 **Impact**: If a lender-scoped request reaches a table with RLS enabled and no
-matching policy, Postgres silently returns zero rows rather than erroring —
+matching policy, Postgres silently returns zero rows rather than erroring;
 this could look like "the pool has no data" instead of a clear
 access-control message, and could equally mask an unintended over- or
 under-grant.

@@ -2,11 +2,11 @@
 
 This document is the human-readable rendering of the **single source of truth** for deployed
 Soroban contract IDs across all networks: [`scripts/contract-registry.json`](../scripts/contract-registry.json).
-Update **that file** whenever a contract is (re-)deployed — this page's tables are kept in sync
+Update **that file** whenever a contract is (re-)deployed. This page's tables are kept in sync
 with it, and [`scripts/verify-contracts.ts`](../scripts/verify-contracts.ts) checks that the
 registry, the on-chain state, and `backend/.env` agree.
 
-> **Secrets note**: contract IDs, deployer addresses and deploy tx hashes are public — safe to
+> **Secrets note**: contract IDs, deployer addresses and deploy tx hashes are public, so they are safe to
 > commit. **Never** commit secret/admin keys or signing secrets here or in the registry JSON.
 
 ---
@@ -79,12 +79,12 @@ No contracts deployed yet.
 
 ## Mainnet (`Public Global Stellar Network ; September 2015`)
 
-> **Status (mainnet launch — blocked until #561/#562 + external audit land, and pending #565 decision):** registry is **scaffolded but no contracts have ever touched Stellar mainnet**. The deploy config (`scripts/deploy-config.json` `mainnet` block) and registry (`scripts/contract-registry.json` `networks.mainnet`) are now structurally prepared so the deploy and verification tooling works — `scripts/deploy.ts -- mainnet` can be run once the correctness gaps and audit are cleared and #565 is decided. This is real-money deployment, not a testnet redeploy.
+> **Status (mainnet launch: blocked until #561/#562 + external audit land, and pending #565 decision):** registry is **scaffolded but no contracts have ever touched Stellar mainnet**. The deploy config (`scripts/deploy-config.json` `mainnet` block) and registry (`scripts/contract-registry.json` `networks.mainnet`) are now structurally prepared so the deploy and verification tooling works: `scripts/deploy.ts -- mainnet` can be run once the correctness gaps and audit are cleared and #565 is decided. This is real-money deployment, not a testnet redeploy.
 
 RPC: `https://soroban-rpc.stellar.org`  
 Explorer: `https://stellar.expert/explorer/public`  
-Deploy config: `scripts/deploy-config.json` (`mainnet`: `networkPassphrase`, `rpcUrl`, `admin` placeholder, `token` placeholder, `contracts.*.wasm` for the 6 contracts that `scripts/deploy.ts` currently handles — `remittance_nft`, `lending_pool`, `loan_manager`, `multisig_governance`, `agent_registry`, `agent_vault`; workspace members `audit_anchor` and `oracle` are not yet wired in `deploy.ts` and `ORACLE_CONTRACT_ID` is not yet read)  
-Registry: `scripts/contract-registry.json` (`networks.mainnet` — 7 entries scaffolded with `not yet recorded` placeholders, matching `testnet` shape: 6 contracts + `token`)
+Deploy config: `scripts/deploy-config.json` (`mainnet`: `networkPassphrase`, `rpcUrl`, `admin` placeholder, `token` placeholder, `contracts.*.wasm` for the 6 contracts that `scripts/deploy.ts` currently handles: `remittance_nft`, `lending_pool`, `loan_manager`, `multisig_governance`, `agent_registry`, `agent_vault`; workspace members `audit_anchor` and `oracle` are not yet wired in `deploy.ts` and `ORACLE_CONTRACT_ID` is not yet read)  
+Registry: `scripts/contract-registry.json` (`networks.mainnet`: 7 entries scaffolded with `not yet recorded` placeholders, matching `testnet` shape: 6 contracts + `token`)
 
 | Contract | Address (`C…`) | Deploy Date | Deployer | Deploy Tx Hash | ABI Version | Upgrade Authority | Timelock |
 |---|---|---|---|---|---|---|---|
@@ -102,7 +102,7 @@ Registry: `scripts/contract-registry.json` (`networks.mainnet` — 7 entries sca
 # 1. Build wasms for contracts
 cargo build --target wasm32-unknown-unknown --release --manifest-path contracts/Cargo.toml
 
-# 2. Deploy to mainnet (admin key via secrets manager — never commit the S... secret)
+# 2. Deploy to mainnet (admin key via secrets manager; never commit the S... secret)
 #    Note: scripts/deploy.ts currently hard-codes 6 contracts (nft/pool/manager/governance/registry/vault);
 #    it does not yet read audit_anchor/oracle from the config, so those would need separate handling.
 SECRET_KEY=S... npm run deploy -- mainnet   # runs scripts/deploy.ts -- mainnet for the 6 supported contracts
@@ -111,7 +111,7 @@ SECRET_KEY=S... npm run deploy -- mainnet   # runs scripts/deploy.ts -- mainnet 
 #    upgrade authority and timelock in scripts/contract-registry.json (mainnet block)
 
 # 4. CRITICAL: migrate every contract's admin to multisig_governance (per CONTRACTS.md)
-#    Contracts not migrated stay gated by a raw admin key — not acceptable for mainnet.
+#    Contracts not migrated stay gated by a raw admin key, which is not acceptable for mainnet.
 #    Verify via: stellar contract info --id <C...> --network mainnet
 
 # 5. Set the resulting contract IDs in production env / CI secrets
@@ -138,14 +138,14 @@ Same as testnet (see table above), but sourced from **production** secrets:
 | `token` | `POOL_TOKEN_ADDRESS` | `production` env `POOL_TOKEN_ADDRESS` |
 | `agent_registry` | `AGENT_REGISTRY_CONTRACT_ID` | `production` env |
 | `agent_vault` | `AGENT_VAULT_CONTRACT_ID` | `production` env |
-| `audit_anchor` | `AUDIT_ANCHOR_CONTRACT_ID` | `production` env (pending #565; not deployed via `deploy.ts` — separate handling) |
+| `audit_anchor` | `AUDIT_ANCHOR_CONTRACT_ID` | `production` env (pending #565; not deployed via `deploy.ts`, handled separately) |
 
 Frontend remains API-driven (no direct contract env reads).
 
 ### Post-deploy verification
 
 - `scripts/verify-contracts.ts --network mainnet` checks address format, env consistency, on-chain existence (best-effort RPC probe), and metadata completeness.
-- Before any mainnet contract is populated, verification reports `SKIPPED` (placeholders) — not a failure — so CI stays green until real deployment.
+- Before any mainnet contract is populated, verification reports `SKIPPED` (placeholders), not a failure, so CI stays green until real deployment.
 - After deployment, the same check must pass clean (`OK`) for **every** mainnet entry that is populated, and every deployed contract's admin must be verified as `multisig_governance` (see `CONTRACTS.md` upgrade governance). `audit_anchor` and `oracle` are not yet handled by `deploy.ts`; if they are required for mainnet they need separate deployment and `ORACLE_CONTRACT_ID` wiring.
 
 ---
@@ -154,11 +154,11 @@ Frontend remains API-driven (no direct contract env reads).
 
 `scripts/verify-contracts.ts` checks, per recorded contract:
 
-1. **Address format** — every recorded address is a valid Stellar contract ID (`C…`).
-2. **Env consistency** — the recorded address matches the value set for its backend env var.
-3. **On-chain existence** — the network RPC is reachable and serving (best-effort; skipped when
+1. **Address format**: every recorded address is a valid Stellar contract ID (`C…`).
+2. **Env consistency**: the recorded address matches the value set for its backend env var.
+3. **On-chain existence**: the network RPC is reachable and serving (best-effort; skipped when
    the RPC is unavailable from the runner).
-4. **Metadata completeness** — ABI version, upgrade authority, timelock, deployer, deploy tx
+4. **Metadata completeness**: ABI version, upgrade authority, timelock, deployer, deploy tx
    hash and deploy date are all recorded.
 
 Unrecorded placeholders (`not yet recorded`) and missing environment inputs are reported as

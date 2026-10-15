@@ -76,11 +76,11 @@ is required.
 ## Supported Event Types
 
 The events below are what the webhook *subscription* system
-(`backend/src/services/webhookService.ts`) can actually dispatch — its
+(`backend/src/services/webhookService.ts`) can actually dispatch; its
 `SUPPORTED_WEBHOOK_EVENT_TYPES` list is the source of truth. These are raw
 Soroban contract event names, distinct from the friendly, snake_case
 notification types (`loan_approved`, `repayment_due`, etc.) used by the
-in-app `/api/notifications` REST API — the two are separate systems.
+in-app `/api/notifications` REST API. The two are separate systems.
 
 | Event                     | Description                                              |
 |----------------------------|-----------------------------------------------------------|
@@ -139,26 +139,26 @@ current event names listed above where an equivalent exists.
 
 | Event             | Description                                                          |
 |-------------------|------------------------------------------------------------------------|
-| `Mint`            | Legacy alias — resolves to `NFTMinted`                                  |
-| `AdmRemint`       | Legacy alias — resolves to `NFTMinted`                                    |
-| `ScoreUpd`        | Legacy alias — resolves to `ScoreUpdated`                                   |
-| `Seized`          | Legacy alias — resolves to `NFTSeized`                                        |
-| `NftBurned`       | Legacy alias — resolves to `NFTBurned`                                          |
-| `GovProp`         | Legacy alias — resolves to `ProposalCreated`                                      |
-| `GovAppr`         | Legacy alias — resolves to `ProposalApproved`                                       |
-| `GovFin`          | Legacy alias — resolves to `ProposalFinalized`                                        |
-| `GovCncl`         | Legacy alias — resolves to `ProposalCancelled`                                          |
-| `GovEmerg`        | Legacy alias — resolves to `ProposalCancelled`                                             |
-| `GovExp`          | Legacy alias — resolves to `ProposalCancelled`                                               |
-| `ScoreDecr`       | Legacy event type for a score decrease — not currently aliased to another event type            |
-| `HashUpd`         | Legacy event type for a content-hash update — not currently aliased to another event type          |
-| `Transfer`        | Legacy event type for an NFT/asset transfer — not currently aliased to another event type            |
-| `MntAuth`         | Legacy event type for a minting-authority change — not currently aliased to another event type         |
-| `MntRev`          | Legacy event type for a minting-authority revocation — not currently aliased to another event type       |
-| `Paused`          | Legacy event type for a contract pause — not currently aliased to another event type                       |
-| `Unpaused`        | Legacy event type for a contract unpause — not currently aliased to another event type                       |
-| `PoolPaused`      | Legacy event type for a pool pause — not currently aliased to another event type                                |
-| `PoolUnpaused`    | Legacy event type for a pool unpause — not currently aliased to another event type                                |
+| `Mint`            | Legacy alias, resolves to `NFTMinted`                                   |
+| `AdmRemint`       | Legacy alias, resolves to `NFTMinted`                                     |
+| `ScoreUpd`        | Legacy alias, resolves to `ScoreUpdated`                                    |
+| `Seized`          | Legacy alias, resolves to `NFTSeized`                                         |
+| `NftBurned`       | Legacy alias, resolves to `NFTBurned`                                           |
+| `GovProp`         | Legacy alias, resolves to `ProposalCreated`                                       |
+| `GovAppr`         | Legacy alias, resolves to `ProposalApproved`                                        |
+| `GovFin`          | Legacy alias, resolves to `ProposalFinalized`                                         |
+| `GovCncl`         | Legacy alias, resolves to `ProposalCancelled`                                           |
+| `GovEmerg`        | Legacy alias, resolves to `ProposalCancelled`                                              |
+| `GovExp`          | Legacy alias, resolves to `ProposalCancelled`                                                |
+| `ScoreDecr`       | Legacy event type for a score decrease, not currently aliased to another event type             |
+| `HashUpd`         | Legacy event type for a content-hash update, not currently aliased to another event type           |
+| `Transfer`        | Legacy event type for an NFT/asset transfer, not currently aliased to another event type             |
+| `MntAuth`         | Legacy event type for a minting-authority change, not currently aliased to another event type          |
+| `MntRev`          | Legacy event type for a minting-authority revocation, not currently aliased to another event type        |
+| `Paused`          | Legacy event type for a contract pause, not currently aliased to another event type                        |
+| `Unpaused`        | Legacy event type for a contract unpause, not currently aliased to another event type                        |
+| `PoolPaused`      | Legacy event type for a pool pause, not currently aliased to another event type                                 |
+| `PoolUnpaused`    | Legacy event type for a pool unpause, not currently aliased to another event type                                 |
 
 ---
 
@@ -360,10 +360,10 @@ for additional language examples.
 
 | Code    | Meaning                                      |
 |---------|----------------------------------------------|
-| 2xx     | Delivery accepted — no retry                 |
-| 4xx     | Request rejected — permanent failure (no retry) |
-| 5xx     | Server error — will be retried               |
-| Timeout | Treated as a failure — will be retried       |
+| 2xx     | Delivery accepted, no retry                  |
+| 4xx     | Request rejected: permanent failure (no retry)  |
+| 5xx     | Server error, will be retried                |
+| Timeout | Treated as a failure, will be retried        |
 
 - **Respond within 10 seconds.** Slow responses are counted as failures.
 - Returning any 2xx status (200, 201, 202, 204) acknowledges delivery.

@@ -1,4 +1,4 @@
-# DukaPay Contracts — Architecture & Invariants
+# DukaPay Contracts: Architecture & Invariants
 
 This document describes the Soroban smart contracts deployed on Stellar,
 their responsibilities, and the invariants that must hold at all times.
@@ -20,7 +20,7 @@ their responsibilities, and the invariants that must hold at all times.
 
 ---
 
-## Agent Vault — Solvency Invariant
+## Agent Vault: Solvency Invariant
 
 The protocol's **core invariant** is enforced on-chain in the `agent_vault`
 contract:
@@ -48,9 +48,9 @@ The invariant is checked at **every state-mutating operation**:
 
 ### View Functions for Off-Chain Verification
 
-- **`check_invariant(agent)`** — Returns `(holds, float, max_allowed)` for a
+- **`check_invariant(agent)`**: Returns `(holds, float, max_allowed)` for a
   single agent. Emits an `InvariantChecked` event for indexer consumption.
-- **`check_invariants(agents)`** — Batch check across multiple agents. Returns
+- **`check_invariants(agents)`**: Batch check across multiple agents. Returns
   a Vec of `(agent, holds, float, max_allowed)` tuples.
 
 ### Events
@@ -68,7 +68,7 @@ solvency dashboard and trigger alerts when any agent's invariant is violated.
 
 - Stored on-chain per-agent in the vault struct (`haircut_bps`).
 - Global maximum stored in `Params.max_haircut_bps`.
-- Updatable by the operator via `set_haircut()` — must not break solvency
+- Updatable by the operator via `set_haircut()`; must not break solvency
   for the agent's outstanding float.
 - Default haircut on first deposit equals the global maximum.
 
@@ -97,11 +97,11 @@ Every WASM upgrade of a DukaPay contract flows through the
 Enforced **on-chain**:
 
 - **48-hour timelock** (`UPGRADE_TIMELOCK_SECONDS = 172_800`) between queue and
-  execute — not overridable by the proposer.
-- **3-of-5 multi-sig** — DukaPay quorum is `[admin, security, ops, legal, community]` (signers not yet assigned)
+  execute, not overridable by the proposer.
+- **3-of-5 multi-sig**: DukaPay quorum is `[admin, security, ops, legal, community]` (signers not yet assigned)
   with `threshold = 3`.
-- **14-day TTL** — a queued-but-unexecuted upgrade expires and can be replaced.
-- **Single in-flight upgrade** — a new one cannot be queued while one is pending.
+- **14-day TTL**: a queued-but-unexecuted upgrade expires and can be replaced.
+- **Single in-flight upgrade**: a new one cannot be queued while one is pending.
 - **Emergency pause** halts *all* `execute_upgrade` calls immediately; any single
   signer can trip it, only the admin can lift it.
 

@@ -27,7 +27,7 @@ CircuitBreakerClient::get_pause_state()
 
 **Resolution:**
 - Local pause: admin calls `unpause`.
-- Circuit breaker: a 3-of-5 governance override is required —
+- Circuit breaker: a 3-of-5 governance override is required:
   `propose_override` → `approve_override` (×threshold) → `execute_override`
   (after the override timelock). Note every pause **auto-expires after 72h**.
 

@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-DukaPay's Lender Command Center is a high-performance dashboard built for liquidity providers managing complex yield strategies. The interface prioritizes real-time data accuracy, seamless asset deployment, and a consistent gamification loop — keeping lenders informed, in control, and engaged.
+DukaPay's Lender Command Center is a high-performance dashboard built for liquidity providers managing complex yield strategies. The interface prioritizes real-time data accuracy, seamless asset deployment, and a consistent gamification loop, keeping lenders informed, in control, and engaged.
 
 ---
 
@@ -14,7 +14,7 @@ Designed the **Total Yield Generated** interactive chart, giving lenders a clear
 
 ### Asset Deployment Workflow
 
-Developed the **Expand Position** component — a streamlined right-aligned sidebar that simplifies the deposit flow. Key details surfaced inline:
+Developed the **Expand Position** component, a streamlined right-aligned sidebar that simplifies the deposit flow. Key details surfaced inline:
 
 - Estimated APR based on current pool utilization
 - Platform fee breakdown before confirmation
@@ -26,7 +26,7 @@ Created a comprehensive **Position Monitoring** table that gives lenders a full 
 
 - Asset balances per pool
 - Accrued yield with color-coded profit indicators (green for gains, amber for pending)
-- Real-time transaction statuses — Active vs. Pending
+- Real-time transaction statuses: Active vs. Pending
 
 ### Risk & Health Metrics
 
@@ -40,16 +40,16 @@ Integrated **Pool Health bars** and risk-level indicators within the Prime Lendi
 
 Integrated the **DukaPay Quests** sidebar to tie financial actions directly to XP rewards, maintaining the gamification loop established across the platform. Featured quests include:
 
-- Whale Migration — reward for deploying above a threshold liquidity amount
-- Iron Resolve — reward for maintaining an active position over a set duration
+- Whale Migration: reward for deploying above a threshold liquidity amount
+- Iron Resolve: reward for maintaining an active position over a set duration
 
 ---
 
 ## Design Principles
 
-- Data density without clutter — lenders need numbers fast, not buried
+- Data density without clutter: lenders need numbers fast, not buried
 - Real-time feedback on every action
-- Risk transparency — health and stability always visible, never hidden
+- Risk transparency: health and stability always visible, never hidden
 - Consistent gamification loop across borrower and lender experiences
 
 ---

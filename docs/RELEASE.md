@@ -127,11 +127,11 @@ Production deployment jobs use the GitHub `production` Environment. Required rev
 
 Configure these values on the `production` GitHub Environment:
 
-- `AWS_REGION` — AWS region containing the production ECS resources.
-- `LISTENER_ARN` — production ALB listener ARN.
-- `BLUE_TG_ARN` — blue target group ARN.
-- `GREEN_TG_ARN` — green target group ARN.
-- `AWS_DEPLOY_ROLE_ARN` — secret containing the IAM role assumed by the production workflow.
+- `AWS_REGION`: AWS region containing the production ECS resources.
+- `LISTENER_ARN`: production ALB listener ARN.
+- `BLUE_TG_ARN`: blue target group ARN.
+- `GREEN_TG_ARN`: green target group ARN.
+- `AWS_DEPLOY_ROLE_ARN`: secret containing the IAM role assumed by the production workflow.
 
 GitHub Actions uses OIDC to assume the deployment role instead of storing long-lived AWS access keys.
 

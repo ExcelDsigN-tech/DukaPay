@@ -4,8 +4,8 @@ Operational runbooks for maintainers working on the DukaPay platform.
 
 ## Index
 
-- [Indexer Recovery](indexer-recovery.md) — Responding to indexer lag, RPC outages, and quarantined events.
-- [Monitoring Verification & Incident-Response Drill](incident-response-drill.md) — Pre-mainnet staging validation (alerts under load, orchestrator dry-run, on-call ownership).
+- [Indexer Recovery](indexer-recovery.md): Responding to indexer lag, RPC outages, and quarantined events.
+- [Monitoring Verification & Incident-Response Drill](incident-response-drill.md): Pre-mainnet staging validation (alerts under load, orchestrator dry-run, on-call ownership).
 
 ## Purpose
 

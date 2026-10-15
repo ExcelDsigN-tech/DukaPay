@@ -4,7 +4,7 @@ Staging validation for the Prometheus/Grafana/Alertmanager stack
 (`ops/monitoring/`) and the incident-response runbooks
 (`ops/incident-response/`). Run before mainnet.
 
-## 1. Monitoring verification (reuse `tests/load/` — no new tooling)
+## 1. Monitoring verification (reuse `tests/load/`, no new tooling)
 
 1. Start staging plus monitoring:
    `docker compose -f docker-compose.staging.yml up -d` then
@@ -22,7 +22,7 @@ Staging validation for the Prometheus/Grafana/Alertmanager stack
      without "no data" gaps (business metrics exported).
 4. Record the run date, scenario, profile, and which alerts fired in the
    Q4 drill report. Fix thresholds/dashboards in `alerts.yml` first if an
-   expected alert does not fire — do not just note it.
+   expected alert does not fire. Do not just note it.
 
 ## 2. Incident-response dry-run
 
