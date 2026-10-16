@@ -1,5 +1,6 @@
 import { scValToNative, xdr } from '@stellar/stellar-sdk';
 import { query } from '../db/connection.js';
+import { toWholeStroops } from '../money/decimal.js';
 
 export const SHARE_PRICE_SCALE = 1_000_000;
 export const YIELD_HISTORY_ALLOWED_DAYS = [7, 30, 90] as const;
@@ -22,8 +23,15 @@ interface PoolEventRow {
   value: string | null;
 }
 
+/**
+ * Parses a raw stroop amount from the DB/chain without going through
+ * parseFloat's naive string-to-float coercion. Keeps this module's existing
+ * stroop-denominated unit convention unchanged (unlike `stroopsToAmount`,
+ * which converts to whole tokens) — only the parsing mechanism changes.
+ */
 function parseNumeric(value: unknown): number {
-  const n = parseFloat(String(value ?? 0));
+  if (value === null || value === undefined) return 0;
+  const n = Number(toWholeStroops(value as string | number | bigint));
   return Number.isFinite(n) ? n : 0;
 }
 
@@ -235,9 +243,9 @@ export async function buildDepositorYieldHistory(
 
     points.push({
       timestamp: bucketEnd.toISOString(),
-      depositedValue: parseFloat(depositedValue.toFixed(7)),
-      currentValue: parseFloat(currentValue.toFixed(7)),
-      netYield: parseFloat(netYield.toFixed(7)),
+      depositedValue: Number(depositedValue.toFixed(7)),
+      currentValue: Number(currentValue.toFixed(7)),
+      netYield: Number(netYield.toFixed(7)),
     });
   }
 

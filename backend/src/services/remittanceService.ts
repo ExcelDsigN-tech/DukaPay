@@ -164,22 +164,7 @@ export const remittanceService = {
           throw AppError.internal('Failed to create remittance record');
         }
 
-        const record = result.rows[0];
-
-        return {
-          id: record.id,
-          senderId: record.sender_id,
-          recipientAddress: record.recipient_address,
-          amount: parseFloat(record.amount),
-          fromCurrency: record.from_currency,
-          toCurrency: record.to_currency,
-          memo: record.memo,
-          status: record.status,
-          transactionHash: record.transaction_hash,
-          xdr: record.xdr,
-          createdAt: record.created_at.toISOString(),
-          updatedAt: record.updated_at.toISOString(),
-        };
+        return toRemittance(result.rows[0]);
       });
     } catch (error) {
       logger.withContext().error('Error creating remittance:', error);

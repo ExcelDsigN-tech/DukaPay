@@ -116,6 +116,20 @@ describe('updateUserScoresBulk', () => {
       expect(params).toEqual(['user1', 10]);
     }, 20000);
 
+    it('applies a positive delta (Issue #746): insert and conflict-update both add, not subtract', async () => {
+      await updateUserScoresBulk(new Map([['user1', 10]]));
+
+      const [sql] = mockQuery.mock.calls[0] as [string, unknown[]];
+
+      // Insert path: clamp(500 + delta, 300, 850), not 500 - delta.
+      expect(sql).toMatch(/LEAST\(850,\s*GREATEST\(300,\s*500 \+ \$2\)\)/);
+      expect(sql).not.toMatch(/500 - \$2/);
+
+      // Conflict-update path: carries the signed delta via (EXCLUDED.score - 500),
+      // added to the existing score, not subtracted.
+      expect(sql).toMatch(/scores\.score \+ \(EXCLUDED\.score - 500\)/);
+    }, 20000);
+
     it('calls pool query for multiple users in a single statement', async () => {
       const updates = new Map([
         ['alice', 15],

@@ -116,8 +116,10 @@ router.get('/analytics', poolAnalyticsRateLimiter, getAnalytics);
  *                       type: string
  *                     floatBalance:
  *                       type: number
+ *                       description: Whole-token units (not stroops), matching the convention of getPoolStats.
  *                     collateralBalance:
  *                       type: number
+ *                       description: Whole-token units (not stroops), matching the convention of getPoolStats.
  *                     isActive:
  *                       type: boolean
  *                     activeLoans:
