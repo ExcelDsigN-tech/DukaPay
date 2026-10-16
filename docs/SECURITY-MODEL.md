@@ -91,7 +91,7 @@ Defined in `ROLE_SCOPES` in `backend/src/auth/rbac.ts`:
 | `agent` | `read:loans`, `write:loans`, `read:pool`, `write:pool`, `read:score`, `read:notifications`, `write:notifications`, `read:remittances`, `write:remittances`, `agents:view-assigned` |
 | `borrower` | `read:loans`, `write:loans`, `read:score`, `read:notifications`, `write:notifications`, `read:remittances`, `write:remittances` |
 | `auditor` | `read:audit`, `read:compliance`, `read:loans`, `read:score`, `read:notifications`, `read:remittances`, `read:pool` |
-| `lender` | `read:loans`, `read:pool`, `write:loans`, `write:pool` |
+| `lender` | `read:loans`, `read:pool`, `write:loans`, `write:pool`, `read:notifications`, `write:notifications` |
 
 ---
 

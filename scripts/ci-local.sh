@@ -65,9 +65,13 @@ backend() {
   step backend "format";    npm run format:check
   step backend "build";     npm run build
   step backend "typecheck"; npm run typecheck
+  if psql "$PG_URL" -c '\q' 2>/dev/null; then
+    step backend "migrations"
+    DATABASE_URL="$PG_URL" npm run migrate:up
+  fi
   step backend "tests"
   NODE_ENV="test" \
-  DATABASE_URL="postgres://user:pass@localhost:5432/test" \
+  DATABASE_URL="$PG_URL" \
   REDIS_URL="redis://localhost:6379" \
   JWT_SECRET="test_jwt_secret" \
   STELLAR_RPC_URL="https://rpc.test.invalid" \

@@ -1,5 +1,6 @@
 import createMiddleware from "next-intl/middleware";
 import { DEFAULT_LOCALE, LOCALES, LOCALE_COOKIE, LOCALE_COOKIE_MAX_AGE } from "./app/lib/locales";
+import { NEXT_PUBLIC_API_URL } from "./app/lib/apiConfig";
 import { NextRequest, NextResponse } from "next/server";
 
 const intlMiddleware = createMiddleware({
@@ -29,7 +30,7 @@ export default function middleware(request: NextRequest) {
   // 2. Generate nonce
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
   const isDev = process.env.NODE_ENV !== "production";
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+  const apiUrl = NEXT_PUBLIC_API_URL;
 
   // 3. Construct CSP
   const cspHeader = `

@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AlertTriangle, RefreshCw } from "lucide-react";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+import { API_URL } from "../../lib/apiConfig";
 
 interface PauseState {
   isPaused: boolean;

@@ -57,9 +57,16 @@ export const ROLE_SCOPES: Record<UserRole, string[]> = {
     'read:remittances',
     'read:pool',
   ],
-  // `lender` is retained as a legacy alias for the pool-provider role that
-  // predates the `agent` naming. New integrations should use `agent`.
-  lender: ['read:loans', 'read:pool', 'write:loans', 'write:pool'],
+  // `lender` represents liquidity providers supplying capital to the lending pool,
+  // distinct from `agent` (who manages assigned borrowers and origination).
+  lender: [
+    'read:loans',
+    'read:pool',
+    'write:loans',
+    'write:pool',
+    'read:notifications',
+    'write:notifications',
+  ],
 };
 
 /** Privilege ordering used for read-level "at least" comparisons. */

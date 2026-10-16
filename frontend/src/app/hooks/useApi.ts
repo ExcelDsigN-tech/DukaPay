@@ -22,8 +22,7 @@ import { useUserStore } from "../stores/useUserStore";
 import { logoutUser, SessionExpiredError } from "../lib/session";
 import { useWallet } from "../components/providers/WalletProvider";
 import { useContractToast } from "./useContractToast";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+import { API_URL } from "../lib/apiConfig";
 
 // ─── Query key factory ────────────────────────────────────────────────────────
 

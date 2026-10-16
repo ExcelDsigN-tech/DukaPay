@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { TokenBalance, WalletNetwork, WalletStatus } from "../../stores/useWalletStore";
 import { useWalletStore } from "../../stores/useWalletStore";
+import { API_URL } from "../../lib/apiConfig";
 
 type FreighterApi = typeof import("@stellar/freighter-api");
 
@@ -59,7 +60,6 @@ interface HorizonBalance {
   asset_code?: string;
 }
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
 const WalletProviderContext = createContext<WalletProviderContextValue | null>(null);
 

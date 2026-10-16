@@ -5,8 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useSSE, type RealtimeStatus } from "./useSSE";
 import { queryKeys } from "./useApi";
 import { useUserStore } from "../stores/useUserStore";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+import { API_URL } from "../lib/apiConfig";
 
 const LOAN_REFRESH_EVENTS = new Set([
   "LoanRepaid",

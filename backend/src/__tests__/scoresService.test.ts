@@ -1,17 +1,28 @@
 import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import { query } from '../db/connection.js';
 import { updateUserScoresBulk } from '../services/scoresService.js';
+import pg from 'pg';
 
 let __scoresService_dbAvailable = false;
-
-beforeAll(async () => {
+if (process.env.DATABASE_TESTS === 'false') {
+  __scoresService_dbAvailable = false;
+} else if (process.env.DATABASE_TESTS === 'true') {
+  __scoresService_dbAvailable = true;
+} else {
+  const probePool = new pg.Pool({
+    connectionString:
+      process.env.DATABASE_URL ?? 'postgresql://postgres:postgres@localhost:5432/dukapay',
+    connectionTimeoutMillis: 1000,
+  });
   try {
-    await query('SELECT 1');
-    __scoresService_dbAvailable = true;
+    const res = await probePool.query('SELECT 1');
+    __scoresService_dbAvailable = (res.rowCount ?? 0) > 0;
   } catch {
     __scoresService_dbAvailable = false;
+  } finally {
+    await probePool.end().catch(() => {});
   }
-});
+}
 
 const describeIf_scoresService = (name: string, fn: () => void) => {
   if (__scoresService_dbAvailable) {
