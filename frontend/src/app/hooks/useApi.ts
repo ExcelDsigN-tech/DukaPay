@@ -221,7 +221,7 @@ export async function getCsrfToken(): Promise<string | null> {
  * - Adds the double-submit CSRF token on mutating requests
  * - Throws a descriptive error on non-2xx responses
  */
-async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
+export async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers = new Headers(options.headers);
   if (!headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");

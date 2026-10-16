@@ -11,8 +11,26 @@ import {
   getAgentDashboard,
   clearAgentDashboardCache,
 } from '../controllers/agentDashboardController.js';
+import {
+  registerAgent,
+  activateAgent,
+  topUpAgentBond,
+  buildAgentVaultAction,
+  getPublicSolvency,
+  submitAgentTransaction,
+} from '../controllers/agentMvpController.js';
 
 const router = Router();
+
+router.get('/solvency', getPublicSolvency);
+router.post('/submit', requireJwtAuth, submitAgentTransaction);
+router.post('/register', requireJwtAuth, registerAgent);
+router.post('/:agentPublicKey/activate', requireJwtAuth, requireRole('admin'), activateAgent);
+router.post('/:agentPublicKey/top-up-bond', requireJwtAuth, requireRole('admin'), topUpAgentBond);
+router.post('/vault/deposit-collateral', requireJwtAuth, requireRole('agent', 'admin'), buildAgentVaultAction('deposit_collateral'));
+router.post('/vault/withdraw-collateral', requireJwtAuth, requireRole('agent', 'admin'), buildAgentVaultAction('withdraw_collateral'));
+router.post('/vault/mint-float', requireJwtAuth, requireRole('admin'), buildAgentVaultAction('mint_float'));
+router.post('/vault/burn-float', requireJwtAuth, requireRole('agent', 'admin'), buildAgentVaultAction('burn_float'));
 
 /**
  * @swagger

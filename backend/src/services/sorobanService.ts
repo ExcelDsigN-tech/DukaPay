@@ -167,6 +167,88 @@ class SorobanService {
     return contractId;
   }
 
+  private getAgentRegistryContractId(): string {
+    const contractId = process.env.AGENT_REGISTRY_CONTRACT_ID;
+    if (!contractId) {
+      throw AppError.internal('AGENT_REGISTRY_CONTRACT_ID is not configured');
+    }
+    return contractId;
+  }
+
+  private async buildAgentContractTx(
+    sourcePublicKey: string,
+    contractId: string,
+    functionName: string,
+    args: ReturnType<typeof nativeToScVal>[],
+  ): Promise<{ unsignedTxXdr: string; networkPassphrase: string }> {
+    const server = this.getRpcServer();
+    const account = await server.getAccount(sourcePublicKey);
+    const tx = new TransactionBuilder(account, {
+      fee: BASE_FEE,
+      networkPassphrase: this.getNetworkPassphrase(),
+    })
+      .addOperation(Operation.invokeContractFunction({ contract: contractId, function: functionName, args }))
+      .setTimeout(30)
+      .build();
+    const prepared = await server.prepareTransaction(tx);
+    return { unsignedTxXdr: prepared.toXDR(), networkPassphrase: this.getNetworkPassphrase() };
+  }
+
+  async buildRegisterAgentTx(
+    agentPublicKey: string,
+    kycRef: string,
+    region: string,
+    bondAmount: bigint,
+    licenseExpiry: bigint,
+  ) {
+    return this.buildAgentContractTx(
+      agentPublicKey,
+      this.getAgentRegistryContractId(),
+      'register',
+      [
+        nativeToScVal(Address.fromString(agentPublicKey), { type: 'address' }),
+        nativeToScVal(kycRef, { type: 'symbol' }),
+        nativeToScVal(region, { type: 'symbol' }),
+        nativeToScVal(bondAmount, { type: 'i128' }),
+        nativeToScVal(licenseExpiry, { type: 'u64' }),
+      ],
+    );
+  }
+
+  async buildActivateAgentTx(operatorPublicKey: string, agentPublicKey: string) {
+    return this.buildAgentContractTx(
+      operatorPublicKey,
+      this.getAgentRegistryContractId(),
+      'activate',
+      [nativeToScVal(Address.fromString(agentPublicKey), { type: 'address' })],
+    );
+  }
+
+  async buildTopUpBondTx(operatorPublicKey: string, agentPublicKey: string, amount: bigint) {
+    return this.buildAgentContractTx(
+      operatorPublicKey,
+      this.getAgentRegistryContractId(),
+      'top_up_bond',
+      [
+        nativeToScVal(Address.fromString(agentPublicKey), { type: 'address' }),
+        nativeToScVal(amount, { type: 'i128' }),
+      ],
+    );
+  }
+
+  async buildAgentVaultTx(
+    sourcePublicKey: string,
+    functionName: 'deposit_collateral' | 'withdraw_collateral' | 'mint_float' | 'burn_float',
+    agentPublicKey: string,
+    amount: bigint,
+  ) {
+    const args = [
+      nativeToScVal(Address.fromString(agentPublicKey), { type: 'address' }),
+      nativeToScVal(amount, { type: 'i128' }),
+    ];
+    return this.buildAgentContractTx(sourcePublicKey, this.getAgentVaultContractId(), functionName, args);
+  }
+
   private getScoreReadSourceKeypair(): Keypair {
     const secret =
       process.env.SCORE_RECONCILIATION_SOURCE_SECRET ?? process.env.LOAN_MANAGER_ADMIN_SECRET;
