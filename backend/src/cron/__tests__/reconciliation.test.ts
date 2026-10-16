@@ -77,4 +77,47 @@ describe('State Synchronization & Automated Reconciliation', () => {
     expect(result.discrepancies[0].isMajor).toBe(true);
     expect(result.discrepancies[0].autoCorrected).toBe(false);
   });
+
+  it('detects a 1-stroop difference above 2^53 without precision loss (Issue #748)', async () => {
+    // 2^53 = 9007199254740992; values straddling it would silently collide
+    // under Number() / parseFloat(), masking a real drift.
+    const dbAmount = '9007199254740993';
+    const onChainAmount = '9007199254740992';
+
+    mockQuery
+      .mockResolvedValueOnce({ rows: [] } as never) // ensure table
+      .mockResolvedValueOnce({
+        rows: [{ loan_id: '1', borrower: 'GBORROWER', amount: dbAmount, status: 'active' }],
+      } as never)
+      .mockResolvedValueOnce({ rows: [] } as never) // agents
+      .mockResolvedValue({ rows: [] } as never); // update/insert log
+
+    mockGetLoanDetails.mockResolvedValue({ amount: onChainAmount } as never);
+
+    const result = await runReconciliationPass();
+    expect(result.discrepanciesCount).toBe(1);
+    const [discrepancy] = result.discrepancies;
+    expect(discrepancy.diffAmount).toBe('0.0000001');
+    expect(discrepancy.dbValue).toBe('900719925.4740993');
+    expect(discrepancy.onChainValue).toBe('900719925.4740992');
+    expect(discrepancy.autoCorrected).toBe(true);
+  });
+
+  it('reports zero drift for identical amounts above 2^53 (exact-match case)', async () => {
+    const amount = '9007199254740993';
+
+    mockQuery
+      .mockResolvedValueOnce({ rows: [] } as never)
+      .mockResolvedValueOnce({
+        rows: [{ loan_id: '1', borrower: 'GBORROWER', amount, status: 'active' }],
+      } as never)
+      .mockResolvedValueOnce({ rows: [] } as never)
+      .mockResolvedValue({ rows: [] } as never);
+
+    mockGetLoanDetails.mockResolvedValue({ amount } as never);
+
+    const result = await runReconciliationPass();
+    expect(result.discrepanciesCount).toBe(0);
+    expect(result.status).toBe('SUCCESS');
+  });
 });

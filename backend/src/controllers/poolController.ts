@@ -137,7 +137,11 @@ export const getDepositorPortfolio = asyncHandler(async (req: Request, res: Resp
       address,
       depositAmount,
       sharePercent: parseFloat(sharePercent.toFixed(6)),
-      estimatedYield: parseFloat(estimatedYield.toFixed(7)),
+      // estimatedYield is a derived display estimate (not a stored money
+      // column), so a plain Number() round-trip is fine here; see
+      // src/money/AGENTS.md — the parseFloat ban targets chain/DB-sourced
+      // stroop values, which this isn't.
+      estimatedYield: Number(estimatedYield.toFixed(7)),
       apy: ANNUAL_APY,
       firstDepositAt,
       lastDepositAt,
@@ -498,8 +502,8 @@ export const getAgentDashboard = asyncHandler(async (req: Request, res: Response
   };
   const dashboardData = {
     agentAddress,
-    floatBalance: safeFloat(vault.float_balance),
-    collateralBalance: safeFloat(vault.collateral_balance),
+    floatBalance: stroopsToAmount(vault.float_balance),
+    collateralBalance: stroopsToAmount(vault.collateral_balance),
     isActive: Boolean(vault.is_active),
     activeLoans: parseInt(loansResult.rows[0]?.active_loans || '0', 10),
     updatedAt: new Date().toISOString(),
