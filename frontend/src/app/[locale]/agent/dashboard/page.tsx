@@ -5,6 +5,7 @@ import { useLocale } from "next-intl";
 import { useUserStore } from "../../../stores/useUserStore";
 import { useAgentDashboard } from "../../../hooks/useApi";
 import { formatCurrency } from "../../../utils/formatLocale";
+import { AgentVaultActions } from "../../../components/agent/AgentVaultActions";
 
 function formatPercent(value: number): string {
   return `${value.toFixed(2)}%`;
@@ -164,6 +165,7 @@ export default function AgentDashboardPage() {
             </button>
             <span className="text-xs text-zinc-400">{t("autoRefresh")}: 10s</span>
           </section>
+          <AgentVaultActions />
         </>
       )}
     </div>
