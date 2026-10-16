@@ -4,8 +4,7 @@ import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useUserStore, type UserStore } from "../stores/useUserStore";
 import { queryKeys, type AppNotification } from "./useApi";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+import { API_URL } from "../lib/apiConfig";
 
 /**
  * Connects to the SSE /api/notifications/stream endpoint and pushes new

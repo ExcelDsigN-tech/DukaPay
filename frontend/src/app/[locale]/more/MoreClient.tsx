@@ -58,6 +58,7 @@ export default function MoreClient() {
   const role = useUserStore((state) => state.user?.role);
   // Same rule as the agent dashboard page, which turns away borrowers and lenders.
   const canSeeAgentDashboard = role !== "borrower" && role !== "lender";
+  const canSendMoney = role !== "lender";
   const href = (path: string) => `/${locale}${path}`;
 
   return (
@@ -83,7 +84,9 @@ export default function MoreClient() {
 
       <MoreGroup
         items={[
-          { name: nav("sendMoney"), href: href("/send-remittance"), icon: SendHorizontal },
+          ...(canSendMoney
+            ? [{ name: nav("sendMoney"), href: href("/send-remittance"), icon: SendHorizontal }]
+            : []),
           { name: nav("wallet"), href: href("/wallet"), icon: CreditCard },
           { name: nav("kingdom"), href: href("/kingdom"), icon: Crown },
         ]}

@@ -1,23 +1,34 @@
-import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
+import { describe, it, expect, beforeAll, afterAll, jest } from '@jest/globals';
 import request from 'supertest';
 import type { Express } from 'express';
 import { query, getClient } from '../../db/connection.js';
 import { generateJwtToken } from '../../services/authService.js';
 import type { PoolClient } from 'pg';
+import pg from 'pg';
 
 let dbAvailable = false;
-
-beforeAll(async () => {
+if (process.env.DATABASE_TESTS === 'false') {
+  dbAvailable = false;
+} else if (process.env.DATABASE_TESTS === 'true') {
+  dbAvailable = true;
+} else {
+  const probePool = new pg.Pool({
+    connectionString:
+      process.env.DATABASE_URL ?? 'postgresql://postgres:postgres@localhost:5432/dukapay',
+    connectionTimeoutMillis: 1000,
+  });
   try {
-    await query('SELECT 1');
-    dbAvailable = true;
+    const res = await probePool.query('SELECT 1');
+    dbAvailable = (res.rowCount ?? 0) > 0;
   } catch {
     dbAvailable = false;
+  } finally {
+    await probePool.end().catch(() => {});
   }
-});
+}
 
 const describeIfDb = (name: string, fn: () => void) => {
-  if (dbAvailable || process.env.INTEGRATION_TESTS === 'true') {
+  if (dbAvailable) {
     describe(name, fn);
   } else {
     describe.skip(`${name} (skipped: no database)`, fn);
@@ -30,6 +41,7 @@ describeIfDb('Integration: Scores API against real schema', () => {
   const testBorrower = 'G_INTEGRATION_TEST_BORROWER_1';
 
   beforeAll(async () => {
+    jest.setTimeout(15000);
     client = await getClient();
     process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-jwt-secret-min-32-chars-long!!';
     process.env.INTERNAL_API_KEY = process.env.INTERNAL_API_KEY || 'test-internal-key';

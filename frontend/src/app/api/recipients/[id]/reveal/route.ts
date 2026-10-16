@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { API_URL } from "../../../../lib/apiConfig";
 
 interface RevealRequestBody {
   field: "email" | "phone" | "name";
@@ -17,7 +18,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   let role: string | null = null;
   try {
     const sessionRes = await fetch(
-      `${process.env.API_URL ?? "http://localhost:3001"}/auth/session`,
+      `${API_URL}/auth/session`,
       {
         headers: { Authorization: `Bearer ${sessionToken}` },
       },
@@ -46,7 +47,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   try {
     const backendRes = await fetch(
-      `${process.env.API_URL ?? "http://localhost:3001"}/recipients/${id}/decrypt`,
+      `${API_URL}/recipients/${id}/decrypt`,
       {
         method: "POST",
         headers: {

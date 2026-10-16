@@ -159,7 +159,8 @@ AML values below are still placeholders that require compliance sign-off. All va
 
 | Variable                           | Dev | Staging | Prod | Default                                   | Description                                            | Source                                      |
 | ---------------------------------- | --- | ------- | ---- | ----------------------------------------- | ------------------------------------------------------ | ------------------------------------------- |
-| `NEXT_PUBLIC_API_URL`              | ✓   | ✓       | ✓    | `http://localhost:3001`                   | Backend API base URL                                   | `frontend/src/app/hooks/useApi.ts`          |
+| `NEXT_PUBLIC_API_URL`              | ✓   | ✓       | ✓    | `http://localhost:3001`                   | Backend API base URL                                   | `frontend/src/app/lib/apiConfig.ts`        |
+| `API_URL`                          | ✓   | ✓       | ✓    | `http://localhost:3001`                   | Server-side backend API base URL                       | `frontend/src/app/lib/apiConfig.ts`        |
 | `NEXT_PUBLIC_APP_URL`              | ✓   | ✓       | ✓    | `https://app.your-domain.example`         | Public-facing app URL used for absolute links          | `frontend/src/lib/canonicalUrl.ts`          |
 | `NEXT_PUBLIC_SENTRY_DSN`           | —   | ✓       | ✓    | —                                         | Sentry DSN for frontend error tracking                 | `frontend/src/sentry.client.config.ts`      |
 | `SENTRY_DSN`                       | —   | ✓       | ✓    | —                                         | Sentry DSN server-side                                 | `frontend/src/sentry.server.config.ts`      |

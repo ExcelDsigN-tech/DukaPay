@@ -7,8 +7,7 @@ import { useUserStore } from "../stores/useUserStore";
 import { useGamificationStore } from "../stores/useGamificationStore";
 import { useQueryClient } from "@tanstack/react-query";
 import { CSRF_HEADER_NAME, getCsrfToken } from "./useApi";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+import { API_URL } from "../lib/apiConfig";
 
 /**
  * useLogout

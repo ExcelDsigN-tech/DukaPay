@@ -41,8 +41,7 @@ import {
   getAssetDecimals,
 } from "../../utils/amount";
 import { formatCurrency } from "../../utils/formatLocale";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+import { API_URL } from "../../lib/apiConfig";
 
 function formatPercent(value: number) {
   return `${(value * 100).toFixed(2)}%`;
