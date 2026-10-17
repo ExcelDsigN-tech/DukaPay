@@ -40,9 +40,8 @@ fuzz_target!(|actions: std::vec::Vec<FuzzAction>| {
     let admin = Address::generate(&env);
     let target = Address::generate(&env);
 
-    let contract_id = env.register(GovernanceContract, ());
+    let contract_id = env.register(GovernanceContract, (&admin, &target));
     let client = GovernanceContractClient::new(&env, &contract_id);
-    client.initialize(&admin, &target);
 
     // A stable pool of candidate signers so indices are meaningful across actions.
     let pool: std::vec::Vec<Address> = (0..POOL_SIZE).map(|_| Address::generate(&env)).collect();

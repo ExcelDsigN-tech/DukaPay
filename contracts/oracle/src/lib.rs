@@ -74,13 +74,8 @@ pub struct Oracle;
 
 #[contractimpl]
 impl Oracle {
-    /// Initialize the oracle. Only `admin` may configure sources and the
-    /// `sources` list gates who is allowed to submit prices.
-    pub fn initialize(env: Env, admin: Address, sources: Vec<Symbol>) {
-        if env.storage().instance().has(&DataKey::Admin) {
-            panic!("already initialized");
-        }
-        admin.require_auth();
+    /// Constructor. `sources` list gates who is allowed to submit prices.
+    pub fn __constructor(env: Env, admin: Address, sources: Vec<Symbol>) {
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::Sources, &sources);
     }
@@ -350,9 +345,7 @@ mod test {
             symbol_short!("chain"),
             symbol_short!("dex"),
         ];
-        let oracle_id = env.register(Oracle, ());
-        let client = OracleClient::new(&env, &oracle_id);
-        client.initialize(&admin, &sources);
+        let oracle_id = env.register(Oracle, (&admin, sources));
         let asset = Address::generate(&env);
         (env, oracle_id, asset)
     }
@@ -602,5 +595,12 @@ mod test {
             assert!(p > 0 && p < base * 2, "price runaway at {frac_bps}bps: {p}");
             bump(&env, 300);
         }
+    }
+
+    #[test]
+    fn test_no_callable_initializer_after_deploy() {
+        let (env, oracle_id, asset) = setup();
+        // Verify oracle is operational and returns NotInitialized error for unset price
+        assert_eq!(get_price_result(&env, &oracle_id, asset), Err(OracleError::NotInitialized));
     }
 }

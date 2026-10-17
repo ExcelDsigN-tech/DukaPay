@@ -49,6 +49,9 @@ Explorer: `https://stellar.expert/explorer/testnet`
 | `token` (USDC-like pool token) | _not yet recorded_ | — | — | — | — | — | — |
 | `agent_registry` | _not yet recorded_ | — | — | — | — | — | — |
 | `agent_vault` | _not yet recorded_ | — | — | — | — | — | — |
+| `circuit_breaker` | _not yet recorded_ | — | — | — | — | — | — |
+| `oracle` | _not yet recorded_ | — | — | — | — | — | — |
+| `audit_anchor` | _not yet recorded_ | — | — | — | — | — | — |
 
 ### Environment variables that consume these IDs
 
@@ -63,6 +66,9 @@ Explorer: `https://stellar.expert/explorer/testnet`
 | `token` | `POOL_TOKEN_ADDRESS` |
 | `agent_registry` | `AGENT_REGISTRY_CONTRACT_ID` |
 | `agent_vault` | `AGENT_VAULT_CONTRACT_ID` |
+| `circuit_breaker` | `CIRCUIT_BREAKER_CONTRACT_ID` |
+| `oracle` | `ORACLE_CONTRACT_ID` |
+| `audit_anchor` | `AUDIT_ANCHOR_CONTRACT_ID` |
 
 #### Frontend (`frontend/.env`)
 

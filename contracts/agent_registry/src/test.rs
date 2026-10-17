@@ -1,15 +1,14 @@
 use crate::{AgentRegistry, AgentRegistryClient, AgentStatus, RegistryError};
 use soroban_sdk::testutils::{Address as _, Events as _};
-use soroban_sdk::{Address, Env, FromVal, Symbol};
+use soroban_sdk::{Address, Env, FromVal, IntoVal, Symbol, Val};
 
 fn setup() -> (Env, AgentRegistryClient<'static>, Address, Address) {
     let env = Env::default();
     env.mock_all_auths();
     let owner = Address::generate(&env);
     let operator = Address::generate(&env);
-    let id = env.register(AgentRegistry, ());
+    let id = env.register(AgentRegistry, (&owner, &operator));
     let client = AgentRegistryClient::new(&env, &id);
-    client.init(&owner, &operator);
     (env, client, owner, operator)
 }
 
@@ -150,4 +149,15 @@ fn test_bond_updated_event() {
     client.register(&a, &kycs(&env), &region(&env), &100, &1_000_000);
     client.top_up_bond(&a, &25);
     assert_eq!(last_event_topic0(&env), Symbol::new(&env, "BondUpdated"));
+}
+
+#[test]
+fn test_no_callable_initializer_after_deploy() {
+    let (env, client, _owner, _op) = setup();
+    let result = env.try_invoke_contract::<Val, Val>(
+        &client.address,
+        &Symbol::new(&env, "init"),
+        ().into_val(&env),
+    );
+    assert!(result.is_err());
 }

@@ -42,7 +42,6 @@ const CURRENT_VERSION: u32 = 1;
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum GovernanceError {
-    AlreadyInitialized = 4001,
     NotInitialized = 4002,
     TargetNotSet = 4003,
     NoPendingTransfer = 4004,
@@ -172,25 +171,19 @@ pub struct GovernanceContract;
 
 #[contractimpl]
 impl GovernanceContract {
-    // ── Initialization ────────────────────────────────────────────────────────
-
-    /// Initialize the governance contract.
+    /// Constructor for the governance contract.
     /// `admin`           — current DukaPay admin.
     /// `target_contract` — the DukaPay contract whose admin will be updated
     ///                     when finalize_admin_transfer is called.
-    pub fn initialize(
+    pub fn __constructor(
         env: Env,
         admin: Address,
         target_contract: Address,
-    ) -> Result<(), GovernanceError> {
-        if env.storage().instance().has(&KEY_ADMIN) {
-            return Err(GovernanceError::AlreadyInitialized);
-        }
+    ) {
         env.storage().instance().set(&KEY_ADMIN, &admin);
         env.storage().instance().set(&KEY_TARGET, &target_contract);
         env.storage().instance().set(&KEY_VERSION, &CURRENT_VERSION);
         env.storage().instance().set(&KEY_PROPOSAL_COUNT, &0u32);
-        Ok(())
     }
 
     pub fn version(env: Env) -> u32 {

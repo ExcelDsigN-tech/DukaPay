@@ -49,7 +49,6 @@ pub trait BreakerInterface {
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum LoanError {
-    AlreadyInitialized = 1,
     NotInitialized = 2,
     LoanNotFound = 3,
     InsufficientScore = 4,
@@ -947,19 +946,22 @@ impl LoanManager {
         events::collateral_liquidated(env, loan_id, collateral);
     }
 
-    pub fn initialize(
+    pub fn __constructor(
         env: Env,
         nft_contract: Address,
         lending_pool: Address,
         token: Address,
         admin: Address,
-    ) -> Result<(), LoanError> {
-        if env.storage().instance().has(&DataKey::Admin) {
-            return Err(LoanError::AlreadyInitialized);
+    ) {
+        if Self::validate_late_fee_rate(Self::DEFAULT_LATE_FEE_RATE_BPS).is_err() {
+            panic!("invalid late fee rate");
         }
-        Self::validate_late_fee_rate(Self::DEFAULT_LATE_FEE_RATE_BPS)?;
-        Self::validate_liquidation_threshold(Self::DEFAULT_LIQUIDATION_THRESHOLD_BPS)?;
-        Self::validate_liquidation_bonus_bps(Self::DEFAULT_LIQUIDATION_BONUS_BPS)?;
+        if Self::validate_liquidation_threshold(Self::DEFAULT_LIQUIDATION_THRESHOLD_BPS).is_err() {
+            panic!("invalid liquidation threshold");
+        }
+        if Self::validate_liquidation_bonus_bps(Self::DEFAULT_LIQUIDATION_BONUS_BPS).is_err() {
+            panic!("invalid liquidation bonus");
+        }
         env.storage()
             .instance()
             .set(&DataKey::NftContract, &nft_contract);
@@ -974,10 +976,6 @@ impl LoanManager {
             .instance()
             .set(&DataKey::CircuitBreaker, &None::<Address>);
 
-        let nft_client = NftClient::new(&env, &nft_contract);
-        if !nft_client.is_authorized_minter(&env.current_contract_address()) {
-            panic!("LoanManager must be authorized minter on NFT contract");
-        }
         env.storage()
             .instance()
             .set(&DataKey::Version, &Self::CURRENT_VERSION);
@@ -1014,7 +1012,6 @@ impl LoanManager {
             .instance()
             .set(&DataKey::MaxRateBps, &Self::MAX_RATE_BPS);
         Self::bump_instance_ttl(&env);
-        Ok(())
     }
 
     pub fn version(env: Env) -> u32 {

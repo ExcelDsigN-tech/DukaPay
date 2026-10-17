@@ -8,7 +8,6 @@ use remittance_nft::{RemittanceNFT, RemittanceNFTClient};
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{Address, BytesN, Env, IntoVal, Symbol, Val};
 use std::collections::HashMap;
-use std::panic::AssertUnwindSafe;
 
 macro_rules! rcall {
     ($env:expr, $client:expr, $func:expr, ($($arg:expr),*)) => {
@@ -23,7 +22,6 @@ macro_rules! rcall {
 #[derive(Arbitrary, Debug)]
 enum FuzzAction {
     RequestLoan {
-        user_id: u8,
         amount: i128,
         score: u32,
     },
@@ -31,7 +29,6 @@ enum FuzzAction {
         loan_id: u32,
     },
     Repay {
-        user_id: u8,
         amount: i128,
         initial_score: u32,
     },
@@ -53,26 +50,27 @@ fuzz_target!(|data: FuzzAction| {
     env.mock_all_auths();
 
     // 1. Setup RemittanceNFT
-    let nft_id = env.register(RemittanceNFT, ());
-    let nft_client = RemittanceNFTClient::new(&env, &nft_id);
     let admin = Address::generate(&env);
-    nft_client.initialize(&admin);
+    let nft_id = env.register(RemittanceNFT, (&admin,));
+    let nft_client = RemittanceNFTClient::new(&env, &nft_id);
 
-    // 2. Setup LoanManager. initialize now takes (nft_contract, lending_pool, token, admin).
-    let lending_pool_id = env.register(LendingPool, ());
+    // 2. Setup LoanManager. constructor takes (nft_contract, lending_pool, token, admin).
+    let pool_admin = Address::generate(&env);
+    let lending_pool_id = env.register(LendingPool, (&pool_admin,));
     let token_admin = Address::generate(&env);
     let token_contract_id = env.register_stellar_asset_contract_v2(token_admin.clone());
     let token_id = token_contract_id.address();
-    let loan_manager_id = env.register(LoanManager, ());
+    let loan_manager_id = env.register(
+        LoanManager,
+        (&nft_id, &lending_pool_id, &token_id, &admin),
+    );
     let loan_manager_client = LoanManagerClient::new(&env, &loan_manager_id);
-    loan_manager_client.initialize(&nft_id, &lending_pool_id, &token_id, &admin);
 
     // Authorize LoanManager to update scores in NFT contract
     nft_client.authorize_minter(&loan_manager_id);
 
     match data {
         FuzzAction::RequestLoan {
-            user_id,
             amount,
             score,
         } => {
@@ -111,7 +109,6 @@ fuzz_target!(|data: FuzzAction| {
         }
 
         FuzzAction::Repay {
-            user_id,
             amount,
             initial_score,
         } => {

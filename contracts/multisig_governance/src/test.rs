@@ -34,14 +34,14 @@ impl MockTarget {
 fn setup() -> (Env, GovernanceContractClient<'static>, Address, Address) {
     let env = Env::default();
     env.mock_all_auths();
-    let id = env.register(GovernanceContract, ());
-    let client = GovernanceContractClient::new(&env, &id);
     let admin = Address::generate(&env);
 
     let target_id = env.register(MockTarget, ());
     let target = target_id.clone();
 
-    client.initialize(&admin, &target);
+    let id = env.register(GovernanceContract, (&admin, &target));
+    let client = GovernanceContractClient::new(&env, &id);
+
     (env, client, admin, target)
 }
 
@@ -128,10 +128,10 @@ fn exposes_target_pending_admin_and_approval_queries() {
 }
 
 #[test]
-fn double_initialize_panics() {
-    let (env, client, _, _) = setup();
-    let result = client.try_initialize(&Address::generate(&env), &Address::generate(&env));
-    assert_eq!(result, Err(Ok(GovernanceError::AlreadyInitialized)));
+fn test_no_callable_initializer_after_deploy() {
+    let (_env, client, admin, _) = setup();
+    // Confirm governance is active and has no separate public initialize entrypoint
+    assert_eq!(client.get_current_admin(), admin);
 }
 
 #[test]

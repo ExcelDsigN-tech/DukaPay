@@ -67,16 +67,15 @@ fn setup() -> Ctx {
     env.mock_all_auths();
     set_ts(&env, 1_000_000);
 
-    let gov_id = env.register(GovernanceContract, ());
+    let target_id = env.register(MockUpgradeable, ());
+    let admin = Address::generate(&env);
+
+    let gov_id = env.register(GovernanceContract, (&admin, &target_id));
     let gov = GovernanceContractClient::new(&env, &gov_id);
 
-    let target_id = env.register(MockUpgradeable, ());
     let target_client = MockUpgradeableClient::new(&env, &target_id);
     // Governance is the admin of the target — upgrades must route through it.
     target_client.set_admin(&gov_id);
-
-    let admin = Address::generate(&env);
-    gov.initialize(&admin, &target_id);
 
     let signers = [
         Address::generate(&env),
@@ -271,11 +270,10 @@ fn execute_without_configured_governance_fails() {
     let env = Env::default();
     env.mock_all_auths();
     set_ts(&env, 1_000_000);
-    let gov_id = env.register(GovernanceContract, ());
-    let gov = GovernanceContractClient::new(&env, &gov_id);
     let target_id = env.register(MockUpgradeable, ());
     let admin = Address::generate(&env);
-    gov.initialize(&admin, &target_id);
+    let gov_id = env.register(GovernanceContract, (&admin, &target_id));
+    let gov = GovernanceContractClient::new(&env, &gov_id);
     // No configure_upgrade_signers → queue must fail (admin still allowed to queue,
     // but there is no threshold configured so execution can never succeed).
     gov.queue_upgrade(&admin, &target_id, &BytesN::from_array(&env, &[1; 32]));

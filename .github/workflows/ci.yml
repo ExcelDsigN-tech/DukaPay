@@ -442,9 +442,10 @@ jobs:
           name: contracts-coverage
           path: contracts/cobertura.xml
           retention-days: 7
-      - name: Check fuzz targets compile
-        run: cargo check
-        working-directory: contracts/fuzz
+      - name: Build fuzz targets
+        run: cargo build --manifest-path contracts/fuzz/Cargo.toml
+        env:
+          RUSTFLAGS: -D warnings
 
   indexer:
     needs: supply-chain-audit

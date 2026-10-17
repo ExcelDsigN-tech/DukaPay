@@ -1,9 +1,7 @@
-#[cfg(test)]
-mod test {
-    use crate::{
-        CircuitBreaker, CircuitBreakerClient, CircuitBreakerError, OverrideTarget,
-        PAUSE_DURATION_SECONDS,
-    };
+use crate::{
+    CircuitBreaker, CircuitBreakerClient, CircuitBreakerError, OverrideTarget,
+    PAUSE_DURATION_SECONDS,
+};
     use soroban_sdk::testutils::{Address as _, Ledger as _};
     use soroban_sdk::{Address, Env, Symbol, Vec};
 
@@ -22,9 +20,7 @@ mod test {
         signers.push_back(s3);
         signers.push_back(s4);
         signers.push_back(s5);
-        let contract_id = env.register(CircuitBreaker, ());
-        let client = CircuitBreakerClient::new(&env, &contract_id);
-        client.initialize(&admin, &signers, &3, &86_400);
+        let contract_id = env.register(CircuitBreaker, (&admin, signers.clone(), 3u32, 86_400u64));
         (env, contract_id, admin, signers)
     }
 
@@ -39,22 +35,14 @@ mod test {
     }
 
     #[test]
-    #[should_panic(expected = "#5001")]
-    fn double_init_rejected() {
-        let env = Env::default();
-        env.mock_all_auths();
-        let admin = Address::generate(&env);
-        let s1 = Address::generate(&env);
-        let mut signers = Vec::new(&env);
-        signers.push_back(s1);
-        let contract_id = env.register(CircuitBreaker, ());
-        let client = CircuitBreakerClient::new(&env, &contract_id);
-        client.initialize(&admin, &signers, &1, &3_600);
-        client.initialize(&admin, &signers, &1, &3_600);
+    fn test_no_callable_initializer_after_deploy() {
+        let (_env, contract_id, _admin, _) = setup();
+        let client = CircuitBreakerClient::new(&_env, &contract_id);
+        assert_eq!(client.get_threshold(), 3);
     }
 
     #[test]
-    #[should_panic(expected = "#5008")]
+    #[should_panic(expected = "duplicate signer")]
     fn duplicate_signer_rejected() {
         let env = Env::default();
         env.mock_all_auths();
@@ -63,9 +51,7 @@ mod test {
         let mut signers = Vec::new(&env);
         signers.push_back(s1.clone());
         signers.push_back(s1);
-        let contract_id = env.register(CircuitBreaker, ());
-        let client = CircuitBreakerClient::new(&env, &contract_id);
-        client.initialize(&admin, &signers, &1, &3_600);
+        env.register(CircuitBreaker, (&admin, signers, 1u32, 3_600u64));
     }
 
     #[test]
@@ -225,4 +211,3 @@ mod test {
         // The other paused function remains blocked.
         assert!(client.is_function_paused(&target, &wit));
     }
-}

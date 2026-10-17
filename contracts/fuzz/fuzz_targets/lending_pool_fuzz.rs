@@ -7,7 +7,6 @@ use soroban_sdk::testutils::Address as _;
 use soroban_sdk::token::{Client as TokenClient, StellarAssetClient};
 use soroban_sdk::{Address, Env, IntoVal, Symbol, Val};
 use std::collections::HashMap;
-use std::panic::AssertUnwindSafe;
 
 macro_rules! rcall {
     ($env:expr, $client:expr, $func:expr, ($($arg:expr),*)) => {
@@ -21,9 +20,9 @@ macro_rules! rcall {
 
 #[derive(Arbitrary, Debug)]
 enum FuzzAction {
-    Deposit { user_id: u8, amount: i128 },
-    Withdraw { user_id: u8, amount: i128 },
-    GetDeposit { user_id: u8 },
+    Deposit { amount: i128 },
+    Withdraw { amount: i128 },
+    GetDeposit,
     MultipleOperations { operations: Vec<Operation> },
 }
 
@@ -53,15 +52,12 @@ fuzz_target!(|data: FuzzAction| {
     let (token_id, stellar_asset_client, token_client) = setup_token_contract(&env, &token_admin);
 
     // 2. Setup LendingPool
-    let pool_id = env.register(LendingPool, ());
+    let pool_admin = Address::generate(&env);
+    let pool_id = env.register(LendingPool, (&pool_admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
 
-    // 3. Initialize LendingPool with Token
-    let pool_admin = Address::generate(&env);
-    pool_client.initialize(&pool_admin);
-
     match data {
-        FuzzAction::Deposit { user_id, amount } => {
+        FuzzAction::Deposit { amount } => {
             let user = Address::generate(&env);
 
             // Skip invalid amounts
@@ -89,7 +85,7 @@ fuzz_target!(|data: FuzzAction| {
             }
         }
 
-        FuzzAction::Withdraw { user_id, amount } => {
+        FuzzAction::Withdraw { amount } => {
             let user = Address::generate(&env);
 
             // Skip invalid amounts
@@ -128,7 +124,7 @@ fuzz_target!(|data: FuzzAction| {
             }
         }
 
-        FuzzAction::GetDeposit { user_id } => {
+        FuzzAction::GetDeposit => {
             let user = Address::generate(&env);
             let balance = pool_client.get_deposit(&user, &token_id);
 

@@ -39,9 +39,8 @@ fn setup_test<'a>(
 ) {
     // 1. Deploy the NFT score contract
     let admin = Address::generate(env);
-    let nft_contract_id = env.register(RemittanceNFT, ());
+    let nft_contract_id = env.register(RemittanceNFT, (&admin,));
     let nft_client = RemittanceNFTClient::new(env, &nft_contract_id);
-    nft_client.initialize(&admin);
 
     // 2. Deploy a test token
     let token_admin = Address::generate(env);
@@ -49,19 +48,18 @@ fn setup_test<'a>(
     let token_id = token_contract.address();
 
     // 3. Deploy a real LendingPool contract for cross-contract pause checks
-    let pool_contract_id = env.register(LendingPool, ());
+    let pool_contract_id = env.register(LendingPool, (&admin,));
     let pool_client = LendingPoolClient::new(env, &pool_contract_id);
-    pool_client.initialize(&admin);
 
     // 4. Deploy the LoanManager contract
-    let loan_manager_id = env.register(LoanManager, ());
+    let loan_manager_id = env.register(
+        LoanManager,
+        (&nft_contract_id, &pool_contract_id, &token_id, &admin),
+    );
     let loan_manager_client = LoanManagerClient::new(env, &loan_manager_id);
 
-    // Authorize LoanManager on NFT contract before initialization
+    // Authorize LoanManager on NFT contract
     nft_client.authorize_minter(&loan_manager_id);
-
-    // 5. Initialize the Loan Manager with the NFT contract, lending pool, token, and admin
-    loan_manager_client.initialize(&nft_contract_id, &pool_contract_id, &token_id, &admin);
 
     // Disable dust spam protection for the loan manager tests
     nft_client.set_min_repayment_amount(&0);
@@ -3905,5 +3903,39 @@ fn test_set_rate_oracle_emits_rate_oracle_updated_event() {
     assert!(
         has_oracle_event,
         "RateOracleUpdated event should be emitted"
+    );
+}
+
+#[test]
+fn test_no_callable_initializer_after_deploy() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (manager, _nft_client, _pool_client, _token_id, _admin) = setup_test(&env);
+    assert_eq!(manager.version(), 4);
+}
+
+#[soroban_sdk::contract]
+struct MockBreaker;
+
+#[soroban_sdk::contractimpl]
+impl MockBreaker {
+    pub fn is_blocked(_env: Env, _contract: Address, _function: soroban_sdk::Symbol) -> bool {
+        true
+    }
+}
+
+#[test]
+fn test_circuit_breaker_tripped_blocks_request_loan() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (manager, _nft_client, _pool_client, _token_id, _admin) = setup_test(&env);
+
+    let breaker_id = env.register(MockBreaker, ());
+    manager.set_circuit_breaker(&Some(breaker_id));
+
+    let borrower = Address::generate(&env);
+    assert_eq!(
+        manager.try_request_loan(&borrower, &1000, &30),
+        Err(Ok(LoanError::CircuitBreakerTripped))
     );
 }

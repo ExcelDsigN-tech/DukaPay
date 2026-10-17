@@ -13,7 +13,6 @@ mod events;
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum RegistryError {
-    AlreadyInitialized = 1,
     NotInitialized = 2,
     Unauthorized = 3,
     AgentAlreadyRegistered = 4,
@@ -59,13 +58,9 @@ pub struct AgentRegistry;
 
 #[contractimpl]
 impl AgentRegistry {
-    pub fn init(env: Env, owner: Address, operator: Address) -> Result<(), RegistryError> {
-        if env.storage().instance().has(&DataKey::Owner) {
-            return Err(RegistryError::AlreadyInitialized);
-        }
+    pub fn __constructor(env: Env, owner: Address, operator: Address) {
         env.storage().instance().set(&DataKey::Owner, &owner);
         env.storage().instance().set(&DataKey::Operator, &operator);
-        Ok(())
     }
 
     fn owner(env: &Env) -> Result<Address, RegistryError> {

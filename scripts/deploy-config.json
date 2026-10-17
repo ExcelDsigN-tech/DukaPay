@@ -24,6 +24,17 @@
         "wasm": "../contracts/target/wasm32-unknown-unknown/release/agent_vault.wasm",
         "max_haircut_bps": 8000,
         "min_collateral": 1000000000
+      },
+      "circuit_breaker": {
+        "wasm": "../contracts/target/wasm32-unknown-unknown/release/circuit_breaker.wasm",
+        "threshold": 1,
+        "override_timelock": 3600
+      },
+      "oracle": {
+        "wasm": "../contracts/target/wasm32-unknown-unknown/release/oracle.wasm"
+      },
+      "audit_anchor": {
+        "wasm": "../contracts/target/wasm32-unknown-unknown/release/audit_anchor.wasm"
       }
     }
   }

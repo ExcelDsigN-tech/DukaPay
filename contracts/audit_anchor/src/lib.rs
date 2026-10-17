@@ -5,7 +5,6 @@ use soroban_sdk::{contract, contracterror, contractimpl, contracttype, Address, 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum AnchorError {
-    AlreadyInitialized = 1,
     NotInitialized = 2,
     EpochAlreadyAnchored = 3,
     EmptyEpoch = 4,
@@ -23,12 +22,8 @@ pub struct AuditAnchor;
 
 #[contractimpl]
 impl AuditAnchor {
-    pub fn init(env: Env, owner: Address) -> Result<(), AnchorError> {
-        if env.storage().instance().has(&DataKey::Owner) {
-            return Err(AnchorError::AlreadyInitialized);
-        }
+    pub fn __constructor(env: Env, owner: Address) {
         env.storage().instance().set(&DataKey::Owner, &owner);
-        Ok(())
     }
 
     pub fn anchor(
@@ -68,21 +63,33 @@ impl AuditAnchor {
 #[cfg(test)]
 mod test {
     use super::*;
-    use soroban_sdk::{testutils::Address as _, Address, BytesN, Env};
+    use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, IntoVal, Symbol, Val};
 
     #[test]
     fn owner_can_anchor_each_epoch_once() {
         let env = Env::default();
         env.mock_all_auths();
-        let contract_id = env.register(AuditAnchor, ());
-        let client = AuditAnchorClient::new(&env, &contract_id);
         let owner = Address::generate(&env);
-        client.init(&owner);
+        let contract_id = env.register(AuditAnchor, (&owner,));
+        let client = AuditAnchorClient::new(&env, &contract_id);
         let root = BytesN::from_array(&env, &[7; 32]);
         client.anchor(&1, &root, &3);
         assert_eq!(client.get_root(&1), Some(root));
         assert!(client
             .try_anchor(&1, &BytesN::from_array(&env, &[8; 32]), &3)
             .is_err());
+    }
+
+    #[test]
+    fn test_no_callable_initializer_after_deploy() {
+        let env = Env::default();
+        let owner = Address::generate(&env);
+        let contract_id = env.register(AuditAnchor, (&owner,));
+        let result = env.try_invoke_contract::<Val, Val>(
+            &contract_id,
+            &Symbol::new(&env, "init"),
+            ().into_val(&env),
+        );
+        assert!(result.is_err());
     }
 }

@@ -13,7 +13,12 @@ their responsibilities, and the invariants that must hold at all times.
 | `lending_pool` | Pool deposits, withdrawals, yield |
 | `remittance_nft` | Remittance NFT issuance & credit scores |
 | `multisig_governance` | Multi-signature governance |
+| `circuit_breaker` | Protocol-wide and granular function emergency pause mechanism |
+| `oracle` | Multi-source price feed oracle |
+| `audit_anchor` | Cryptographic audit trail ledger anchoring |
 | `money` | Shared monetary policy/constants |
+
+All contracts utilize Soroban `__constructor` functions for atomic initialization during deployment, eliminating front-runnable initialization windows.
 
 ---
 
