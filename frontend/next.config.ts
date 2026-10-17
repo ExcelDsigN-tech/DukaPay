@@ -1,6 +1,6 @@
 import createNextIntlPlugin from "next-intl/plugin";
 import type { NextConfig } from "next";
-import { withSentryConfig } from "@sentry/nextjs";
+import { withSentryConfig } from "@sentry/nextjs/config";
 import withSerwistInit from "@serwist/next";
 
 const withNextIntl = createNextIntlPlugin("./i18n.config.ts");
@@ -84,6 +84,8 @@ export default withNextIntl(
     sourcemaps: {
       disable: !process.env.SENTRY_AUTH_TOKEN,
     },
-    autoInstrumentServerFunctions: true,
+    webpack: {
+      autoInstrumentServerFunctions: true,
+    },
   }),
 );
