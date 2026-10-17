@@ -9,7 +9,8 @@ export const STROOP_SCALE = 10 ** STROOP_DECIMALS;
 // Asset-specific decimal precision
 export const ASSET_DECIMALS: Record<string, number> = {
   XLM: 7,
-  USDC: 2,
+  // Stellar USDC uses the standard 7-decimal on-chain precision.
+  USDC: 7,
   EURC: 2,
   PHP: 2,
 };

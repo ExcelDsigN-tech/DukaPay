@@ -1,5 +1,10 @@
 # DukaPay Standalone Event Indexer
 
+> **Experimental:** this standalone Rust indexer is not production-ready. The
+> supported deployment remains the backend's in-process indexer until this
+> crate has completed operational validation. No Kubernetes deployment is
+> provided for this experimental component.
+
 High-throughput Soroban contract-event indexer written in Rust. Replaces the
 in-process TypeScript indexer (`backend/src/services/eventIndexer.ts`) for
 mainnet load.

@@ -35,9 +35,10 @@ jobs:
 
   semgrep:
     name: Semgrep SAST
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'pull_request' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    continue-on-error: true
+    # Secret findings must block every pull request and scheduled scan.
+    continue-on-error: false
     container:
       # Pinned to a specific release, not `latest`: a mutable tag lets a
       # compromised or buggy upstream image silently change what every PR
