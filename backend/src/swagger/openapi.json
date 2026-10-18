@@ -7443,6 +7443,7 @@
             "name": "page",
             "schema": {
               "type": "integer",
+              "minimum": 1,
               "default": 1
             }
           },
@@ -7451,9 +7452,18 @@
             "name": "limit",
             "schema": {
               "type": "integer",
+              "minimum": 1,
               "default": 20,
-              "maximum": 100
+              "maximum": 500
             }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Optional positive integer cursor for cursor-based pagination"
           }
         ],
         "responses": {
@@ -7554,6 +7564,9 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "Invalid pagination query parameters."
           },
           "401": {
             "description": "Missing or invalid Bearer token."

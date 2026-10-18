@@ -3,12 +3,12 @@ import { query } from '../db/connection.js';
 import { AppError } from '../errors/AppError.js';
 import logger from '../utils/logger.js';
 import { sorobanService } from './sorobanService.js';
-import { toStroops } from '../money/decimal.js';
+import { toStroops, toWholeStroops } from '../money/decimal.js';
 
 export interface InitiateTransferInput {
   fromAgent: string;
   toAgent: string;
-  amount: number;
+  amount: number | string;
   reason?: string | undefined;
   createdBy: string;
   userRole?: string | undefined;
@@ -29,8 +29,8 @@ export interface RejectTransferInput {
 export interface SetLimitsInput {
   fromAgent: string;
   toAgent: string;
-  dailyLimit: number;
-  weeklyLimit: number;
+  dailyLimit: number | string;
+  weeklyLimit: number | string;
   updatedBy: string;
 }
 
@@ -77,7 +77,7 @@ export class AgentFloatService {
   async getPairLimits(
     fromAgent: string,
     toAgent: string,
-  ): Promise<{ dailyLimit: number; weeklyLimit: number }> {
+  ): Promise<{ dailyLimit: number | string; weeklyLimit: number | string }> {
     try {
       const res = await query(
         `SELECT daily_limit, weekly_limit FROM agent_float_transfer_limits
@@ -87,9 +87,17 @@ export class AgentFloatService {
 
       if (res.rows.length > 0) {
         const row = res.rows[0] as { daily_limit: string; weekly_limit: string };
+        const dailyStroops = toWholeStroops(row.daily_limit);
+        const weeklyStroops = toWholeStroops(row.weekly_limit);
         return {
-          dailyLimit: Number(row.daily_limit),
-          weeklyLimit: Number(row.weekly_limit),
+          dailyLimit:
+            dailyStroops <= BigInt(Number.MAX_SAFE_INTEGER)
+              ? Number(dailyStroops)
+              : dailyStroops.toString(),
+          weeklyLimit:
+            weeklyStroops <= BigInt(Number.MAX_SAFE_INTEGER)
+              ? Number(weeklyStroops)
+              : weeklyStroops.toString(),
         };
       }
     } catch (err) {
@@ -108,24 +116,43 @@ export class AgentFloatService {
   async setPairLimits(input: SetLimitsInput): Promise<{
     fromAgent: string;
     toAgent: string;
-    dailyLimit: number;
-    weeklyLimit: number;
+    dailyLimit: number | string;
+    weeklyLimit: number | string;
   }> {
     const { fromAgent, toAgent, dailyLimit, weeklyLimit, updatedBy } = input;
 
     if (fromAgent === toAgent) {
       throw AppError.badRequest('fromAgent and toAgent must be different');
     }
-    if (dailyLimit <= 0 || weeklyLimit <= 0) {
+
+    let dailyStroops: bigint;
+    let weeklyStroops: bigint;
+    try {
+      dailyStroops = toWholeStroops(String(dailyLimit));
+      weeklyStroops = toWholeStroops(String(weeklyLimit));
+    } catch {
       throw AppError.badRequest('Limits must be positive numbers');
     }
+
+    if (dailyStroops <= 0n || weeklyStroops <= 0n) {
+      throw AppError.badRequest('Limits must be positive numbers');
+    }
+
+    const normalizedDaily =
+      dailyStroops <= BigInt(Number.MAX_SAFE_INTEGER)
+        ? Number(dailyStroops)
+        : dailyStroops.toString();
+    const normalizedWeekly =
+      weeklyStroops <= BigInt(Number.MAX_SAFE_INTEGER)
+        ? Number(weeklyStroops)
+        : weeklyStroops.toString();
 
     await query(
       `INSERT INTO agent_float_transfer_limits (from_agent, to_agent, daily_limit, weekly_limit, updated_at)
        VALUES ($1, $2, $3, $4, NOW())
        ON CONFLICT (from_agent, to_agent)
        DO UPDATE SET daily_limit = EXCLUDED.daily_limit, weekly_limit = EXCLUDED.weekly_limit, updated_at = NOW()`,
-      [fromAgent, toAgent, dailyLimit, weeklyLimit],
+      [fromAgent, toAgent, normalizedDaily, normalizedWeekly],
     );
 
     // Audit log
@@ -133,18 +160,29 @@ export class AgentFloatService {
       actor: updatedBy,
       action: 'AGENT_FLOAT_TRANSFER_LIMITS_UPDATED',
       target: `Pair:${fromAgent}->${toAgent}`,
-      payload: { dailyLimit, weeklyLimit },
+      payload: { dailyLimit: normalizedDaily, weeklyLimit: normalizedWeekly },
       status: 200,
     });
 
-    return { fromAgent, toAgent, dailyLimit, weeklyLimit };
+    return {
+      fromAgent,
+      toAgent,
+      dailyLimit: normalizedDaily,
+      weeklyLimit: normalizedWeekly,
+    };
   }
 
   /**
    * Check if transfer amount respects daily and weekly limits.
    */
-  private async checkLimits(fromAgent: string, toAgent: string, amount: number): Promise<void> {
+  private async checkLimits(
+    fromAgent: string,
+    toAgent: string,
+    amountStroops: bigint,
+  ): Promise<void> {
     const limits = await this.getPairLimits(fromAgent, toAgent);
+    const dailyLimitStroops = toWholeStroops(String(limits.dailyLimit));
+    const weeklyLimitStroops = toWholeStroops(String(limits.weeklyLimit));
 
     // Check rolling 24-hour total
     const dailyRes = await query(
@@ -155,10 +193,10 @@ export class AgentFloatService {
       [fromAgent, toAgent],
     );
 
-    const dailyTotal = Number((dailyRes.rows[0] as { total: string }).total);
-    if (dailyTotal + amount > limits.dailyLimit) {
+    const dailyTotal = toWholeStroops((dailyRes.rows[0] as { total: string }).total);
+    if (dailyTotal + amountStroops > dailyLimitStroops) {
       throw AppError.badRequest(
-        `Transfer exceeds daily limit of ${limits.dailyLimit} for this agent pair. Current 24h total: ${dailyTotal}, requested: ${amount}`,
+        `Transfer exceeds daily limit of ${limits.dailyLimit} for this agent pair. Current 24h total: ${dailyTotal.toString()}, requested: ${amountStroops.toString()}`,
       );
     }
 
@@ -171,10 +209,10 @@ export class AgentFloatService {
       [fromAgent, toAgent],
     );
 
-    const weeklyTotal = Number((weeklyRes.rows[0] as { total: string }).total);
-    if (weeklyTotal + amount > limits.weeklyLimit) {
+    const weeklyTotal = toWholeStroops((weeklyRes.rows[0] as { total: string }).total);
+    if (weeklyTotal + amountStroops > weeklyLimitStroops) {
       throw AppError.badRequest(
-        `Transfer exceeds weekly limit of ${limits.weeklyLimit} for this agent pair. Current 7-day total: ${weeklyTotal}, requested: ${amount}`,
+        `Transfer exceeds weekly limit of ${limits.weeklyLimit} for this agent pair. Current 7-day total: ${weeklyTotal.toString()}, requested: ${amountStroops.toString()}`,
       );
     }
   }
@@ -193,7 +231,15 @@ export class AgentFloatService {
         'Self-transfer is not allowed. fromAgent and toAgent must be different.',
       );
     }
-    if (!amount || amount <= 0) {
+
+    let amountStroops: bigint;
+    try {
+      amountStroops = toWholeStroops(String(amount ?? ''));
+    } catch {
+      throw AppError.badRequest('Transfer amount must be positive.');
+    }
+
+    if (amountStroops <= 0n) {
       throw AppError.badRequest('Transfer amount must be positive.');
     }
     const isAdmin = userRole === 'admin' || userRole === 'super_admin';
@@ -204,10 +250,14 @@ export class AgentFloatService {
     }
 
     // Enforce daily/weekly pair limits
-    await this.checkLimits(fromAgent, toAgent, amount);
+    await this.checkLimits(fromAgent, toAgent, amountStroops);
 
     const transferId = `ft_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
     const initialRole = createdBy === fromAgent ? 'initiator' : 'admin';
+    const normalizedAmount =
+      amountStroops <= BigInt(Number.MAX_SAFE_INTEGER)
+        ? Number(amountStroops)
+        : amountStroops.toString();
 
     // Insert transfer record
     const transferRes = await query(
@@ -215,7 +265,7 @@ export class AgentFloatService {
        (id, from_agent, to_agent, amount, reason, status, required_approvals, approval_count, created_by)
        VALUES ($1, $2, $3, $4, $5, 'PENDING_APPROVAL', 2, 1, $6)
        RETURNING *`,
-      [transferId, fromAgent, toAgent, amount, reason ?? null, createdBy],
+      [transferId, fromAgent, toAgent, normalizedAmount, reason ?? null, createdBy],
     );
 
     const transfer = transferRes.rows[0] as AgentFloatTransferRow;

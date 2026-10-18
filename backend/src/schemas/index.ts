@@ -5,3 +5,7 @@ export * from './notificationSchemas.js';
 export * from './disputeSchemas.js';
 export * from './auditSchemas.js';
 export * from './remittanceSchemas.js';
+export * from './agentSchemas.js';
+export * from './eventSchemas.js';
+export * from './indexerSchemas.js';
+export * from './transactionSchemas.js';
