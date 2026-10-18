@@ -20,6 +20,69 @@ export const swaggerSchemas = {
     },
     required: ['success', 'message'],
   },
+  AgentDashboard: {
+    type: 'object',
+    properties: {
+      agentPublicKey: { type: 'string' },
+      floatUtilization: {
+        type: 'object',
+        properties: {
+          totalFloat: { type: 'number' },
+          allocated: { type: 'number' },
+          utilizationPct: { type: 'number' },
+        },
+      },
+      earnings: {
+        type: 'object',
+        properties: {
+          daily: { type: 'number' },
+          weekly: { type: 'number' },
+          monthly: { type: 'number' },
+          total: { type: 'number' },
+        },
+      },
+      borrowerPortfolio: {
+        type: 'object',
+        properties: {
+          totalLoans: { type: 'integer' },
+          activeLoans: { type: 'integer' },
+          defaultedLoans: { type: 'integer' },
+          totalOutstanding: { type: 'number' },
+          byStatus: { type: 'object', additionalProperties: { type: 'integer' } },
+        },
+      },
+      pendingSettlements: {
+        type: 'object',
+        properties: {
+          count: { type: 'integer' },
+          totalValue: { type: 'number' },
+        },
+      },
+      collateralRatio: {
+        type: 'object',
+        properties: {
+          totalCollateral: { type: 'number' },
+          totalDebt: { type: 'number' },
+          ratio: { type: 'number' },
+        },
+      },
+      recentTransactions: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            type: { type: 'string' },
+            amount: {
+              type: 'number',
+              description: 'Whole tokens for money events; raw value otherwise.',
+            },
+            loanId: { type: 'string', nullable: true },
+            timestamp: { type: 'string', format: 'date-time' },
+          },
+        },
+      },
+    },
+  },
   SimpleSuccessResponse: {
     type: 'object',
     properties: {
@@ -145,7 +208,16 @@ export const swaggerSchemas = {
     type: 'object',
     properties: {
       type: { type: 'string' },
-      amount: { type: 'string', nullable: true },
+      amount: {
+        oneOf: [{ type: 'number' }, { type: 'string' }],
+        nullable: true,
+        description:
+          'Money events: whole tokens (e.g. 250.5 USDC). Config events (rates, ledgers, scores): the raw on-chain value.',
+      },
+      amountStroops: {
+        type: 'string',
+        description: 'Exact amount in stroops (10^-7 token). Money events only.',
+      },
       timestamp: { type: 'string', format: 'date-time', nullable: true },
       tx: { type: 'string', nullable: true },
     },
@@ -591,7 +663,16 @@ export const swaggerSchemas = {
       },
       loanId: { type: 'integer' },
       borrower: { type: 'string' },
-      amount: { type: 'string' },
+      amount: {
+        oneOf: [{ type: 'number' }, { type: 'string' }],
+        nullable: true,
+        description:
+          'Money events: whole tokens (e.g. 250.5 USDC). Config events (rates, ledgers, scores): the raw on-chain value.',
+      },
+      amountStroops: {
+        type: 'string',
+        description: 'Exact amount in stroops (10^-7 token). Money events only.',
+      },
       ledger: { type: 'integer' },
       ledgerClosedAt: { type: 'string', format: 'date-time' },
       txHash: { type: 'string' },

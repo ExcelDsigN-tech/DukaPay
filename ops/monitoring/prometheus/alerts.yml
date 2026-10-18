@@ -106,3 +106,24 @@ groups:
         annotations:
           summary: "Database is down"
           description: "PostgreSQL instance {{ $labels.instance }} is not responding"
+
+  - name: indexer
+    interval: 30s
+    rules:
+      - alert: IndexerDeadLetteredEvents
+        expr: increase(indexer_dead_letter_events_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Indexer events were dead-lettered"
+          description: "{{ $value }} event(s) exhausted processing retries. Check the indexer dead-letter file and resolve the blocked checkpoint."
+
+      - alert: IndexerLagHigh
+        expr: indexer_lag_ledgers > 100
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Indexer ledger lag exceeds threshold"
+          description: "indexer_lag_ledgers is {{ $value }} (threshold 100 per INDEXER_LAG_ALERT_THRESHOLD). See docs/runbooks/indexer-recovery.md."

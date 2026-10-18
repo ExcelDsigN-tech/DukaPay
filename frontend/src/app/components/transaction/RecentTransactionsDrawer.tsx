@@ -17,10 +17,10 @@ function formatDate(value: string) {
 export function RecentTransactionsDrawer() {
   const t = useTranslations("RecentTransactions");
   const [open, setOpen] = useState(false);
-  const authToken = useUserStore((state) => state.authToken);
+  const isAuthenticated = useUserStore((state) => state.isAuthenticated);
   const { data, isLoading, isError } = useMyTransactions({
     limit: 20,
-    enabled: open && Boolean(authToken),
+    enabled: open && isAuthenticated,
   });
   const transactions = data?.items ?? [];
 
@@ -30,7 +30,7 @@ export function RecentTransactionsDrawer() {
         type="button"
         onClick={() => setOpen(true)}
         aria-label={t("open")}
-        className="rounded-lg p-2 text-zinc-500 transition hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-900"
+        className="flex h-10 w-10 items-center justify-center rounded-[10px] border border-line text-fg transition-colors hover:bg-subtle"
       >
         <Clock3 className="h-5 w-5" aria-hidden="true" />
       </button>

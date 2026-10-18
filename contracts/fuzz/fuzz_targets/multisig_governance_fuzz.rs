@@ -6,7 +6,7 @@
 //! highest-value invariants live in the signer-set and proposal state machine:
 //!   - approvals are deduplicated (a signer approving twice counts once),
 //!   - the approval count never exceeds the signer set,
-//!   - the admin only ever changes via an explicit finalize — never as a side
+//!   - the admin only ever changes via an explicit finalize, never as a side
 //!     effect of propose/approve/cancel/expire.
 //!
 //! We drive an arbitrary sequence of actions and assert these hold throughout.

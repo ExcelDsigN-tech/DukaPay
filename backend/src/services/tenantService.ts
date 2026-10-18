@@ -62,7 +62,7 @@ export async function assignBorrowerToAgent(
 
   const row = result.rows[0];
   if (!row) {
-    // Existing assignment — return the stored row so callers can treat the
+    // Existing assignment: return the stored row so callers can treat the
     // operation as idempotent.
     const existing = await query(
       `SELECT agent_public_key, borrower_public_key, created_at, created_by

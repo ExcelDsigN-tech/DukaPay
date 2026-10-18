@@ -26,7 +26,7 @@ does **not** apply. The same rigor is achieved with the combination below:
 Each invariant is written CVL-style for readability, followed by how it is
 **actually** enforced in this Rust/Soroban codebase.
 
-### INV-1 — AgentVault float solvency
+### INV-1: AgentVault float solvency
 
 ```cvl
 invariant floatSolvency(env, agent):
@@ -39,7 +39,7 @@ and `set_haircut` all recompute `max_float_of(collateral, haircut)` and revert
 with `SolvencyViolated` if the resulting float would exceed the bound. This is
 checked by `agent_vault/src/test.rs` and by `fuzz_targets/invariants_fuzz.rs`.
 
-### INV-2 — LendingPool share pricing is inflation-safe
+### INV-2: LendingPool share pricing is inflation-safe
 
 ```cvl
 invariant noFirstDepositorInflation(env, token, provider, shares):
@@ -53,7 +53,7 @@ well-defined at empty-pool and prevents a donation from rounding a victim's
 minted shares to zero. Pricing uses internally tracked `TotalManagedAssets`,
 never the live token balance.
 
-### INV-3 — LoanManager total-debt cap
+### INV-3: LoanManager total-debt cap
 
 ```cvl
 invariant debtBounded(env, loan):
@@ -64,7 +64,7 @@ invariant debtBounded(env, loan):
 Enforced: `accrue_late_fee` clamps the per-call fee to `max_total_debt -
 current_total_debt`, so fees can never push total debt beyond 2× principal.
 
-### INV-4 — Reentrancy freedom
+### INV-4: Reentrancy freedom
 
 ```cvl
 rule noReentrancy(method f):
@@ -78,7 +78,7 @@ state and mark terminal status **before** the `token_client.transfer` /
 and reverts. `lending_pool::redeem_shares` updates accounting before the
 outbound transfer. Verified by reading the source + fuzz replay.
 
-### INV-5 — Access control
+### INV-5: Access control
 
 ```cvl
 rule onlyAdminCanPause(env, caller):
@@ -93,7 +93,7 @@ Enforced: `assert_not_paused` / `require_operator` / `Self::admin(...).require_a
 guards in every privileged entry point. The `CircuitBreaker` additionally
 requires a signer to trip and a 3-of-5 override (with timelock) to lift.
 
-### INV-6 — Arithmetic overflow freedom
+### INV-6: Arithmetic overflow freedom
 
 ```cvl
 rule noWrap(env, op):
@@ -104,7 +104,7 @@ Enforced: `overflow-checks = true` in `Cargo.toml` (debug, test, release) → an
 overflow/underflow **panics** rather than wrapping. All hot math routes through
 `money::round_div` / `checked_*` helpers.
 
-### INV-7 — Circuit-breaker consistency
+### INV-7: Circuit-breaker consistency
 
 ```cvl
 rule breakerBlocks(env, contract, fn):

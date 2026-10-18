@@ -21,7 +21,7 @@ export function XPGainAnimation({
 
   useEffect(() => {
     if (show) {
-      setIsVisible(true);
+      setIsVisible(true); // eslint-disable-line react-hooks/set-state-in-effect -- syncs visibility with prop
       const timer = setTimeout(() => {
         setIsVisible(false);
         onComplete?.();

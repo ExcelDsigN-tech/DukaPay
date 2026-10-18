@@ -12,51 +12,8 @@ DukaPay uses three core smart contracts:
 
 ## Prerequisites
 
-<<<<<<< HEAD
 - [Rust Toolchain](https://www.rust-lang.org/tools/install) installed via `rustup` **1.23.0 or newer**
 - [Soroban CLI](https://soroban.stellar.org/docs/getting-started/setup)
-- [wasm32-unknown-unknown target](https://doc.rust-lang.org/rustc/platform-support/wasm32-unknown-unknown.html)
-
-### The pinned toolchain
-
-This directory contains a `rust-toolchain.toml` that pins the exact toolchain
-used to build the contracts:
-
-```toml
-[toolchain]
-channel = "1.85.0"
-targets = ["wasm32-unknown-unknown"]
-components = ["rustfmt", "clippy"]
-```
-
-**You do not need to install this toolchain yourself.** Any `cargo` or `rustc`
-command run from inside `contracts/` is intercepted by `rustup`, which reads
-this file, downloads the pinned toolchain and the `wasm32-unknown-unknown`
-target on first use, and runs the real command with them. The first build after
-cloning will therefore pause to download a toolchain — that is expected, not a
-failure.
-
-The pin is what makes builds reproducible: a WASM built on a different compiler
-version can differ byte-for-byte, which breaks on-chain hash verification even
-when the source is identical. Do not work around it by overriding the channel.
-
-**Minimum rustup version: 1.23.0**, the release that added `rust-toolchain.toml`
-support. On anything older the file is ignored and you get confusing errors —
-typically a compile failure against your system toolchain, or
-`error: target 'wasm32-unknown-unknown' not found`, rather than a clear message
-about the pin. Check and upgrade with:
-
-```bash
-rustup --version
-rustup self update
-```
-
-If you must confirm the pin is active, run `rustup show` from `contracts/` —
-the pinned version should be listed as the active toolchain, with `overridden
-by` pointing at `rust-toolchain.toml`.
-=======
-- [Rust Toolchain](https://www.rust-lang.org/tools/install) (latest stable)
-- [Soroban CLI](https://soroban.stellar.org/docs/getting-started/setup) (v22.0.0+)
 - [wasm32-unknown-unknown target](https://doc.rust-lang.org/rustc/platform-support/wasm32-unknown-unknown.html)
 
 ### Required Versions
@@ -66,8 +23,51 @@ by` pointing at `rust-toolchain.toml`.
 | `soroban-sdk` | 22.0.0 |
 | `soroban-cli` | 22.0.0+ |
 
-> These versions are pinned in `contracts/Cargo.toml` — keep the two files in sync when upgrading.
->>>>>>> 5c8064c (fix: normalize non-Error rejections in asyncHandler, add tests, document SDK version and PII inventory)
+> These versions are pinned in `contracts/Cargo.toml`. Keep the two files in sync when upgrading.
+
+### The pinned toolchain
+
+This directory contains a `rust-toolchain.toml` that pins the exact toolchain
+used to build the contracts:
+
+```toml
+[toolchain]
+channel = "1.85.0"
+targets = ["wasm32-unknown-unknown", "wasm32v1-none"]
+components = ["rustfmt", "clippy"]
+```
+
+**You do not need to install this toolchain yourself.** Any `cargo` or `rustc`
+command run from inside `contracts/` is intercepted by `rustup`, which reads
+this file, downloads the pinned toolchain and the `wasm32-unknown-unknown`
+target on first use, and runs the real command with them. The first build after
+cloning will therefore pause to download a toolchain. That is expected, not a
+failure.
+
+**Build for deployment with `wasm32v1-none`** (`scripts/build.sh` does this).
+Since Rust 1.82, `wasm32-unknown-unknown` enables WASM features such as
+reference-types that the Stellar network rejects, so a contract built that way
+fails to upload with `reference-types not enabled`. `wasm32-unknown-unknown`
+is still fine for tests and size checks.
+
+The pin is what makes builds reproducible: a WASM built on a different compiler
+version can differ byte-for-byte, which breaks on-chain hash verification even
+when the source is identical. Do not work around it by overriding the channel.
+
+**Minimum rustup version: 1.23.0**, the release that added `rust-toolchain.toml`
+support. On anything older the file is ignored and you get confusing errors,
+typically a compile failure against your system toolchain, or
+`error: target 'wasm32-unknown-unknown' not found`, rather than a clear message
+about the pin. Check and upgrade with:
+
+```bash
+rustup --version
+rustup self update
+```
+
+If you must confirm the pin is active, run `rustup show` from `contracts/`:
+the pinned version should be listed as the active toolchain, with `overridden
+by` pointing at `rust-toolchain.toml`.
 
 ### Installation
 
@@ -76,7 +76,7 @@ by` pointing at `rust-toolchain.toml`.
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 # Add wasm32 target.
-# Optional here — rust-toolchain.toml already declares it, so rustup installs
+# Optional here: rust-toolchain.toml already declares it, so rustup installs
 # it automatically for the pinned toolchain on first build. Harmless to run,
 # and useful if you also build outside this directory.
 rustup target add wasm32-unknown-unknown
@@ -107,7 +107,12 @@ contracts/
 │   │   └── test.rs
 │   ├── test_snapshots/
 │   └── Cargo.toml
-├── Cargo.toml               # Workspace configuration
+├── circuit_breaker/         # Emergency pause kill-switch (global/contract/function)
+│   ├── src/
+│   │   ├── lib.rs
+│   │   └── test.rs
+│   └── Cargo.toml
+├── Cargo.toml               # Workspace configuration (all contracts above are members)
 ├── Cargo.lock
 └── README.md
 ```

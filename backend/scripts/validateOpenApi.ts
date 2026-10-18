@@ -33,7 +33,7 @@ const HTTP_METHODS = ['get', 'post', 'put', 'delete', 'patch', 'head', 'options'
 
 /**
  * Mount table mirroring src/app.ts. The key is the spec-relative base path
- * (the express mount prefix with `/api`/`/api/v1` stripped); each entry maps
+ * (the express mount prefix with `/api` stripped); each entry maps
  * to the router instance registered there.
  */
 const MOUNTS: Array<[specBasePath: string, router: Router]> = [

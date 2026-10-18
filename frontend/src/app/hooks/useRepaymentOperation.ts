@@ -1,23 +1,11 @@
 /**
  * hooks/useRepaymentOperation.ts
  *
- * Complete repayment operation management with optimistic updates,
- * progress tracking, and automatic state rollback on failure.
+ * Lending pool deposit and withdrawal operations: build the unsigned
+ * transaction on the backend, sign it in the wallet, submit it, and track
+ * progress with optimistic updates and rollback on failure.
  *
- * Usage Example:
- * ```tsx
- * const repayment = useRepaymentOperation();
- *
- * const handleRepay = async () => {
- *   repayment.start("Repaying loan...);
- *   try {
- *     const result = await repayLoan({ loanId: 123, amount: 500 });
- *     repayment.success(result.txHash);
- *   } catch (error) {
- *     repayment.error(error.message);
- *   }
- * };
- * ```
+ * Loan repayments live on the repay page (app/[locale]/repay/[loanId]).
  */
 
 import { useCallback, useId, useState } from "react";
@@ -27,99 +15,10 @@ import { useWallet } from "../components/providers/WalletProvider";
 import {
   useDepositToPool,
   usePoolStats,
-  useRepayLoan,
   useWithdrawFromPool,
   submitPoolTransaction,
   queryKeys,
 } from "./useApi";
-import { enqueueRepayment } from "../../lib/offlineQueue";
-
-interface RepaymentOperationOptions {
-  loanId: number;
-  amount: number;
-  borrowerAddress: string;
-}
-
-interface RepaymentOperationResult {
-  txHash: string;
-  status: "success";
-}
-
-export function useRepaymentOperation(options?: {
-  onSuccess?: (result: RepaymentOperationResult) => void;
-  onError?: (error: Error) => void;
-}) {
-  const uid = useId();
-  const transactionId = `repayment-${uid}`;
-  const transaction = useTransaction(transactionId);
-  const [error, setError] = useState<string | null>(null);
-  const repayLoan = useRepayLoan();
-
-  const executeRepayment = useCallback(
-    async ({
-      loanId,
-      amount,
-      borrowerAddress,
-    }: RepaymentOperationOptions): Promise<RepaymentOperationResult> => {
-      transaction.start("Processing repayment...");
-      setError(null);
-
-      try {
-        // If offline, enqueue the repayment for background sync and return a queued result
-        if (typeof navigator !== "undefined" && !navigator.onLine) {
-          await enqueueRepayment({ loanId, amount, borrowerAddress });
-          try {
-            if ("serviceWorker" in navigator && "SyncManager" in window) {
-              const reg = await navigator.serviceWorker.ready;
-              // register background sync to process queued repayments
-              await (reg as any).sync.register("sync-repayments");
-            }
-          } catch (swErr) {
-            // Non-fatal
-            // eslint-disable-next-line no-console
-            console.error("Background sync register failed", swErr);
-          }
-
-          transaction.submit(`queued-${Date.now()}`, "Queued for background sync");
-          transaction.confirm("Will retry when online");
-          transaction.complete(`queued-${Date.now()}`);
-
-          const result = { txHash: `queued-${Date.now()}`, status: "success" as const };
-          options?.onSuccess?.(result);
-          return result;
-        }
-
-        transaction.updateProgress(20, "Submitting repayment...");
-
-        // useRepayLoan handles the full submit flow with optimistic cache updates
-        const response = await repayLoan.mutateAsync({ loanId, amount, borrowerAddress });
-        const txHash = response.txHash ?? String(loanId);
-
-        transaction.submit(txHash, "Transaction submitted, waiting for confirmation...");
-        transaction.confirm("Confirming transaction...");
-        transaction.complete(txHash);
-
-        const result = { txHash, status: "success" as const };
-        options?.onSuccess?.(result);
-        return result;
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : "Repayment failed";
-        transaction.fail(errorMessage);
-        setError(errorMessage);
-        options?.onError?.(err instanceof Error ? err : new Error(errorMessage));
-        throw err;
-      }
-    },
-    [transaction, repayLoan, options],
-  );
-
-  return {
-    ...transaction,
-    executeRepayment,
-    error,
-    clearError: () => setError(null),
-  };
-}
 
 /**
  * Hook for managing deposit operations
@@ -130,8 +29,9 @@ export function useDepositOperation(options?: {
 }) {
   const queryClient = useQueryClient();
   const { signTransaction } = useWallet();
-  const buildDeposit = useDepositToPool();
+  const { mutateAsync: buildDeposit } = useDepositToPool();
   const { data: poolStats } = usePoolStats();
+  const poolTokenAddress = poolStats?.poolTokenAddress;
 
   const uid = useId();
   const transactionId = `deposit-${uid}`;
@@ -150,14 +50,14 @@ export function useDepositOperation(options?: {
       setError(null);
 
       try {
-        const token = poolStats?.poolTokenAddress;
+        const token = poolTokenAddress;
         if (!token) {
           throw new Error("Pool token address not found. Please wait for stats to load.");
         }
 
         // Step 1: Build unsigned transaction
         transaction.updateProgress(20, "Building transaction...");
-        const buildResult = await buildDeposit.mutateAsync({
+        const buildResult = await buildDeposit({
           amount,
           depositorAddress,
           token,
@@ -202,7 +102,7 @@ export function useDepositOperation(options?: {
         throw err;
       }
     },
-    [transaction, queryClient, options],
+    [transaction, queryClient, options, poolTokenAddress, buildDeposit, signTransaction],
   );
 
   return {
@@ -222,8 +122,9 @@ export function useWithdrawalOperation(options?: {
 }) {
   const queryClient = useQueryClient();
   const { signTransaction } = useWallet();
-  const buildWithdraw = useWithdrawFromPool();
+  const { mutateAsync: buildWithdraw } = useWithdrawFromPool();
   const { data: poolStats } = usePoolStats();
+  const poolTokenAddress = poolStats?.poolTokenAddress;
 
   const uid = useId();
   const transactionId = `withdrawal-${uid}`;
@@ -242,14 +143,14 @@ export function useWithdrawalOperation(options?: {
       setError(null);
 
       try {
-        const token = poolStats?.poolTokenAddress;
+        const token = poolTokenAddress;
         if (!token) {
           throw new Error("Pool token address not found. Please wait for stats to load.");
         }
 
         // Step 1: Build unsigned transaction
         transaction.updateProgress(20, "Building transaction...");
-        const buildResult = await buildWithdraw.mutateAsync({
+        const buildResult = await buildWithdraw({
           amount,
           depositorAddress,
           token,
@@ -294,7 +195,7 @@ export function useWithdrawalOperation(options?: {
         throw err;
       }
     },
-    [transaction, queryClient, options],
+    [transaction, queryClient, options, poolTokenAddress, buildWithdraw, signTransaction],
   );
 
   return {

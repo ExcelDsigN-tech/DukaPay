@@ -55,12 +55,12 @@ export default function (data) {
 
   // Endpoint distribution (weighted by expected production traffic)
   const endpoints = [
-    { weight: 0.3, url: '/api/v1/pool/stats', name: 'pool_stats' },
-    { weight: 0.25, url: '/api/v1/loans/borrower/' + selectRandomUser(), name: 'borrower_loans' },
-    { weight: 0.2, url: '/api/v1/score/' + selectRandomUser(), name: 'credit_score' },
-    { weight: 0.1, url: '/api/v1/remittances', name: 'remittances_list' },
+    { weight: 0.3, url: '/api/pool/stats', name: 'pool_stats' },
+    { weight: 0.25, url: '/api/loans/borrower/' + selectRandomUser(), name: 'borrower_loans' },
+    { weight: 0.2, url: '/api/score/' + selectRandomUser(), name: 'credit_score' },
+    { weight: 0.1, url: '/api/remittances', name: 'remittances_list' },
     { weight: 0.08, url: '/health', name: 'health_check' },
-    { weight: 0.05, url: '/api/v1/notifications', name: 'notifications' },
+    { weight: 0.05, url: '/api/notifications', name: 'notifications' },
     { weight: 0.02, url: '/version', name: 'version_info' },
   ];
 

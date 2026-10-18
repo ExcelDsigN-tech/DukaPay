@@ -22,7 +22,7 @@ pub struct DecodedEvent {
     pub tx_hash: String,
     pub topics: Vec<String>,
     pub value: serde_json::Value,
-    /// Shard that produced this event — lets consumers dedupe across replicas.
+    /// Shard that produced this event; lets consumers dedupe across replicas.
     pub shard: u32,
 }
 

@@ -6,11 +6,11 @@ import {
   RemittanceResource,
   ScoresResource,
 } from './resources.js';
-import type { Session } from './types.js';
+import type { Session, SimulationResult } from './types.js';
 import { assertWallet, type StellarNetwork, type WalletAdapter } from './wallet/index.js';
 
 export interface DukaPayClientOptions {
-  /** API base URL, e.g. https://api.dukapay.io */
+  /** API base URL, e.g. https://your-backend.example */
   baseUrl: string;
   /** Stellar network the API is bound to. Defaults to 'testnet'. */
   network?: StellarNetwork;
@@ -31,7 +31,7 @@ export interface DukaPayClientOptions {
  * ```ts
  * const client = new DukaPayClient({ baseUrl, wallet: new FreighterAdapter() });
  * await client.loginWithWallet();
- * const loans = await client.loans.list({ borrower: await client.address() });
+ * const { loans } = await client.loans.list({ borrower: await client.address()! });
  * ```
  */
 export class DukaPayClient {
@@ -98,12 +98,18 @@ export class DukaPayClient {
   /** Full wallet login: connect → challenge → sign → login. Idempotent-ish. */
   async loginWithWallet(): Promise<Session> {
     assertWallet(this.wallet);
-    const address = (await this.wallet.getAddress()) ?? (await this.wallet.connect());
-    const { message } = await this.auth.challenge(address);
-    const { signature } = await this.wallet.signMessage(message);
-    const session = await this.auth.login({ publicKey: address, message, signature });
-    this.setSession(session);
-    return session;
+    try {
+      const address = (await this.wallet.getAddress()) ?? (await this.wallet.connect());
+      const { message } = await this.auth.challenge(address);
+      const { signature } = await this.wallet.signMessage(message);
+      const session = await this.auth.login({ publicKey: address, message, signature });
+      this.setSession(session);
+      return session;
+    } catch (error) {
+      this.setSession(null);
+      await this.wallet.disconnect().catch(() => {});
+      throw error;
+    }
   }
 
   async logout(): Promise<void> {
@@ -118,14 +124,31 @@ export class DukaPayClient {
   // ── Transactions ───────────────────────────────────────────────────────────
 
   /**
+   * Simulate a transaction before signing to catch errors early.
+   * Returns estimated fees and success status.
+   */
+  async simulate(unsigned: { xdr: string }): Promise<SimulationResult> {
+    const result = await this.http.post<SimulationResult>(
+      '/transactions/simulate',
+      { xdr: unsigned.xdr },
+    );
+    return result;
+  }
+
+  /**
    * Sign an unsigned XDR with the connected wallet and hand the signed XDR to a
    * submitter (typically one of the resource `submit*` calls).
+   * Optionally simulates the transaction first unless skipSimulation is true.
    */
   async signAndSubmit<T>(
     unsigned: { xdr: string },
     submit: (signedXdr: string) => Promise<T>,
+    opts?: { skipSimulation?: boolean },
   ): Promise<T> {
     assertWallet(this.wallet);
+    if (!opts?.skipSimulation) {
+      await this.simulate(unsigned);
+    }
     const signedXdr = await this.wallet.signTransaction(unsigned.xdr, { network: this.network });
     return submit(signedXdr);
   }

@@ -3,13 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "prettier --check .",
+    "lint": "eslint src e2e lib && npm run lint:i18n",
+    "format:check": "prettier --check .",
+    "lint:i18n": "eslint -c eslint.i18n.config.mjs --no-warn-ignored src",
     "typecheck": "tsc --noEmit",
     "audit:a11y": "next build && npx axe-playwright",
     "perf:budget": "node scripts/check-bundle-size.mjs",
@@ -33,7 +35,7 @@
     "framer-motion": "^12.38.0",
     "lottie-react": "^2.4.1",
     "lucide-react": "^0.575.0",
-    "next": "^16.2.1",
+    "next": "^16.3.6",
     "next-intl": "^4.8.3",
     "qrcode.react": "^4.2.0",
     "react": "19.2.3",

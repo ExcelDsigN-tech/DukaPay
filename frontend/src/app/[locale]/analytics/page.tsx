@@ -13,7 +13,7 @@ export default function AnalyticsPage() {
   const userId = address ?? "demo_user";
 
   return (
-    <main className="min-h-screen p-8 lg:p-12 max-w-7xl mx-auto space-y-8">
+    <div className="min-h-screen p-8 lg:p-12 max-w-7xl mx-auto space-y-8">
       <header>
         <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">Analytics Dashboard</h1>
         <p className="text-zinc-500 dark:text-zinc-400 mt-2">
@@ -45,6 +45,6 @@ export default function AnalyticsPage() {
           walletAddress={address ?? undefined}
         />
       </ErrorBoundary>
-    </main>
+    </div>
   );
 }

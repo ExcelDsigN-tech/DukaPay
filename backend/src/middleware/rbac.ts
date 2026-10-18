@@ -10,15 +10,15 @@ import { isRoleAtLeast, type UserRole } from '../auth/rbac.js';
  * Centralises the role/scope/tenant checks for the DukaPay backend. Roles are
  * resolved from the authenticated JWT (`req.user`) by `requireJwtAuth`, so
  * these checks are declarative gates: they never trust request bodies or
- * params to decide *who* the caller is — only *what* resource id the caller
+ * params to decide *who* the caller is, only *what* resource id the caller
  * is allowed to reach.
  *
  * Roles (from `auth/rbac.ts`):
- *   - admin    — everything
- *   - agent    — own data + data of assigned borrowers (`agents:view-assigned`)
- *   - borrower — own data only
- *   - auditor  — read-only across audit/compliance surfaces
- *   - lender   — legacy alias of `agent` for pool providers
+ *   - admin:    everything
+ *   - agent:    own data + data of assigned borrowers (`agents:view-assigned`)
+ *   - borrower: own data only
+ *   - auditor:  read-only across audit/compliance surfaces
+ *   - lender:   legacy alias of `agent` for pool providers
  */
 
 const ADMIN_ROLE: UserRole = 'admin';
@@ -121,7 +121,7 @@ export function canAccessWallet(
 /**
  * Injects `assignedBorrowers` onto `req.user` for agents that authenticated
  * before the assignment claim was minted (or when assignments changed after
- * login), using the `agent_assignments` table. Never throws on DB failure —
+ * login), using the `agent_assignments` table. Never throws on DB failure;
  * falls back to whatever the JWT already carried.
  */
 async function enrichAssignedBorrowers(req: Request): Promise<void> {
@@ -151,6 +151,7 @@ export function resolveRequestedWallet(req: Request): string | undefined {
     req.params?.userId ??
     req.params?.walletAddress ??
     req.params?.address ??
+    req.params?.agentAddress ??
     req.body?.wallet ??
     req.body?.borrowerPublicKey ??
     req.body?.publicKey ??
@@ -195,7 +196,7 @@ export const requireTenantAccess = async (
 
 /**
  * Combined gate used on write-heavy borrower-scoped routes: the caller must
- * have a write-capable role (borrower/agent/admin/lender — never auditor) AND
+ * have a write-capable role (borrower/agent/admin/lender, never auditor) AND
  * tenant access to the target wallet.
  */
 export const requireWriteTenantAccess = async (

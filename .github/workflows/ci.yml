@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [main]
 
+# Least-privilege default: every job gets read-only contents unless it
+# explicitly declares elevated permissions (e.g. the contracts job needs
+# id-token: write and attestations: write for OIDC-based artifact signing).
+permissions:
+  contents: read
+
 # Cancel superseded runs for the same branch/PR to avoid wasting CI minutes
 # on commits that have already been replaced by newer ones.
 concurrency:
@@ -48,7 +54,7 @@ jobs:
       - name: Use Node.js 20
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 20
+          node-version-file: '.nvmrc'
           cache: "npm"
           cache-dependency-path: scripts/package-lock.json
       - name: Install dependencies
@@ -56,6 +62,57 @@ jobs:
         working-directory: scripts
       - name: Check generated money-policy artifacts are up to date
         run: npx ts-node gen-money.ts --check
+        working-directory: scripts
+
+  # Issue #432: the stroop-integer money kernel exists twice on purpose: once in
+  # Rust (`contracts/money`, what the chain executes) and once in TypeScript
+  # (`backend/src/money/decimal.ts`, the off-chain settlement path). The two
+  # must agree bit-for-bit for the same amount, or an off-chain confirmation can
+  # disagree with what actually settles. This job runs both halves of the parity
+  # harness and fails the build the moment they diverge: the shared vectors in
+  # `contracts/money/tests/parity_vectors.rs` and `parity-vectors.test.ts`, then
+  # `scripts/money-parity.ts`, which replays every vector in
+  # `tests/money-parity/vectors.json` plus a randomized batch through both
+  # implementations and diffs the outputs.
+  money-parity:
+    needs: money-policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable # not SHA-pinned: rolling channel branch (stable/beta/nightly track new Rust releases); pinning would freeze the toolchain version
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: contracts
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: "npm"
+          cache-dependency-path: backend/package-lock.json
+      - name: Install backend dependencies
+        run: npm ci
+        working-directory: backend
+
+      - name: Rust shared money vectors and properties
+        # `--test-threads=1` matches the contracts job: soroban's test host
+        # meters a budget per `Env`, and the randomized split test allocates one
+        # per iteration.
+        run: cargo test -p money -- --test-threads=1
+        working-directory: contracts
+
+      - name: Backend money vectors and properties
+        run: npm test -- src/money/__tests__/parity-vectors.test.ts
+        working-directory: backend
+        env:
+          NODE_ENV: test
+
+      - name: Cross-language money parity (shared vectors + randomized)
+        run: npx tsx money-parity.ts --randomized 5000
         working-directory: scripts
 
   backend:
@@ -67,7 +124,7 @@ jobs:
       - name: Use Node.js 20
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 20
+          node-version-file: '.nvmrc'
           cache: "npm"
           cache-dependency-path: backend/package-lock.json
       - name: Install dependencies
@@ -75,6 +132,9 @@ jobs:
         working-directory: backend
       - name: Lint
         run: npm run lint
+        working-directory: backend
+      - name: Format check
+        run: npm run format:check
         working-directory: backend
       - name: Build
         run: npm run build
@@ -130,7 +190,7 @@ jobs:
       - name: Use Node.js 20
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 20
+          node-version-file: '.nvmrc'
           cache: "npm"
           cache-dependency-path: backend/package-lock.json
       - name: Install dependencies
@@ -186,7 +246,7 @@ jobs:
       - name: Use Node.js 20
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 20
+          node-version-file: '.nvmrc'
           cache: "npm"
           cache-dependency-path: backend/package-lock.json
       - name: Install dependencies
@@ -249,7 +309,7 @@ jobs:
       - name: Use Node.js 20
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 20
+          node-version-file: '.nvmrc'
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
       - name: Install dependencies
@@ -257,6 +317,9 @@ jobs:
         working-directory: frontend
       - name: Lint
         run: npm run lint
+        working-directory: frontend
+      - name: Format check
+        run: npm run format:check
         working-directory: frontend
       - name: Type check
         run: npm run typecheck
@@ -283,7 +346,7 @@ jobs:
       - name: Use Node.js 20
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 20
+          node-version-file: '.nvmrc'
           cache: npm
           cache-dependency-path: scripts/package-lock.json
 
@@ -298,14 +361,18 @@ jobs:
   e2e:
     needs: [supply-chain-audit, frontend]
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' || contains(github.event.pull_request.changed_files, 'frontend/')
+    # Run e2e on push and on pull requests that touch frontend; the previous
+    # `contains(github.event.pull_request.changed_files, 'frontend/')` used a
+    # non-existent field and caused the job to be skipped on PRs (see review feedback).
+    # Until a proper paths-filter is added, run on all pull requests.
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Use Node.js 20
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 20
+          node-version-file: '.nvmrc'
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
       - name: Install dependencies
@@ -332,12 +399,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          # Full history so the migration check can diff against the base branch.
+          fetch-depth: 0
       - name: Use Node.js 20
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 20
+          node-version-file: '.nvmrc'
       - name: Check env docs are in sync
         run: node scripts/check-env-docs.mjs
+      - name: Check prod-flag launch posture (KYC + audit-anchor)
+        run: node scripts/check-prod-flags.mjs
+      - name: Check existing migrations are unchanged
+        if: github.event_name == 'pull_request'
+        run: node scripts/check-migrations-immutable.mjs origin/${{ github.base_ref }}
 
   error-code-mapping-check:
     runs-on: ubuntu-latest
@@ -346,9 +421,15 @@ jobs:
       - name: Use Node.js 20
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 20
+          node-version-file: '.nvmrc'
       - name: Check every backend ErrorCode has a frontend message mapping
         run: node scripts/check-error-code-mappings.mjs
+      - name: Check i18n catalogs match en.json keys
+        run: node scripts/check-i18n-parity.mjs
+      - name: Check translation keys used in code exist in en.json
+        run: node scripts/check-i18n-keys.mjs
+      - name: Check public asset sizes
+        run: node scripts/check-asset-sizes.mjs
 
   contracts:
     needs: money-policy
@@ -420,7 +501,7 @@ jobs:
       #
       # Restricted to `push` (i.e. post-merge on main): GitHub does not
       # issue OIDC tokens to `pull_request` runs triggered from a fork, so
-      # this step cannot succeed there — and attesting a build from an
+      # this step cannot succeed there, and attesting a build from an
       # unmerged fork PR isn't meaningful provenance anyway.
       - name: Attest wasm build provenance
         if: github.event_name == 'push'
@@ -470,6 +551,34 @@ jobs:
         run: cargo test
         working-directory: indexer
 
+  image-digest-check:
+    needs: supply-chain-audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Verify all Kubernetes images are pinned to SHA256 digests
+        run: |
+          set -euo pipefail
+          FAIL=0
+          while IFS= read -r file; do
+            while IFS= read -r line; do
+              if echo "$line" | grep -qE '^\s+image:'; then
+                image=$(echo "$line" | sed 's/.*image:\s*//')
+                if echo "$image" | grep -q ':latest'; then
+                  echo "::error file=$file::Unpinned :latest tag found: $image"
+                  FAIL=1
+                elif ! echo "$image" | grep -qE '@sha256:[a-f0-9]{64}'; then
+                  echo "::error file=$file::Image not pinned to SHA256 digest: $image"
+                  FAIL=1
+                fi
+              fi
+            done < "$file"
+          done < <(find infra/kubernetes -name "*.yaml" -o -name "*.yml")
+          if [ "$FAIL" -eq 1 ]; then
+            exit 1
+          fi
+          echo "All Kubernetes images are pinned to SHA256 digests."
+
   sdk:
     needs: supply-chain-audit
     runs-on: ubuntu-latest
@@ -479,11 +588,14 @@ jobs:
       - name: Use Node.js 20
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 20
+          node-version-file: '.nvmrc'
           cache: npm
           cache-dependency-path: sdk/package-lock.json
       - name: Install dependencies
         run: npm ci
+        working-directory: sdk
+      - name: Lint
+        run: npm run lint
         working-directory: sdk
       - name: Type check
         run: npm run typecheck

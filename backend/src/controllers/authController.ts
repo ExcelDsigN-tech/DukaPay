@@ -4,6 +4,7 @@
  */
 // Only import types once at the top
 import { getAuditLogs, type AuditLogFilters } from '../services/auditLogService.js';
+import { listAuditLogsQuerySchema } from '../schemas/auditSchemas.js';
 import type { Request, Response, NextFunction } from 'express';
 import { asyncHandler } from '../utils/asyncHandler.js';
 export const registerTestUser = asyncHandler(
@@ -23,6 +24,9 @@ import { AppError } from '../errors/AppError.js';
 import { ErrorCode } from '../errors/errorCodes.js';
 import {
   generateChallenge,
+  storeChallenge,
+  getIssuedChallenge,
+  consumeIssuedChallenge,
   verifySignature,
   verifyChallengeTimestamp,
   generateTokenPair,
@@ -30,6 +34,7 @@ import {
   generateDeviceFingerprint,
   revokeToken,
   revokeTokenFamily,
+  invalidateAllFamilies,
 } from '../services/authService.js';
 import logger from '../utils/logger.js';
 import { complianceService } from '../services/complianceService.js';
@@ -60,7 +65,7 @@ export const submitKyc = asyncHandler(async (req: Request, res: Response) => {
   });
 });
 
-export const requestChallenge = (req: Request, res: Response): void => {
+export const requestChallenge = asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const { publicKey } = req.body;
 
   if (!publicKey || typeof publicKey !== 'string') {
@@ -83,11 +88,13 @@ export const requestChallenge = (req: Request, res: Response): void => {
     throw error;
   }
 
+  await storeChallenge(publicKey, challenge);
+
   res.status(200).json({
     success: true,
     data: challenge,
   });
-};
+});
 
 export const login = asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const { publicKey, message, signature } = req.body;
@@ -119,10 +126,36 @@ export const login = asyncHandler(async (req: Request, res: Response): Promise<v
     throw AppError.unauthorized('Challenge has expired', ErrorCode.CHALLENGE_EXPIRED);
   }
 
+  const issuedChallenge = await getIssuedChallenge(publicKey, message);
+  if (
+    !issuedChallenge ||
+    issuedChallenge.publicKey !== publicKey ||
+    issuedChallenge.message !== message
+  ) {
+    logAuthFailure(req, publicKey, 'challenge_not_issued');
+    throw AppError.unauthorized(
+      'Challenge is invalid or has already been used',
+      ErrorCode.INVALID_CHALLENGE,
+    );
+  }
+
+  if (issuedChallenge.expiresAt < Date.now()) {
+    logAuthFailure(req, publicKey, 'challenge_expired');
+    throw AppError.unauthorized('Challenge has expired', ErrorCode.CHALLENGE_EXPIRED);
+  }
+
   const isValidSignature = verifySignature(publicKey, message, signature);
   if (!isValidSignature) {
     logAuthFailure(req, publicKey, 'invalid_signature');
     throw AppError.unauthorized('Invalid signature', ErrorCode.INVALID_SIGNATURE);
+  }
+
+  if (!(await consumeIssuedChallenge(publicKey, message, issuedChallenge))) {
+    logAuthFailure(req, publicKey, 'challenge_already_used');
+    throw AppError.unauthorized(
+      'Challenge is invalid or has already been used',
+      ErrorCode.INVALID_CHALLENGE,
+    );
   }
 
   const fingerprint = generateDeviceFingerprint(req);
@@ -143,7 +176,7 @@ export const login = asyncHandler(async (req: Request, res: Response): Promise<v
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'strict',
-    path: '/api/v1/auth',
+    path: '/api/auth',
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
   });
 
@@ -192,7 +225,7 @@ export const refresh = asyncHandler(async (req: Request, res: Response): Promise
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'strict',
-    path: '/api/v1/auth',
+    path: '/api/auth',
     maxAge: 7 * 24 * 60 * 60 * 1000,
   });
 
@@ -214,14 +247,16 @@ export async function listAuditLogs(
   next: NextFunction,
 ): Promise<void> {
   try {
+    const validated = listAuditLogsQuerySchema.parse(req.query);
     const result = await getAuditLogs({
-      actor: req.query.actor as string | undefined,
-      action: req.query.action as string | undefined,
-      from: req.query.from as string | undefined,
-      to: req.query.to as string | undefined,
-      cursor: req.query.cursor as string | undefined,
-      limit: Number(req.query.limit ?? 25),
-      withTotal: req.query.withTotal === 'true',
+      actor: validated.actor,
+      action: validated.action,
+      from: validated.from,
+      to: validated.to,
+      cursor: validated.cursor,
+      limit: validated.limit,
+      offset: validated.offset,
+      withTotal: validated.withTotal,
     } as AuditLogFilters);
 
     res.json(result);
@@ -256,10 +291,33 @@ export const logout = async (req: Request, res: Response): Promise<void> => {
   const cookieName = process.env.JWT_COOKIE_NAME ?? 'dukapay_jwt';
   const refreshCookieName = process.env.REFRESH_COOKIE_NAME ?? 'dukapay_refresh';
   res.clearCookie(cookieName, { path: '/' });
-  res.clearCookie(refreshCookieName, { path: '/api/v1/auth' });
+  res.clearCookie(refreshCookieName, { path: '/api/auth' });
 
   res.status(200).json({
     success: true,
     data: { message: 'Logged out' },
   });
 };
+
+export const logoutAllSessions = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user?.publicKey) {
+    throw AppError.unauthorized('Authentication required');
+  }
+
+  await invalidateAllFamilies(req.user.publicKey, 'user_logout_all');
+
+  const cookieName = process.env.JWT_COOKIE_NAME ?? 'dukapay_jwt';
+  const refreshCookieName = process.env.REFRESH_COOKIE_NAME ?? 'dukapay_refresh';
+  res.clearCookie(cookieName, { path: '/' });
+  res.clearCookie(refreshCookieName, { path: '/api/auth' });
+
+  logger.withContext().info('User logged out from all sessions', {
+    publicKey: req.user.publicKey,
+    timestamp: new Date().toISOString(),
+  });
+
+  res.status(200).json({
+    success: true,
+    data: { message: 'Logged out from all sessions' },
+  });
+});

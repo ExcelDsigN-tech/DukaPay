@@ -1,12 +1,12 @@
+// First import so .env is loaded before any module reads process.env.
+import 'dotenv/config';
 import express, { type Request, type Response, type NextFunction } from 'express';
 import cors from 'cors';
 import compression from 'compression';
 import helmet from 'helmet';
-import dotenv from 'dotenv';
 import { Sentry } from './config/sentry.js';
 import { mountSwaggerDocs } from './config/swagger.js';
 
-dotenv.config();
 import pool from './db/connection.js';
 import { cacheService } from './services/cacheService.js';
 import { sorobanService } from './services/sorobanService.js';
@@ -33,7 +33,8 @@ import { errorHandler } from './middleware/errorHandler.js';
 import { metricsHandler, metricsMiddleware } from './middleware/metrics.js';
 import { requestLogger } from './middleware/requestLogger.js';
 import { requestIdMiddleware } from './middleware/requestId.js';
-import { pauseGuard } from './middleware/pauseGuard.js';
+import { pauseGuard, getPauseGuardHealth } from './middleware/pauseGuard.js';
+import { csrfProtection, hasAuthCookie } from './middleware/csrf.js';
 import { asyncHandler } from './utils/asyncHandler.js';
 import { AppError } from './errors/AppError.js';
 const app = express();
@@ -137,6 +138,21 @@ app.use(metricsMiddleware);
 // Issue #1381: Cross-layer emergency pause coordination
 app.use(pauseGuard);
 
+// CSRF protection for ambient (cookie) credentials.
+//
+// The JWT is stored in an httpOnly cookie, so browsers automatically attach it
+// to requests. Mutating requests authenticated that way must also present the
+// double-submit CSRF token. Bearer-token clients (mobile apps, `tests/load`,
+// existing supertest suites) are stateless and are left untouched.
+const csrfGuard = csrfProtection();
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const hasBearer = (req.headers.authorization ?? '').startsWith('Bearer ');
+  if (!hasBearer && hasAuthCookie(req.headers.cookie)) {
+    return csrfGuard(req, res, next);
+  }
+  return next();
+});
+
 app.get('/', (_req: Request, res: Response) => {
   res.send('DukaPay Backend is running');
 });
@@ -149,8 +165,8 @@ app.get('/', (_req: Request, res: Response) => {
  * backend version deployed can be determined without shelling into the container.
  *
  * Environment variables (injected at Docker build time via ARG/ENV):
- *   GIT_SHA    — full git commit SHA of the build (falls back to "unknown")
- *   BUILD_TIME — ISO-8601 UTC timestamp of the build (falls back to "unknown")
+ *   GIT_SHA     full git commit SHA of the build (falls back to "unknown")
+ *   BUILD_TIME  ISO-8601 UTC timestamp of the build (falls back to "unknown")
  */
 app.get('/version', (_req: Request, res: Response) => {
   res.json({
@@ -162,6 +178,7 @@ app.get('/version', (_req: Request, res: Response) => {
       lendingPool: process.env.LENDING_POOL_CONTRACT_ID ?? 'unknown',
       remittanceNft: process.env.REMITTANCE_NFT_CONTRACT_ID ?? 'unknown',
       multisigGovernance: process.env.MULTISIG_GOVERNANCE_CONTRACT_ID ?? 'unknown',
+      settlementNetter: process.env.SETTLEMENT_NETTER_CONTRACT_ID ?? 'unknown',
     },
   });
 });
@@ -329,12 +346,17 @@ app.get(
     const anyDown = db === 'down' || redis === 'down' || stellarRpc === 'down';
     const overallStatus = anyDown ? 'down' : indexerStatus === 'degraded' ? 'degraded' : 'ok';
 
+    const pauseGuardHealth = getPauseGuardHealth();
     res.status(anyDown ? 503 : 200).json({
-      status: overallStatus,
+      status:
+        overallStatus === 'ok' && pauseGuardHealth.status === 'degraded'
+          ? 'degraded'
+          : overallStatus,
       checks: {
         db,
         redis,
         stellarRpc,
+        pauseGuard: pauseGuardHealth,
         indexer: {
           status: indexerStatus,
           lagLedgers,
@@ -350,7 +372,7 @@ const statusRouter = express.Router();
 registerStatusRoutes(statusRouter);
 app.use('/', statusRouter);
 
-// Legacy routes (deprecated, maintained for backward compatibility)
+// API routes
 app.use('/api', simulationRoutes);
 app.use('/api/score', scoreRoutes);
 app.use('/api/loans', loanRoutes);
@@ -358,31 +380,15 @@ app.use('/api/pool', poolRoutes);
 app.use('/api/indexer', indexerRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/agents', agentRoutes);
 app.use('/api/notifications', notificationsRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/remittances', remittanceRoutes);
 app.use('/api/transactions', transactionRoutes);
-app.use('/api/agents', agentRoutes);
 app.use('/api/agents', agentFloatRoutes);
-app.use('/audit', auditRoutes);
-
-// Versioned API routes (v1 - current)
-app.use('/api/v1', simulationRoutes);
-app.use('/api/v1/score', scoreRoutes);
-app.use('/api/v1/loans', loanRoutes);
-app.use('/api/v1/indexer', indexerRoutes);
-app.use('/api/v1/admin', adminRoutes);
-app.use('/api/v1/auth', authRoutes);
-app.use('/api/v1/remittances', remittanceRoutes);
-app.use('/api/v1/transactions', transactionRoutes);
-app.use('/api/v1/pool', poolRoutes);
-app.use('/api/v1/notifications', notificationsRoutes);
-app.use('/api/v1/events', eventRoutes);
-app.use('/api/v1/privacy', privacyRoutes);
-app.use('/api/v1/agents', agentRoutes);
-app.use('/api/v1/agents', agentFloatRoutes);
-app.use('/api/v1/audit', auditRoutes);
-app.use('/user', userRoutes);
+app.use('/api/privacy', privacyRoutes);
+app.use('/api/audit', auditRoutes);
+app.use('/api/user', userRoutes);
 
 mountSwaggerDocs(app);
 

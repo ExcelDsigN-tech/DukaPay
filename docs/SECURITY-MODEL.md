@@ -11,10 +11,10 @@ vulnerability-disclosure policy.
 
 ### 1. Challenge–signature–JWT (primary, for wallet users)
 
-1. **GET /api/auth/challenge?publicKey=G…** — server returns a one-time nonce
+1. **GET /api/auth/challenge?publicKey=G…**: server returns a one-time nonce
    message valid for 5 minutes.
 2. Client signs the message with the Stellar Ed25519 private key.
-3. **POST /api/auth/verify** — server verifies the signature via
+3. **POST /api/auth/verify**: server verifies the signature via
    `Keypair.verify`, resolves the role for that public key (see [Role
    resolution](#role-resolution) below), and mints a JWT.
 4. The JWT is returned both in the JSON body and set as a `httpOnly`,
@@ -29,7 +29,7 @@ JWT payload shape (`JwtPayload` in `authService.ts`):
 ```ts
 {
   publicKey: string;   // Stellar G… address
-  role: UserRole;      // "admin" | "borrower" | "lender"
+   role: UserRole;      // "admin" | "borrower" | "lender"
   scopes: string[];    // derived from role via ROLE_SCOPES
   iat: number;
   exp: number;
@@ -37,6 +37,7 @@ JWT payload shape (`JwtPayload` in `authService.ts`):
 ```
 
 Subsequent requests supply the JWT via:
+
 - `Authorization: Bearer <token>` header, or
 - the `dukapay_jwt` cookie.
 
@@ -63,9 +64,17 @@ Implemented in `backend/src/middleware/auth.ts` (`requireApiKey`).
 
 `resolveRoleForWallet(publicKey)` in `backend/src/auth/rbac.ts`:
 
-1. If the public key is in `ADMIN_WALLETS` (comma-separated env) → **admin**.
-2. If the public key is in `LENDER_WALLETS` → **lender**.
-3. Otherwise → **borrower**.
+Wallets are checked against these comma-separated environment variables in
+order; the first match determines the role:
+
+1. `SUPER_ADMIN_WALLETS` → **super_admin**
+2. `OPS_WALLETS` → **ops**
+3. `SUPPORT_WALLETS` → **support**
+4. `ADMIN_WALLETS` → **admin**
+5. `AGENT_WALLETS` → **agent**
+6. `AUDITOR_WALLETS` → **auditor**
+7. `LENDER_WALLETS` → **lender**
+8. No match → **borrower**
 
 ---
 
@@ -76,13 +85,13 @@ Defined in `ROLE_SCOPES` in `backend/src/auth/rbac.ts`:
 | Role | Scopes granted |
 |---|---|
 | `admin` | `admin:all` |
-| `lender` | `read:loans`, `read:pool` |
-| `borrower` | `read:loans`, `write:repayment`, `read:score`, `read:notifications`, `write:notifications` |
-
-> **Note:** `lender` does **not** have `write:pool`. Pool write endpoints
-> (`build-deposit`, `build-withdraw`, `build-emergency-withdraw`, `submit`)
-> require `write:pool`, which means lenders currently receive 403 on those
-> routes. This is a known gap tracked in issue #1179.
+| `super_admin` | `admin:all` |
+| `ops` | `read:loans`, `read:pool`, `read:score`, `read:remittances`, `read:notifications` |
+| `support` | `read:loans`, `read:score`, `read:remittances`, `read:notifications` |
+| `agent` | `read:loans`, `write:loans`, `read:pool`, `write:pool`, `read:score`, `read:notifications`, `write:notifications`, `read:remittances`, `write:remittances`, `agents:view-assigned` |
+| `borrower` | `read:loans`, `write:loans`, `read:score`, `read:notifications`, `write:notifications`, `read:remittances`, `write:remittances` |
+| `auditor` | `read:audit`, `read:compliance`, `read:loans`, `read:score`, `read:notifications`, `read:remittances`, `read:pool` |
+| `lender` | `read:loans`, `read:pool`, `write:loans`, `write:pool` |
 
 ---
 
@@ -130,10 +139,10 @@ encrypted at rest on the backend (`backend/src/services/piiCrypto.ts`).
 
 | Field | Frontend mask (`piiMask.ts`) | Backend encrypt (`piiCrypto.ts`) |
 |-------|------------------------------|----------------------------------|
-| Email | Yes — `maskRecipient(v, "email")` | Yes — `encryptField()` / `maskValue(v, "email")` |
-| Phone | Yes — `maskRecipient(v, "phone")` | Yes — `encryptField()` / `maskValue(v, "phone")` |
-| Name  | Yes — `maskRecipient(v, "name")`  | Yes — `encryptField()` / `maskValue(v, "name")` |
-| Stellar address | Yes — `maskAddress(v)` | No (public by nature) |
+| Email | Yes, `maskRecipient(v, "email")` | Yes, `encryptField()` / `maskValue(v, "email")` |
+| Phone | Yes, `maskRecipient(v, "phone")` | Yes, `encryptField()` / `maskValue(v, "phone")` |
+| Name  | Yes, `maskRecipient(v, "name")`  | Yes, `encryptField()` / `maskValue(v, "name")` |
+| Stellar address | Yes, `maskAddress(v)` | No (public by nature) |
 
 Both `piiMask.ts` and `piiCrypto.ts` export a `maskValue` / `maskRecipient` for
 email, phone, and name. The frontend uses `maskRecipient` from `piiMask.ts`;
@@ -145,16 +154,16 @@ equivalent but maintained separately for each layer.
 ## Auth middleware stack
 
 ```
-backend/src/middleware/jwtAuth.ts   — requireJwtAuth, requireLender,
+backend/src/middleware/jwtAuth.ts     requireJwtAuth, requireLender,
                                       requireBorrower, requireScopes
-backend/src/middleware/auth.ts      — requireApiKey (API-key scoped access)
-backend/src/services/authService.ts — generateJwtToken, verifyJwtToken,
+backend/src/middleware/auth.ts        requireApiKey (API-key scoped access)
+backend/src/services/authService.ts   generateJwtToken, verifyJwtToken,
                                       generateChallenge, verifySignature
-backend/src/auth/rbac.ts            — ROLE_SCOPES, resolveRoleForWallet,
+backend/src/auth/rbac.ts              ROLE_SCOPES, resolveRoleForWallet,
                                       resolveScopesForRole
-backend/src/middleware/rateLimit.ts — CSRF + tiered rate limiting
-backend/src/services/piiCrypto.ts   — field-level PII encryption at rest
-backend/src/services/piiRotation.ts — PII encryption-key rotation
+backend/src/middleware/rateLimit.ts   CSRF + tiered rate limiting
+backend/src/services/piiCrypto.ts     field-level PII encryption at rest
+backend/src/services/piiRotation.ts   PII encryption-key rotation
 ```
 
 ---
@@ -192,7 +201,7 @@ KEK active (for decryption) while records transition, and retire it once the
 revision sweep reports zero records below the new revision.
 
 `JWT_SECRET` rotation follows the same principle: JWTs are re-minted within 24h
-(`JWT_EXPIRES_IN`), so a rolling rotation is inherently safe — see
+(`JWT_EXPIRES_IN`), so a rolling rotation is inherently safe; see
 `authService.rotateJwtSecret` equivalent flows in the auth middleware.
 
 ---
@@ -227,39 +236,36 @@ reconstructed without exposing PII.
 | OWASP ASVS V2 (auth) | Challenge–signature–JWT, short-lived tokens, scoped API keys |
 | OWASP ASVS V6 (PII) | Field-level AES-256-GCM encryption, masking in UI, `piiMask` |
 | GDPR Art. 25 (DPA) | `docs/DPA_TEMPLATE.md`, PII inventory above, retention 90d–1y |
-| PCI-DSS 3.4 (if storing card data) | N/A — DukaPay stores no card data; Stellar assets only |
-| SOC 2 CC7 (monitoring) | Audit logging, Sentry, query-latency + security metrics |
+| PCI-DSS 3.4 (if storing card data) | N/A: DukaPay stores no card data; Stellar assets only |
 | NIST SP 800-53 AC-2 (access) | RBAC scopes per route, role resolution, API-key scoping |
 
 ---
 
 ## Incident response playbook
 
-1. **Detect** — Sentry alerts, audit-log anomaly checks, DAST/CodeQL findings
-   (`.github/workflows/dast.yml`, `codeql.yml`), bug-bounty reports
-   (`docs/BUG_BOUNTY_PROGRAM.md`).
-2. **Verify** — reproduce and classify severity (SEV-1 PII/oracle/funds,
+1. **Detect**: Sentry alerts, audit-log anomaly checks, DAST/CodeQL findings
+   (`.github/workflows/dast.yml`, `codeql.yml`), private vulnerability reports
+   (see `SECURITY.md`).
+2. **Verify**: reproduce and classify severity (SEV-1 PII/oracle/funds,
    SEV-2 availability, SEV-3 low). Use `request_id` links from the audit log to
    trace impact without exposing PII.
-3. **Contain** — rotate `JWT_SECRET`, `INTERNAL_API_KEY`, and `PII_ENCRYPTION_KEK`;
+3. **Contain**: rotate `JWT_SECRET`, `INTERNAL_API_KEY`, and `PII_ENCRYPTION_KEK`;
    revoke impacted token families (`wiki/jwt-revocation.md`); pause failing
    admin key.
-4. **Triage** — snapshot affected rows, run `reEncryptPIIForAllUsers` if key
+4. **Triage**: snapshot affected rows, run `reEncryptPIIForAllUsers` if key
    exposure implied, blocklist signatures if wallet compromise.
-5. **Eradicate & recover** — apply patch behind the single-commit policy in
+5. **Eradicate & recover**: apply patch behind the single-commit policy in
    `SECURITY.md`, validate with e2e + contract fuzz where relevant.
-6. **Postmortem** — update `docs/SECURITY-MODEL.md`, threat model
-   (`.github/THREAT_MODEL.md`), and Red Team schedule
-   (`docs/RED_TEAM_SCHEDULE.md`); publish a summary to maintainers + Telegram.
+6. **Postmortem**: update `docs/SECURITY-MODEL.md`, threat model
+   (`.github/THREAT_MODEL.md`); publish a summary to maintainers.
 
 ---
 
 ## Cross-references
 
-- [SECURITY.md](../SECURITY.md) — responsible disclosure + hardening policy
-- `.github/THREAT_MODEL.md` — threat model
-- `docs/DPA_TEMPLATE.md` — data-processing agreement template
-- `docs/BUG_BOUNTY_PROGRAM.md` — bounty scope + rules
-- `wiki/jwt-revocation.md` — token revocation procedure
-- `docs/ENVIRONMENT.md` — env-var reference (`JWT_SECRET`, `INTERNAL_API_KEY`,
+- [SECURITY.md](../SECURITY.md): responsible disclosure + hardening policy
+- `.github/THREAT_MODEL.md`: threat model
+- `docs/DPA_TEMPLATE.md`: data-processing agreement template
+- `wiki/jwt-revocation.md`: token revocation procedure
+- `docs/ENVIRONMENT.md`: env-var reference (`JWT_SECRET`, `INTERNAL_API_KEY`,
   `PII_ENCRYPTION_KEK`, rate-limit and CSRF knobs)

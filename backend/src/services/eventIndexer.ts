@@ -364,11 +364,11 @@ export class EventIndexer {
   }
 
   /**
-   * Contiguous-cursor invariant (issue #1376): records the ledger range this
+   * Contiguous-cursor invariant: records the ledger range this
    * poll iteration just requested, and flags a gap when it doesn't
    * immediately follow the previously-recorded range for this contract.
    *
-   * This does NOT prove every ledger in `rangeStart..rangeEnd` was scanned —
+   * This does NOT prove every ledger in `rangeStart..rangeEnd` was scanned;
    * only that `processChunk` was invoked for that exact range and returned
    * without error. What it catches is the specific failure mode in the
    * issue: `fromLedger` being derived from a value that skips ahead of what
@@ -377,7 +377,7 @@ export class EventIndexer {
    * chunk, never compared it against the *previous* one.
    *
    * Reorg detection (re-reading a suspect/verified range and comparing a
-   * content digest) is intentionally out of scope here — see this change's
+   * content digest) is intentionally out of scope here; see this change's
    * PR description.
    */
   private async recordCheckpoint(
@@ -718,32 +718,30 @@ export class EventIndexer {
     let cursor: string | undefined;
     let hasMorePages = true;
 
+    const filters = [{ type: 'contract', contractIds: this.contractIds }];
+
     while (hasMorePages) {
-      const response = (await this.rpc.getEvents({
-        startLedger,
-        endLedger,
-        cursor,
-        limit: this.batchSize,
-        filters: [
-          {
-            type: 'contract',
-            contractIds: this.contractIds,
-          },
-        ],
-      } as never)) as unknown as {
+      // RPC rejects a ledger range together with a cursor, so later pages send
+      // only the cursor and the range is enforced by the filter below.
+      const request = cursor
+        ? { cursor, limit: this.batchSize, filters }
+        : { startLedger, endLedger, limit: this.batchSize, filters };
+      const response = (await this.rpc.getEvents(request as never)) as unknown as {
         events?: SorobanRawEvent[];
         cursor?: string;
         nextCursor?: string;
       };
 
-      const events = (response.events ?? []).filter(
+      const pageEvents = response.events ?? [];
+      const events = pageEvents.filter(
         (event) => event.ledger >= startLedger && event.ledger <= endLedger,
       );
 
       result.push(...events);
 
+      const passedEnd = pageEvents.some((event) => event.ledger > endLedger);
       const nextCursor = response.nextCursor ?? response.cursor;
-      if (!nextCursor || nextCursor === cursor || events.length === 0) {
+      if (!nextCursor || nextCursor === cursor || events.length === 0 || passedEnd) {
         hasMorePages = false;
         continue;
       }
@@ -854,14 +852,14 @@ export class EventIndexer {
           }
 
           /**
-           * LoanApprv audit row — records which admin approved a loan.
+           * LoanApprv audit row: records which admin approved a loan.
            *
            * audit_logs shape:
-           *   actor     — admin Stellar address (topic[1] of the LoanApprv event)
-           *   action    — 'loan_approved'
-           *   target    — 'loan:<loanId>'
-           *   payload   — { eventId, loanId, borrower, txHash }
-           *   ip_address — null (on-chain action, no HTTP request IP)
+           *   actor:      admin Stellar address (topic[1] of the LoanApprv event)
+           *   action:     'loan_approved'
+           *   target:     'loan:<loanId>'
+           *   payload:    { eventId, loanId, borrower, txHash }
+           *   ip_address: null (on-chain action, no HTTP request IP)
            */
           if (event.eventType === 'LoanApprv') {
             await client.query(
@@ -910,7 +908,7 @@ export class EventIndexer {
 
       // Apply batched score updates on the same pinned client so that both
       // the event inserts and the score changes are committed or rolled back
-      // together — satisfying the atomicity requirement.
+      // together, satisfying the atomicity requirement.
       if (scoreUpdates.size > 0) {
         await updateUserScoresBulk(scoreUpdates, client);
       }
@@ -1256,11 +1254,11 @@ export class EventIndexer {
     if (!userId) return;
     try {
       await query(
-        `INSERT INTO scores (user_id, current_score)
+        `INSERT INTO scores (borrower, score)
          VALUES ($1, $2)
-         ON CONFLICT (user_id)
+         ON CONFLICT (borrower)
          DO UPDATE SET
-           current_score = LEAST(850, GREATEST(300, scores.current_score + $3)),
+           score = LEAST(850, GREATEST(300, scores.score + $3)),
            updated_at = CURRENT_TIMESTAMP`,
         [userId, 500 + delta, delta],
       );
@@ -1527,6 +1525,6 @@ export class EventIndexer {
 // `getSuspectRanges` above; the implementation lives in
 // ledgerCheckpoints.ts so consumers that only need the gate check (e.g.
 // defaultChecker.ts) don't pull in this module's heavier dependency graph
-// (Soroban RPC client, webhook/notification/event-stream services) — see
+// (Soroban RPC client, webhook/notification/event-stream services); see
 // that file's doc comment.
 export { hasUnresolvedLedgerGaps } from './ledgerCheckpoints.js';

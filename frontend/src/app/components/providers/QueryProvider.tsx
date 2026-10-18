@@ -10,7 +10,6 @@
  */
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { useState, type ReactNode } from "react";
 import { SessionExpiryHandler } from "./SessionExpiryHandler";
 
@@ -28,7 +27,7 @@ export function QueryProvider({ children }: QueryProviderProps) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            // Data is considered fresh for 60 seconds — avoids unnecessary refetches
+            // Data is considered fresh for 60 seconds; avoids unnecessary refetches
             staleTime: 60 * 1000,
             // Retry failed requests (but don't spin when offline)
             retry: (failureCount) => {
@@ -56,9 +55,8 @@ export function QueryProvider({ children }: QueryProviderProps) {
     <QueryClientProvider client={queryClient}>
       {/* Listen for 401 auth:session-expired events and trigger full logout */}
       <SessionExpiryHandler />
+      {/* Reacts to service-worker replays of offline-queued repayments */}
       {children}
-      {/* DevTools only render in development */}
-      <ReactQueryDevtools initialIsOpen={false} />
     </QueryClientProvider>
   );
 }

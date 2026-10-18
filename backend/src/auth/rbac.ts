@@ -1,12 +1,30 @@
-export const USER_ROLES = ['admin', 'agent', 'borrower', 'auditor', 'lender'] as const;
+export const USER_ROLES = [
+  'admin',
+  'super_admin',
+  'ops',
+  'support',
+  'agent',
+  'borrower',
+  'auditor',
+  'lender',
+] as const;
 export type UserRole = (typeof USER_ROLES)[number];
 
 export const ROLE_SCOPES: Record<UserRole, string[]> = {
   admin: ['admin:all'],
+  super_admin: ['admin:all'],
+  /**
+   * Admin sub-roles (#427). Their admin-panel actions are gated by
+   * `requireRoles` in adminRoutes.ts; scopes stay read-only so they never
+   * inherit write access to user-facing routes.
+   */
+  ops: ['read:loans', 'read:pool', 'read:score', 'read:remittances', 'read:notifications'],
+  support: ['read:loans', 'read:score', 'read:remittances', 'read:notifications'],
   agent: [
     'read:loans',
     'write:loans',
     'read:pool',
+    'write:pool',
     'read:score',
     'read:notifications',
     'write:notifications',
@@ -41,12 +59,15 @@ export const ROLE_SCOPES: Record<UserRole, string[]> = {
   ],
   // `lender` is retained as a legacy alias for the pool-provider role that
   // predates the `agent` naming. New integrations should use `agent`.
-  lender: ['read:loans', 'read:pool', 'write:loans'],
+  lender: ['read:loans', 'read:pool', 'write:loans', 'write:pool'],
 };
 
 /** Privilege ordering used for read-level "at least" comparisons. */
 export const ROLE_HIERARCHY: Record<UserRole, number> = {
   admin: 4,
+  super_admin: 4,
+  ops: 2,
+  support: 2,
   agent: 3,
   auditor: 2,
   lender: 3,
@@ -65,6 +86,21 @@ const parseWalletSet = (wallets: string | undefined): Set<string> => {
 };
 
 export const resolveRoleForWallet = (publicKey: string): UserRole => {
+  const superAdminWallets = parseWalletSet(process.env.SUPER_ADMIN_WALLETS);
+  if (superAdminWallets.has(publicKey)) {
+    return 'super_admin';
+  }
+
+  const opsWallets = parseWalletSet(process.env.OPS_WALLETS);
+  if (opsWallets.has(publicKey)) {
+    return 'ops';
+  }
+
+  const supportWallets = parseWalletSet(process.env.SUPPORT_WALLETS);
+  if (supportWallets.has(publicKey)) {
+    return 'support';
+  }
+
   const adminWallets = parseWalletSet(process.env.ADMIN_WALLETS);
   if (adminWallets.has(publicKey)) {
     return 'admin';

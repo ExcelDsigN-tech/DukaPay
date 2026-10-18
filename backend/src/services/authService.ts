@@ -32,6 +32,12 @@ export interface ChallengeMessage {
   expiresIn: number;
 }
 
+interface StoredChallenge {
+  publicKey: string;
+  message: string;
+  expiresAt: number;
+}
+
 export interface TokenPair {
   accessToken: string;
   refreshToken: string;
@@ -51,20 +57,120 @@ export interface StoredRefreshTokenMetadata {
   expiresAt: number;
 }
 
-export const ACCESS_TOKEN_TTL_SECONDS = 15 * 60; // 15 minutes
-export const REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days
-export const ACCESS_TOKEN_EXPIRES_IN = '15m';
-export const REFRESH_TOKEN_EXPIRES_IN = '7d';
-const CHALLENGE_EXPIRES_IN_MS = 5 * 60 * 1000;
+function getTokenTTLConfig() {
+  const accessTtl = process.env.ACCESS_TOKEN_TTL_SECONDS
+    ? Number.parseInt(process.env.ACCESS_TOKEN_TTL_SECONDS, 10)
+    : 15 * 60;
+  const refreshTtl = process.env.REFRESH_TOKEN_TTL_SECONDS
+    ? Number.parseInt(process.env.REFRESH_TOKEN_TTL_SECONDS, 10)
+    : 7 * 24 * 60 * 60;
+  const challengeTtl = process.env.CHALLENGE_EXPIRES_IN_MS
+    ? Number.parseInt(process.env.CHALLENGE_EXPIRES_IN_MS, 10)
+    : 5 * 60 * 1000;
+
+  if (!Number.isFinite(accessTtl) || accessTtl <= 0) {
+    throw new Error('ACCESS_TOKEN_TTL_SECONDS must be a positive number');
+  }
+  if (!Number.isFinite(refreshTtl) || refreshTtl <= 0) {
+    throw new Error('REFRESH_TOKEN_TTL_SECONDS must be a positive number');
+  }
+  if (!Number.isFinite(challengeTtl) || challengeTtl <= 0) {
+    throw new Error('CHALLENGE_EXPIRES_IN_MS must be a positive number');
+  }
+  if (accessTtl >= refreshTtl) {
+    throw new Error('ACCESS_TOKEN_TTL_SECONDS must be less than REFRESH_TOKEN_TTL_SECONDS');
+  }
+
+  return { accessTtl, refreshTtl, challengeTtl };
+}
+
+const tokenTTLConfig = getTokenTTLConfig();
+
+export const ACCESS_TOKEN_TTL_SECONDS = tokenTTLConfig.accessTtl;
+export const REFRESH_TOKEN_TTL_SECONDS = tokenTTLConfig.refreshTtl;
+const CHALLENGE_EXPIRES_IN_MS = tokenTTLConfig.challengeTtl;
+
 const CLOCK_SKEW_TOLERANCE_MS = 5 * 1000;
 
 const REFRESH_TOKEN_PREFIX = 'refresh_token:';
 const TOKEN_FAMILY_PREFIX = 'token_family:';
 const REVOKED_JTI_PREFIX = 'revoked-jti:';
+const AUTH_CHALLENGE_PREFIX = 'auth_challenge:';
 
 // In-memory fallback stores when Redis / cache is offline
 const inMemoryRefreshTokens = new Map<string, StoredRefreshTokenMetadata>();
 const inMemoryRevokedFamilies = new Map<string, { revokedAt: number; reason: string }>();
+const inMemoryChallenges = new Map<string, StoredChallenge>();
+
+function getChallengeKey(publicKey: string, message: string): string | null {
+  const nonceMatch = message.match(/\nNonce: ([a-f0-9]{64})\n/);
+  if (!nonceMatch) return null;
+  return `${AUTH_CHALLENGE_PREFIX}${publicKey}:${nonceMatch[1]}`;
+}
+
+export async function storeChallenge(
+  publicKey: string,
+  challenge: ChallengeMessage,
+): Promise<void> {
+  const stored: StoredChallenge = {
+    publicKey,
+    message: challenge.message,
+    expiresAt: challenge.timestamp + challenge.expiresIn,
+  };
+  const key = getChallengeKey(publicKey, challenge.message);
+  if (!key) throw new Error('Generated challenge has an invalid nonce');
+
+  if (process.env.NODE_ENV === 'test') {
+    inMemoryChallenges.set(key, stored);
+    return;
+  }
+
+  await cacheService.setRequired(key, stored, Math.ceil(challenge.expiresIn / 1000));
+}
+
+export async function getIssuedChallenge(
+  publicKey: string,
+  message: string,
+): Promise<StoredChallenge | null> {
+  const key = getChallengeKey(publicKey, message);
+  if (!key) return null;
+
+  if (process.env.NODE_ENV === 'test') {
+    const stored = inMemoryChallenges.get(key) ?? null;
+    if (stored && stored.expiresAt < Date.now()) {
+      inMemoryChallenges.delete(key);
+      return null;
+    }
+    return stored;
+  }
+
+  return cacheService.get<StoredChallenge>(key);
+}
+
+export async function consumeIssuedChallenge(
+  publicKey: string,
+  message: string,
+  expected: StoredChallenge,
+): Promise<boolean> {
+  const key = getChallengeKey(publicKey, message);
+  if (!key) return false;
+
+  if (process.env.NODE_ENV === 'test') {
+    const stored = inMemoryChallenges.get(key);
+    if (
+      !stored ||
+      stored.publicKey !== expected.publicKey ||
+      stored.message !== expected.message ||
+      stored.expiresAt !== expected.expiresAt
+    ) {
+      return false;
+    }
+    inMemoryChallenges.delete(key);
+    return true;
+  }
+
+  return cacheService.deleteIfMatch(key, expected);
+}
 
 function getJwtSecret(): string {
   const secret = process.env.JWT_SECRET;
@@ -82,7 +188,8 @@ export function generateChallenge(publicKey: string): ChallengeMessage {
   const nonce = crypto.randomBytes(32).toString('hex');
   const timestamp = Date.now();
 
-  const message = `Sign this message to authenticate with DukaPay.\n\nNonce: ${nonce}\nTimestamp: ${timestamp}\n\nThis request will expire in 5 minutes.`;
+  const domain = new URL(process.env.FRONTEND_URL ?? 'https://dukapay.com').host;
+  const message = `Sign this message to authenticate with DukaPay.\n\nDomain: ${domain}\nNonce: ${nonce}\nTimestamp: ${timestamp}\n\nThis request will expire in 5 minutes.`;
 
   return {
     message,
@@ -91,6 +198,8 @@ export function generateChallenge(publicKey: string): ChallengeMessage {
     expiresIn: CHALLENGE_EXPIRES_IN_MS,
   };
 }
+
+const SEP53_PREFIX = Buffer.from('Stellar Signed Message:\n', 'utf-8');
 
 export function verifySignature(publicKey: string, message: string, signature: string): boolean {
   if (!StrKey.isValidEd25519PublicKey(publicKey)) {
@@ -108,8 +217,19 @@ export function verifySignature(publicKey: string, message: string, signature: s
     }
 
     const messageBytes = Buffer.from(message, 'utf-8');
+    const keypair = Keypair.fromPublicKey(publicKey);
 
-    return Keypair.fromPublicKey(publicKey).verify(messageBytes, signatureBytes);
+    // Accept a raw Ed25519 signature over the message, or a SEP-53 signature
+    // (what Freighter's signMessage returns) over
+    // sha256("Stellar Signed Message:\n" + message).
+    const sep53Digest = crypto
+      .createHash('sha256')
+      .update(Buffer.concat([SEP53_PREFIX, messageBytes]))
+      .digest();
+
+    return (
+      keypair.verify(messageBytes, signatureBytes) || keypair.verify(sep53Digest, signatureBytes)
+    );
   } catch {
     return false;
   }
@@ -188,7 +308,7 @@ export function generateJwtToken(
   }
 
   return jwt.sign(payload, secret, {
-    expiresIn: ACCESS_TOKEN_EXPIRES_IN,
+    expiresIn: ACCESS_TOKEN_TTL_SECONDS,
     algorithm: 'HS256',
   });
 }
@@ -222,7 +342,7 @@ export function generateRefreshToken(
   }
 
   const refreshToken = jwt.sign(payload, secret, {
-    expiresIn: REFRESH_TOKEN_EXPIRES_IN,
+    expiresIn: REFRESH_TOKEN_TTL_SECONDS,
     algorithm: 'HS256',
   });
 
@@ -336,6 +456,50 @@ export async function revokeTokenFamily(
 
   logger.withContext().warn('Token family revoked', {
     familyId,
+    reason,
+    revokedAt: new Date(now).toISOString(),
+  });
+}
+
+/**
+ * Invalidates all token families for a given public key (logout all sessions).
+ * Used when credentials are compromised or user explicitly logs out all devices.
+ */
+export async function invalidateAllFamilies(
+  publicKey: string,
+  reason = 'user_initiated',
+): Promise<void> {
+  const now = Date.now();
+
+  logger.withContext().info('Bulk token family revocation initiated', {
+    publicKey,
+    reason,
+    timestamp: new Date(now).toISOString(),
+  });
+
+  for (const meta of inMemoryRefreshTokens.values()) {
+    if (meta.publicKey === publicKey && !meta.isRevoked) {
+      meta.isRevoked = true;
+      inMemoryRevokedFamilies.set(meta.familyId, { revokedAt: now, reason: `bulk_${reason}` });
+      try {
+        await Promise.race([
+          cacheService.set(
+            `${TOKEN_FAMILY_PREFIX}${meta.familyId}`,
+            { isRevoked: true, revokedAt: now, reason: `bulk_${reason}` },
+            REFRESH_TOKEN_TTL_SECONDS,
+          ),
+          new Promise<void>((_, reject) =>
+            setTimeout(() => reject(new Error('cache_timeout')), CACHE_TIMEOUT_MS),
+          ),
+        ]);
+      } catch {
+        // in-memory fallback already recorded
+      }
+    }
+  }
+
+  logger.withContext().warn('All token families revoked for user', {
+    publicKey,
     reason,
     revokedAt: new Date(now).toISOString(),
   });

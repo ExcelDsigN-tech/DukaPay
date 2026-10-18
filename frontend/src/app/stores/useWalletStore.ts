@@ -39,7 +39,7 @@ export interface WalletNetwork {
 interface WalletState {
   /** Wallet connection status */
   status: WalletStatus;
-  /** Connected wallet address (checksummed) — null when disconnected */
+  /** Connected wallet address (checksummed), null when disconnected */
   address: string | null;
   /** Current network info */
   network: WalletNetwork | null;

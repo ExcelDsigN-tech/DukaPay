@@ -11,6 +11,7 @@ members = [
   "audit_anchor",
   "circuit_breaker",
   "oracle",
+  "circuit_breaker",
 ]
 exclude = [
   "fuzz",

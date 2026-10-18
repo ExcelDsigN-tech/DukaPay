@@ -37,11 +37,11 @@ export async function updateUserScoresBulk(
   ).join(', ');
 
   const sql = `
-    INSERT INTO scores (user_id, current_score)
+    INSERT INTO scores (borrower, score)
     VALUES ${valuePlaceholders}
-    ON CONFLICT (user_id)
+    ON CONFLICT (borrower)
     DO UPDATE SET
-      current_score = LEAST(850, GREATEST(300, scores.current_score + EXCLUDED.current_score - 500)),
+      score = LEAST(850, GREATEST(300, scores.score + EXCLUDED.score - 500)),
       updated_at = CURRENT_TIMESTAMP`;
 
   try {
@@ -85,19 +85,19 @@ export async function setAbsoluteUserScoresBulk(scores: Map<string, number>): Pr
 
   if (valuePlaceholders.length === 0) return;
 
-  // Reconciliation writes are absolute — they overwrite with on-chain truth.
+  // Reconciliation writes are absolute: they overwrite with on-chain truth.
   // No application-level clamping here so a score that legitimately falls
   // outside the normal 300..850 band (e.g. mid-migration during a contract
   // upgrade) still lands verbatim instead of being silently rewritten.
   const sql = `
-    WITH reconciled_scores (user_id, current_score) AS (
+    WITH reconciled_scores (borrower, score) AS (
       VALUES ${valuePlaceholders.join(',')}
     )
-    INSERT INTO scores (user_id, current_score)
-    SELECT user_id, current_score FROM reconciled_scores
-    ON CONFLICT (user_id)
+    INSERT INTO scores (borrower, score)
+    SELECT borrower, score FROM reconciled_scores
+    ON CONFLICT (borrower)
     DO UPDATE SET
-      current_score = EXCLUDED.current_score,
+      score = EXCLUDED.score,
       updated_at = CURRENT_TIMESTAMP
   `;
 

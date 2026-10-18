@@ -5,10 +5,10 @@
   "main": "dist/index.js",
   "type": "module",
   "scripts": {
-    "dev": "nodemon --watch src --ext ts --exec tsx src/index.ts",
+    "dev": "nodemon --watch src --ext ts --exec tsx --import ./src/instrument.ts src/index.ts",
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.build.json --noEmit",
-    "start": "node dist/index.js",
+    "start": "node --import ./dist/instrument.js dist/index.js",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
@@ -20,7 +20,7 @@
     "migrate:down": "node-pg-migrate down --use-glob --migrations-dir 'migrations/*.cjs'",
     "openapi:generate": "tsx scripts/generateOpenApi.ts",
     "openapi:validate": "tsx scripts/validateOpenApi.ts",
-    "_migrations_note": "Single source of truth: backend/migrations/*.cjs (node-pg-migrate). Do NOT add .sql files to src/db/ — they are not executed by any script.",
+    "_migrations_note": "Single source of truth: backend/migrations/*.cjs (node-pg-migrate). Do NOT add .sql files to src/db/; they are not executed by any script.",
     "seed": "npm run seed:dev",
     "seed:dev": "tsx src/seed/index.ts",
     "seed:reset": "tsx src/seed/index.ts --reset"
@@ -29,7 +29,7 @@
   "author": "",
   "license": "ISC",
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "dependencies": {
     "@sendgrid/mail": "^8.1.6",

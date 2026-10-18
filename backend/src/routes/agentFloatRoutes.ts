@@ -3,11 +3,12 @@ import { agentFloatService } from '../services/agentFloatService.js';
 import { requireJwtAuth } from '../middleware/jwtAuth.js';
 import { requireRole } from '../middleware/rbac.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import { AppError } from '../errors/AppError.js';
 
 const router = Router();
 
 /**
- * POST /float-transfer — Initiate a new agent-to-agent float transfer
+ * POST /float-transfer: Initiate a new agent-to-agent float transfer
  */
 router.post(
   '/float-transfer',
@@ -15,6 +16,7 @@ router.post(
   asyncHandler(async (req: Request, res: Response) => {
     const { fromAgent, toAgent, amount, reason } = req.body;
     const publicKey = (req as { user?: { publicKey?: string } }).user?.publicKey;
+    const role = (req as { user?: { role?: string } }).user?.role;
 
     const result = await agentFloatService.initiateTransfer({
       fromAgent,
@@ -22,6 +24,7 @@ router.post(
       amount: Number(amount),
       reason,
       createdBy: publicKey!,
+      userRole: role,
     });
 
     res.status(201).json({ success: true, data: result });
@@ -29,7 +32,7 @@ router.post(
 );
 
 /**
- * POST /float-transfer/:id/approve — Approve a pending float transfer
+ * POST /float-transfer/:id/approve: Approve a pending float transfer
  */
 router.post(
   '/float-transfer/:id/approve',
@@ -50,7 +53,7 @@ router.post(
 );
 
 /**
- * POST /float-transfer/:id/reject — Reject a pending float transfer
+ * POST /float-transfer/:id/reject: Reject a pending float transfer
  */
 router.post(
   '/float-transfer/:id/reject',
@@ -71,13 +74,20 @@ router.post(
 );
 
 /**
- * GET /float-transfer/limits — Get pair limits for a agent pair
+ * GET /float-transfer/limits: Get pair limits for a agent pair
  */
 router.get(
   '/float-transfer/limits',
+  requireJwtAuth,
   asyncHandler(async (req: Request, res: Response) => {
     const fromAgent = req.query.fromAgent as string;
     const toAgent = req.query.toAgent as string;
+    const publicKey = (req as { user?: { publicKey?: string } }).user?.publicKey;
+    const role = (req as { user?: { role?: string } }).user?.role;
+
+    if (role !== 'admin' && publicKey !== fromAgent && publicKey !== toAgent) {
+      throw AppError.forbidden('Only the two agents in the pair or an admin can view these limits');
+    }
 
     const result = await agentFloatService.getPairLimits(fromAgent, toAgent);
 
@@ -86,7 +96,7 @@ router.get(
 );
 
 /**
- * PUT /float-transfer/limits — Set or update pair limits (Admin only)
+ * PUT /float-transfer/limits: Set or update pair limits (Admin only)
  */
 router.put(
   '/float-transfer/limits',

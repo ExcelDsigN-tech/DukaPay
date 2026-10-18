@@ -11,18 +11,18 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 // Default routes exempted from CSRF (e.g. public webhook callbacks with HMAC verification, public challenge)
 const DEFAULT_EXEMPT_PATHS = [
   '/api/auth/challenge',
-  '/api/v1/auth/challenge',
   '/api/auth/login',
-  '/api/v1/auth/login',
-  '/api/v1/webhooks',
   '/health',
   '/metrics',
   '/version',
 ];
 
+// Cookie names come straight off the wire, so writing them onto a plain
+// object as property keys risks prototype pollution (e.g. a "__proto__"
+// cookie). Object.create(null) has no prototype to pollute.
 function parseCookies(cookieHeader: string | undefined): Record<string, string> {
-  if (!cookieHeader) return {};
-  const cookies: Record<string, string> = {};
+  const cookies: Record<string, string> = Object.create(null) as Record<string, string>;
+  if (!cookieHeader) return cookies;
   cookieHeader.split(';').forEach((cookie) => {
     const [name, ...rest] = cookie.split('=');
     const trimmedName = name?.trim();
@@ -37,15 +37,41 @@ export function generateCsrfToken(): string {
   return crypto.randomBytes(32).toString('hex');
 }
 
+const DEFAULT_JWT_COOKIE_NAME = 'dukapay_jwt';
+
+/**
+ * Returns true when the request carries the httpOnly JWT auth cookie.
+ *
+ * Used to decide whether a request is authenticated by *ambient* credentials
+ * (cookies) rather than an explicit `Authorization: Bearer` header. Ambient
+ * credentials are the ones CSRF protection must cover.
+ */
+export function hasAuthCookie(cookieHeader: string | undefined): boolean {
+  if (!cookieHeader) {
+    return false;
+  }
+
+  const cookieName = process.env.JWT_COOKIE_NAME ?? DEFAULT_JWT_COOKIE_NAME;
+  return parseCookies(cookieHeader)[cookieName] !== undefined;
+}
+
 export function setCsrfCookie(res: Response, token: string): void {
   const isProduction = process.env.NODE_ENV === 'production';
+  // httpOnly: true prevents JavaScript from reading the cookie directly,
+  // which closes the XSS-based CSRF bypass attack vector.
+  // The token is delivered to the frontend via the X-CSRF-Token response header
+  // (Double Submit Cookie pattern) so JavaScript can include it in subsequent requests.
   res.cookie(CSRF_COOKIE_NAME, token, {
-    httpOnly: false, // Accessible by frontend JavaScript to include in X-CSRF-Token header
+    httpOnly: true,
     secure: isProduction,
     sameSite: 'strict',
     path: '/',
     maxAge: 24 * 60 * 60 * 1000, // 24 hours
   });
+  // Expose token in response header so the frontend can read it once and store it
+  // in memory (e.g. a module-level variable or React state), then send it back
+  // via the X-CSRF-Token request header on every mutating request.
+  res.setHeader(CSRF_HEADER_NAME, token);
 }
 
 export interface CsrfOptions {
@@ -124,16 +150,19 @@ export function csrfProtection(options: CsrfOptions = {}) {
 
 /**
  * Controller endpoint to retrieve or refresh a CSRF token.
- * GET /api/v1/auth/csrf
+ * GET /api/auth/csrf
  */
 export function getCsrfTokenController(req: Request, res: Response): void {
-  const cookies =
-    (req as unknown as { cookies?: Record<string, string> }).cookies ??
-    parseCookies(req.headers.cookie);
-
-  let token = cookies[CSRF_COOKIE_NAME];
+  // csrfProtection() runs ahead of this controller on every route and already
+  // issues (and stashes in res.locals) a token when the request has none, so
+  // reuse it here instead of minting a second, mismatched token that would
+  // overwrite the cookie/header pair the middleware just set.
+  let token = res.locals.csrfToken as string | undefined;
   if (!token) {
-    token = generateCsrfToken();
+    const cookies =
+      (req as unknown as { cookies?: Record<string, string> }).cookies ??
+      parseCookies(req.headers.cookie);
+    token = cookies[CSRF_COOKIE_NAME] ?? generateCsrfToken();
   }
 
   setCsrfCookie(res, token);

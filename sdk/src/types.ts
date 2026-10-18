@@ -62,10 +62,57 @@ export interface LoanConfig {
   gracePeriodLedgers: number;
 }
 
+/** `status` filter accepted by `GET /loans/borrower/{borrower}`. */
+export type BorrowerLoanStatus =
+  | 'active'
+  | 'repaid'
+  | 'defaulted'
+  | 'liquidatable'
+  | 'pending'
+  | 'all';
+
+/** A loan as returned by `GET /loans/borrower/{borrower}`. */
+export interface BorrowerLoan {
+  loanId: number;
+  principal: number;
+  accruedInterest: number;
+  totalRepaid: number;
+  totalOwed: number;
+  nextPaymentDeadline: string;
+  status: 'active' | 'repaid' | 'defaulted';
+  borrower: Address;
+  approvedAt?: string | null;
+}
+
+/** Response envelope for `GET /loans/borrower/{borrower}`. */
+export interface BorrowerLoans {
+  success: boolean;
+  borrower: Address;
+  loans: BorrowerLoan[];
+}
+
+/** Response of `POST /loans/{loanId}/repay`: an unsigned XDR to be signed. */
+export interface RepayTransaction {
+  success: boolean;
+  loanId: number;
+  unsignedTxXdr: string;
+  networkPassphrase: string;
+}
+
 /** Base64 XDR transaction envelope the wallet must sign and submit. */
 export interface UnsignedTransaction {
   xdr: string;
   network: 'testnet' | 'mainnet';
+}
+
+/** Simulation result from transaction simulation before signing. */
+export interface SimulationResult {
+  /** Estimated fees in stroops. */
+  estimatedFee: Stroops;
+  /** Whether the transaction would succeed on-chain. */
+  success: boolean;
+  /** Error message if simulation failed. */
+  error?: string;
 }
 
 // ── Pool / float ──────────────────────────────────────────────────────────────
@@ -79,6 +126,31 @@ export interface PoolStats {
   supplyApyBps: number;
   borrowApyBps: number;
   sharePrice: Stroops;
+}
+
+/** Aggregate protocol analytics from `GET /pool/analytics`. Amounts are numbers, not stroops. */
+export interface PoolAnalytics {
+  totalDeposits: number;
+  totalWithdrawals: number;
+  totalYieldDistributed: number;
+  totalLoansIssued: number;
+  totalVolume: number;
+  activeAgents: number;
+  /** ISO-8601 timestamp of when the snapshot was computed. */
+  updatedAt: string;
+}
+
+/**
+ * Envelope returned by `GET /pool/analytics`.
+ *
+ * The endpoint wraps the snapshot, so callers must read `analytics` off the
+ * response rather than treating the body as the payload itself. `source`
+ * reports whether the snapshot was served from the 300s server-side cache.
+ */
+export interface PoolAnalyticsResponse {
+  success: boolean;
+  analytics: PoolAnalytics;
+  source: 'cache' | 'database';
 }
 
 export interface DepositorPortfolio {
@@ -99,21 +171,81 @@ export interface YieldHistoryPoint {
 
 // ── Scores ────────────────────────────────────────────────────────────────────
 
+export type CreditBand = 'Excellent' | 'Good' | 'Fair' | 'Poor';
+
+/** Explanatory strings the API returns alongside a credit score. */
+export interface ScoreFactors {
+  repaymentHistory: string;
+  latePaymentPenalty: string;
+  range: string;
+}
+
+/** Response of `GET /score/{userId}`. `userId` is the wallet's Stellar address. */
 export interface Score {
-  address: Address;
+  success: boolean;
+  userId: Address;
   score: number;
-  updatedAt: string;
-  tier: string;
+  band: CreditBand;
+  factors: ScoreFactors;
 }
 
 // ── Remittance ────────────────────────────────────────────────────────────────
 
+export type RemittanceCurrency = 'USDC' | 'EURC' | 'PHP';
+
+/** Status of a remittance record. */
+export type RemittanceStatus = 'pending' | 'processing' | 'completed' | 'failed';
+
+/** A remittance record as persisted by the API. */
 export interface Remittance {
   id: string;
-  tokenId: string;
-  sender: Address;
-  recipient: Address;
-  amount: Stroops;
-  status: 'minted' | 'claimed' | 'seized' | 'burned';
+  senderId: Address;
+  recipientAddress: Address;
+  amount: number;
+  fromCurrency: RemittanceCurrency;
+  toCurrency: RemittanceCurrency;
+  memo?: string | null;
+  status: RemittanceStatus;
+  transactionHash?: string | null;
+  /** Unsigned transaction XDR generated on creation; sign it, then submit. */
+  xdr?: string;
   createdAt: string;
+  updatedAt: string;
 }
+
+/** Keyset pagination envelope returned by the remittance list endpoint. */
+export interface RemittancePage {
+  next_cursor: string | null;
+  snapshot_seq: string;
+  total_at_snapshot: number;
+  limit: number;
+}
+
+/** Response envelope for `GET /remittances`. */
+export interface RemittanceList {
+  success: boolean;
+  data: Remittance[];
+  page: RemittancePage;
+}
+
+/** Response envelope for `GET /remittances/{id}`. */
+export interface RemittanceEnvelope {
+  success: boolean;
+  data: Remittance;
+}
+
+/** Response envelope for `POST /remittances`. */
+export interface RemittanceCreated {
+  success: boolean;
+  data: Remittance;
+  message?: string;
+}
+
+/** Response of `POST /remittances/{id}/submit`. */
+export interface RemittanceSubmitResult {
+  id: string;
+  status: 'processing' | 'completed' | 'failed';
+  txHash: string;
+  message: string;
+}
+

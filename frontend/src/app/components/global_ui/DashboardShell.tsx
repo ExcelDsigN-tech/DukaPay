@@ -1,55 +1,46 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
+import { usePathname } from "next/navigation";
+import { useLocale } from "next-intl";
+import { useWalletStore, selectIsWalletConnected } from "../../stores/useWalletStore";
 import { Sidebar } from "./Sidebar";
 import { BottomNav } from "./BottomNav";
 import { Header } from "./Header";
 import { Breadcrumbs } from "./Breadcrumbs";
 import { OfflineBanner } from "./OfflineBanner";
 import { PauseBanner } from "./PauseBanner";
-import { clsx, type ClassValue } from "clsx";
-import { twMerge } from "tailwind-merge";
-
-function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
 
 interface DashboardShellProps {
   children: ReactNode;
 }
 
 export function DashboardShell({ children }: DashboardShellProps) {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const pathname = usePathname();
+  const locale = useLocale();
+  const isConnected = useWalletStore(selectIsWalletConnected);
+
+  // Signed-out visitors on the home route see the standalone landing page,
+  // which brings its own nav. The app chrome appears once a wallet connects.
+  const isLanding = !isConnected && (pathname === `/${locale}` || pathname === `/${locale}/`);
+  if (isLanding) {
+    return <>{children}</>;
+  }
 
   return (
-    <div className="flex min-h-screen bg-zinc-50 dark:bg-zinc-950">
+    <div className="flex min-h-screen bg-canvas text-fg">
       <a
         href="#main-content"
-        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 z-50 bg-white dark:bg-zinc-800 dark:text-white p-2 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 z-50 rounded-[10px] bg-surface p-2 text-fg focus:outline-none focus:ring-[3px] focus:ring-link"
       >
         Skip to main content
       </a>
-      {/* Mobile Sidebar Backdrop */}
-      {isSidebarOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-zinc-900/50 backdrop-blur-sm lg:hidden"
-          aria-hidden="true"
-          onClick={() => setIsSidebarOpen(false)}
-        />
-      )}
+      {/* Sidebar on desktop; mobile uses the bottom nav and its More tab */}
+      <Sidebar className="hidden lg:flex" />
 
-      {/* Sidebar - Persistent on desktop, drawer on mobile */}
-      <Sidebar
-        onClose={() => setIsSidebarOpen(false)}
-        className={cn(
-          "fixed inset-y-0 left-0 z-50 transition-transform duration-300 lg:static lg:translate-x-0 hidden lg:flex",
-          isSidebarOpen ? "translate-x-0" : "-translate-x-full",
-        )}
-      />
-
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex min-w-0 flex-1 flex-col">
         {/* Header */}
-        <Header onMenuClick={() => setIsSidebarOpen(true)} />
+        <Header />
         <OfflineBanner />
         <PauseBanner />
 
@@ -57,7 +48,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
         <main
           id="main-content"
           tabIndex={-1}
-          className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 pb-20 lg:pb-8"
+          className="flex-1 px-4 pt-[18px] pb-24 lg:px-8 lg:pt-7 lg:pb-12"
         >
           <div className="mx-auto max-w-7xl">
             <Breadcrumbs />

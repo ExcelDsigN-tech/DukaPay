@@ -46,12 +46,12 @@ export interface NotificationPreferences {
 
 // ─── SSE subscriber registry ──────────────────────────────────────────────────
 // Maps userId → set of SSE response streams currently listening.
-// No persistence needed — streams are in-process only.
+// No persistence needed: streams are in-process only.
 
 type SseClient = Response;
 const sseClients = new Map<string, Set<SseClient>>();
 
-// Lazy-init Twilio client — dynamic import avoids ESM/CJS interop issues in tests
+// Lazy-init Twilio client; dynamic import avoids ESM/CJS interop issues in tests
 async function getTwilioClient() {
   if (
     !process.env.TWILIO_ACCOUNT_SID ||
@@ -64,7 +64,7 @@ async function getTwilioClient() {
   return twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 }
 
-// Lazy-init SendGrid — called once on first sendEmail
+// Lazy-init SendGrid; called once on first sendEmail
 let _sgInitialized = false;
 async function ensureSendGrid() {
   if (_sgInitialized) return;
@@ -81,27 +81,27 @@ function buildEmailTemplate(
 ): { subject: string; html: string } {
   const templates: Record<NotificationType, { subject: string; html: string }> = {
     loan_approved: {
-      subject: 'Your loan has been approved — DukaPay',
+      subject: 'Your loan has been approved | DukaPay',
       html: `<h2>Loan Approved</h2><p>${message}</p><p>Log in to view your loan details and repayment schedule.</p>`,
     },
     repayment_due: {
-      subject: 'Repayment reminder — DukaPay',
+      subject: 'Repayment reminder | DukaPay',
       html: `<h2>Repayment Due Soon</h2><p>${message}</p><p>Please ensure funds are available to avoid a default.</p>`,
     },
     repayment_confirmed: {
-      subject: 'Repayment confirmed — DukaPay',
+      subject: 'Repayment confirmed | DukaPay',
       html: `<h2>Repayment Confirmed</h2><p>${message}</p><p>Thank you for your payment.</p>`,
     },
     loan_defaulted: {
-      subject: 'Loan default notice — DukaPay',
+      subject: 'Loan default notice | DukaPay',
       html: `<h2>Loan Defaulted</h2><p>${message}</p><p>Contact support immediately if you believe this is an error.</p>`,
     },
     loan_liquidated: {
-      subject: 'Your loan has been liquidated — DukaPay',
+      subject: 'Your loan has been liquidated | DukaPay',
       html: `<h2>Loan Liquidated</h2><p>${message}</p><p>Contact support if you have questions about the outcome.</p>`,
     },
     score_changed: {
-      subject: 'Your credit score has changed — DukaPay',
+      subject: 'Your credit score has changed | DukaPay',
       html: `<h2>Credit Score Update</h2><p>${message}</p><p>Log in to see your updated score and history.</p>`,
     },
   };
@@ -144,7 +144,7 @@ async function sendEmail(email: string, message: string, type?: NotificationType
     logger.withContext().error(`[Email] SendGrid failed for ${maskedEmail}`, {
       error: error instanceof Error ? error.message : String(error),
     });
-    // Swallow error — email failure must not break the main flow
+    // Swallow error: email failure must not break the main flow
   }
 }
 
@@ -457,7 +457,7 @@ class NotificationService {
     if (adminEmail) {
       await sendEmail(adminEmail, message);
     } else {
-      logger.withContext().warn('[Admin] ADMIN_EMAIL not set — logging dispute only', {
+      logger.withContext().warn('[Admin] ADMIN_EMAIL not set; logging dispute only', {
         title,
         message,
       });

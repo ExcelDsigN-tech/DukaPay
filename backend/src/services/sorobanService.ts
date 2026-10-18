@@ -10,6 +10,7 @@ import {
 } from '@stellar/stellar-sdk';
 import logger from '../utils/logger.js';
 import { AppError } from '../errors/AppError.js';
+import { ErrorCode } from '../errors/errorCodes.js';
 import {
   createSorobanRpcServer,
   getStellarNetworkPassphrase,
@@ -20,6 +21,23 @@ import {
  * Service for building and submitting Soroban contract transactions.
  * Handles the transaction lifecycle: build → (frontend signs) → submit.
  */
+/**
+ * Error for a submitted transaction that did not succeed. `details.txStatus`
+ * tells callers whether it definitely did not apply (ERROR, TRY_AGAIN_LATER,
+ * FAILED) or is still unconfirmed (NOT_FOUND after polling) and may land later.
+ */
+function transactionNotSuccessful(txHash: string, txStatus: string): AppError {
+  const pending = txStatus === 'NOT_FOUND';
+  const message = pending
+    ? 'Transaction not confirmed yet; check its status before retrying'
+    : `Transaction did not succeed on the Stellar network (${txStatus})`;
+  const statusCode = pending || txStatus === 'TRY_AGAIN_LATER' ? 503 : 400;
+  return new AppError(message, statusCode, true, ErrorCode.BLOCKCHAIN_ERROR, undefined, {
+    txHash,
+    txStatus,
+  });
+}
+
 class SorobanService {
   private static readonly FALLBACK_CREDIT_SCORE = 500;
   private static readonly SCORE_SIMULATION_RETRY_ATTEMPTS = 2;
@@ -208,7 +226,8 @@ class SorobanService {
    */
   async buildRequestLoanTx(
     borrowerPublicKey: string,
-    amount: number,
+    amount: bigint,
+    termLedgers: number,
   ): Promise<{ unsignedTxXdr: string; networkPassphrase: string }> {
     const server = this.getRpcServer();
     const contractId = this.getLoanManagerContractId();
@@ -219,7 +238,8 @@ class SorobanService {
     const borrowerScVal = nativeToScVal(Address.fromString(borrowerPublicKey), {
       type: 'address',
     });
-    const amountScVal = nativeToScVal(BigInt(amount), { type: 'i128' });
+    const amountScVal = nativeToScVal(amount, { type: 'i128' });
+    const termScVal = nativeToScVal(termLedgers, { type: 'u32' });
 
     const tx = new TransactionBuilder(account, {
       fee: BASE_FEE,
@@ -229,7 +249,7 @@ class SorobanService {
         Operation.invokeContractFunction({
           contract: contractId,
           function: 'request_loan',
-          args: [borrowerScVal, amountScVal],
+          args: [borrowerScVal, amountScVal, termScVal],
         }),
       )
       .setTimeout(30)
@@ -276,7 +296,7 @@ class SorobanService {
   async buildRepayTx(
     borrowerPublicKey: string,
     loanId: number,
-    amount: number,
+    amount: bigint,
   ): Promise<{ unsignedTxXdr: string; networkPassphrase: string }> {
     const server = this.getRpcServer();
     const contractId = this.getLoanManagerContractId();
@@ -288,7 +308,7 @@ class SorobanService {
       type: 'address',
     });
     const loanIdScVal = nativeToScVal(loanId, { type: 'u32' });
-    const amountScVal = nativeToScVal(BigInt(amount), { type: 'i128' });
+    const amountScVal = nativeToScVal(amount, { type: 'i128' });
 
     const tx = new TransactionBuilder(account, {
       fee: BASE_FEE,
@@ -324,7 +344,7 @@ class SorobanService {
   async buildDepositTx(
     providerPublicKey: string,
     tokenAddress: string,
-    amount: number,
+    amount: bigint,
   ): Promise<{ unsignedTxXdr: string; networkPassphrase: string }> {
     const server = this.getRpcServer();
     const contractId = this.getLendingPoolContractId();
@@ -338,7 +358,7 @@ class SorobanService {
     const tokenScVal = nativeToScVal(Address.fromString(tokenAddress), {
       type: 'address',
     });
-    const amountScVal = nativeToScVal(BigInt(amount), { type: 'i128' });
+    const amountScVal = nativeToScVal(amount, { type: 'i128' });
 
     const tx = new TransactionBuilder(account, {
       fee: BASE_FEE,
@@ -374,7 +394,7 @@ class SorobanService {
   async buildWithdrawTx(
     providerPublicKey: string,
     tokenAddress: string,
-    shares: number,
+    shares: bigint,
   ): Promise<{ unsignedTxXdr: string; networkPassphrase: string }> {
     const server = this.getRpcServer();
     const contractId = this.getLendingPoolContractId();
@@ -388,7 +408,7 @@ class SorobanService {
     const tokenScVal = nativeToScVal(Address.fromString(tokenAddress), {
       type: 'address',
     });
-    const sharesScVal = nativeToScVal(BigInt(shares), { type: 'i128' });
+    const sharesScVal = nativeToScVal(shares, { type: 'i128' });
 
     const tx = new TransactionBuilder(account, {
       fee: BASE_FEE,
@@ -424,7 +444,7 @@ class SorobanService {
   async buildEmergencyWithdrawTx(
     providerPublicKey: string,
     tokenAddress: string,
-    shares: number,
+    shares: bigint,
   ): Promise<{ unsignedTxXdr: string; networkPassphrase: string }> {
     const server = this.getRpcServer();
     const contractId = this.getLendingPoolContractId();
@@ -438,7 +458,7 @@ class SorobanService {
     const tokenScVal = nativeToScVal(Address.fromString(tokenAddress), {
       type: 'address',
     });
-    const sharesScVal = nativeToScVal(BigInt(shares), { type: 'i128' });
+    const sharesScVal = nativeToScVal(shares, { type: 'i128' });
 
     const tx = new TransactionBuilder(account, {
       fee: BASE_FEE,
@@ -515,7 +535,7 @@ class SorobanService {
   async buildDepositCollateralTx(
     borrowerPublicKey: string,
     loanId: number,
-    amount: number,
+    amount: bigint,
   ): Promise<{ unsignedTxXdr: string; networkPassphrase: string }> {
     const server = this.getRpcServer();
     const contractId = this.getLoanManagerContractId();
@@ -524,7 +544,7 @@ class SorobanService {
     const account = await server.getAccount(borrowerPublicKey);
 
     const loanIdScVal = nativeToScVal(loanId, { type: 'u32' });
-    const amountScVal = nativeToScVal(BigInt(amount), { type: 'i128' });
+    const amountScVal = nativeToScVal(amount, { type: 'i128' });
 
     const tx = new TransactionBuilder(account, {
       fee: BASE_FEE,
@@ -600,7 +620,7 @@ class SorobanService {
   async buildRefinanceLoanTx(
     borrowerPublicKey: string,
     loanId: number,
-    newAmount: number,
+    newAmount: bigint,
     newTerm: number,
   ): Promise<{ unsignedTxXdr: string; networkPassphrase: string }> {
     const server = this.getRpcServer();
@@ -610,7 +630,7 @@ class SorobanService {
     const account = await server.getAccount(borrowerPublicKey);
 
     const loanIdScVal = nativeToScVal(loanId, { type: 'u32' });
-    const amountScVal = nativeToScVal(BigInt(newAmount), { type: 'i128' });
+    const amountScVal = nativeToScVal(newAmount, { type: 'i128' });
     const termScVal = nativeToScVal(newTerm, { type: 'u32' });
 
     const tx = new TransactionBuilder(account, {
@@ -738,7 +758,7 @@ class SorobanService {
   async buildTransferToAgentTx(
     fromAgent: string,
     toAgent: string,
-    amount: number | bigint,
+    amount: bigint,
   ): Promise<{ unsignedTxXdr: string; networkPassphrase: string }> {
     const server = this.getRpcServer();
     const contractId = this.getAgentVaultContractId();
@@ -748,7 +768,7 @@ class SorobanService {
 
     const fromScVal = nativeToScVal(Address.fromString(fromAgent), { type: 'address' });
     const toScVal = nativeToScVal(Address.fromString(toAgent), { type: 'address' });
-    const amountScVal = nativeToScVal(BigInt(amount), { type: 'i128' });
+    const amountScVal = nativeToScVal(amount, { type: 'i128' });
 
     const tx = new TransactionBuilder(account, {
       fee: BASE_FEE,
@@ -788,6 +808,7 @@ class SorobanService {
       ['LOAN_MANAGER_CONTRACT_ID', process.env.LOAN_MANAGER_CONTRACT_ID ?? ''],
       ['LENDING_POOL_CONTRACT_ID', process.env.LENDING_POOL_CONTRACT_ID ?? ''],
       ['REMITTANCE_NFT_CONTRACT_ID', process.env.REMITTANCE_NFT_CONTRACT_ID ?? ''],
+      ['MULTISIG_GOVERNANCE_CONTRACT_ID', process.env.MULTISIG_GOVERNANCE_CONTRACT_ID ?? ''],
       ['POOL_TOKEN_ADDRESS', process.env.POOL_TOKEN_ADDRESS ?? ''],
     ];
 
@@ -855,7 +876,7 @@ class SorobanService {
         status: sendResult.status,
         errorResult: sendResult.errorResult?.toXDR('base64'),
       });
-      return { txHash, status: sendResult.status };
+      throw transactionNotSuccessful(txHash, sendResult.status);
     }
 
     // Poll for final result
@@ -864,10 +885,11 @@ class SorobanService {
       sleepStrategy: () => 1000,
     });
 
-    const resultXdr =
-      polled.status === 'SUCCESS' && polled.resultXdr
-        ? polled.resultXdr.toXDR('base64')
-        : undefined;
+    if (polled.status !== 'SUCCESS') {
+      throw transactionNotSuccessful(txHash, polled.status);
+    }
+
+    const resultXdr = polled.resultXdr ? polled.resultXdr.toXDR('base64') : undefined;
 
     return {
       txHash,

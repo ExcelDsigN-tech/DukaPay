@@ -1,10 +1,10 @@
-# DukaPay — Product Requirements Document (Reverse-Engineered)
+# DukaPay: Product Requirements Document (Reverse-Engineered)
 
 > This PRD documents DukaPay **as it currently exists in code**, not as originally pitched. Where the shipped product has outgrown or diverged from the README/marketing description, that divergence is called out explicitly rather than smoothed over.
 
 ## App Name & Tagline
 
-**DukaPay** ("duka" = shop, Swahili) — originally framed as an on-chain agent-banking float & settlement protocol for unbanked cash economies. In practice, the shipped product is broader: **a Stellar/Soroban DeFi lending, remittance, and agent-banking platform with a gamified borrower experience.**
+**DukaPay** ("duka" = shop, Swahili) was originally framed as an on-chain agent-banking float & settlement protocol for unbanked cash economies. In practice, the shipped product is broader: **a Stellar/Soroban DeFi lending, remittance, and agent-banking platform with a gamified borrower experience.**
 
 ## Problem
 
@@ -17,9 +17,9 @@ These are related (float/collateral is the backbone; loans and remittances are b
 
 ## Core Value Proposition
 
-- Solvency is **enforced on-chain** (`float ≤ collateral × haircut`), not promised by a bank — auditable by anyone, including regulators (read-only proof).
+- Solvency is **enforced on-chain** (`float ≤ collateral × haircut`), not promised by a bank, and is auditable by anyone, including regulators (read-only proof).
 - Credit access for users with no formal credit history, via an on-chain, portable credit score (`remittance_nft` contract + score reconciliation service).
-- A gamification layer (XP, tiers "Apprentice → Sovereign → Exalted", quests, achievement badges) intended to drive repayment behavior and retention — this is a first-class product bet, not a cosmetic skin (see `frontend/src/app/[locale]/kingdom/`, `components/gamification/`).
+- A gamification layer (XP, tiers "Apprentice → Sovereign → Exalted", quests, achievement badges) intended to drive repayment behavior and retention. This is a first-class product bet, not a cosmetic skin (see `frontend/src/app/[locale]/kingdom/`, `components/gamification/`).
 
 ## Target User Persona
 
@@ -28,9 +28,9 @@ Two personas are actually served by the code:
 - **The Agent**: a local shop owner, KYC'd and bonded, who provides cash-in/cash-out liquidity and earns from float spread. Technical enough to use a wallet (Freighter), not necessarily banked themselves.
 - **The Borrower**: an unbanked-or-underbanked individual seeking small collateralized loans, building a reputation/credit score over time, engaged by gamified progress feedback (quests, XP, tier unlocks).
 
-A third, thinner persona exists in the code but isn't described in any product doc: the **Lender/Pool provider** (`lender` role in RBAC — legacy alias for `agent`) who deposits into the lending pool for yield.
+A third, thinner persona exists in the code but isn't described in any product doc: the **Lender/Pool provider** (`lender` role in RBAC, legacy alias for `agent`) who deposits into the lending pool for yield.
 
-## Core Features — Shipped (Must Have, verified in code)
+## Core Features: Shipped (Must Have, verified in code)
 
 - Agent onboarding with KYC reference + USDC bond (`agent_registry` contract, `agentRoutes.ts`)
 - Cash-in/cash-out float minting/burning with enforced solvency invariant (`agent_vault` contract)
@@ -48,17 +48,17 @@ A third, thinner persona exists in the code but isn't described in any product d
 
 ## Nice to Have / Partial / In-Progress
 
-- `settlement-netter` — described in ARCHITECTURE.md as a batched net-settlement contract; **no such contract exists in the codebase.** Either dropped, renamed into `agent_vault.settle_net`, or never built — needs a maintainer decision (see Implementation Plan, Open Items).
-- `circuit_breaker` contract — has source and tests but is **not in the Cargo workspace**, so it isn't built/tested by default `cargo test`. Unclear if deployed separately or abandoned mid-integration.
-- `oracle` contract — exists, has price-feed manipulation protections per commit history, but no product doc describes what it's for (likely future collateral types beyond USDC).
-- KYC/AML enforcement is present but **disabled by default** (`KYC_ENFORCEMENT_ENABLED=false`) — currently opt-in, not a hard requirement.
+- `settlement-netter`: described in ARCHITECTURE.md as a batched net-settlement contract; **no such contract exists in the codebase.** Either dropped, renamed into `agent_vault.settle_net`, or never built. Needs a maintainer decision (see Implementation Plan, Open Items).
+- `circuit_breaker` contract: has source and tests but is **not in the Cargo workspace**, so it isn't built/tested by default `cargo test`. Unclear if deployed separately or abandoned mid-integration.
+- `oracle` contract: exists, has price-feed manipulation protections per commit history, but no product doc describes what it's for (likely future collateral types beyond USDC).
+- KYC/AML enforcement is present but **disabled by default** (`KYC_ENFORCEMENT_ENABLED=false`): currently opt-in, not a hard requirement.
 - Audit anchoring is present but disabled by default (`AUDIT_ANCHOR_ENABLED=false`).
 
 ## Out of Scope (as of current version)
 
-- Permissionless agent onboarding (explicitly named as a *future* option in ARCHITECTURE.md, not built — registration is operator-gated).
-- Non-USDC collateral types in `agent_vault` (single-asset by design — "no price-feed risk" is a stated architectural choice).
-- Mainnet deployment automation — env defaults (`STELLAR_NETWORK=testnet`) and CI/deploy scripts target testnet/staging; no evidence of a production mainnet deploy pipeline in this repo.
+- Permissionless agent onboarding (explicitly named as a *future* option in ARCHITECTURE.md, not built; registration is operator-gated).
+- Non-USDC collateral types in `agent_vault` (single-asset by design: "no price-feed risk" is a stated architectural choice).
+- Mainnet deployment automation: env defaults (`STELLAR_NETWORK=testnet`) and CI/deploy scripts target testnet/staging; no evidence of a production mainnet deploy pipeline in this repo.
 
 ## User Stories (reconstructed from shipped features)
 
@@ -73,6 +73,13 @@ A third, thinner persona exists in the code but isn't described in any product d
 
 ## Success Metrics
 
-**Not found in any repo doc.** No PRD, README, or docs/ file states target signup numbers, loan volume, retention, or default-rate thresholds.
+Defined in **[`docs/SUCCESS_METRICS.md`](../SUCCESS_METRICS.md)** (issue #567).
 
-> ⚠️ Gap: success metrics need to come from a human stakeholder — this cannot be reverse-engineered from code. Candidates worth defining: agent activation rate, loan default rate, average Reliability Score growth, remittance volume, solvency-invariant violations (should always be zero).
+Key categories:
+- **Solvency invariant**: `Σ float ≤ Σ collateral × haircut` (0 violations, always)
+- **Acquisition**: new borrower signups/week, agent activation rate (target ≥ 70 % within 14 days)
+- **Risk**: loan default rate (≤ 5 % trailing 90 days), 30-day delinquency (≤ 10 %)
+- **Compliance**: DSAR resolution ≤ 30 calendar days, 0 open disputes > 7 days
+- **System health**: API p99 ≤ 500 ms, indexer lag ≤ 60 s, 0 unhandled rejections
+
+Quantitative targets marked TBD in that file require sign-off from a product owner/stakeholder.

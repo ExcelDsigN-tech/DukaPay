@@ -28,7 +28,6 @@ jest.unstable_mockModule('../controllers/scoreController.js', () => ({
   getRemittanceNft: jest.fn((_req: Request, res: Response) =>
     res.json({ success: true, data: { nft: null } }),
   ),
-  getLeaderboard: jest.fn((_req: Request, res: Response) => res.json({ success: true, data: [] })),
   updateScore: jest.fn((_req: Request, res: Response) =>
     res.json({ success: true, data: { score: 1 } }),
   ),

@@ -24,11 +24,7 @@ export const swaggerSpec = swaggerJSDoc({
     servers: [
       {
         url: '/api',
-        description: 'Legacy API base path',
-      },
-      {
-        url: '/api/v1',
-        description: 'Versioned API base path',
+        description: 'API base path',
       },
     ],
     components: {

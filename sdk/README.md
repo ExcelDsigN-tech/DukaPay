@@ -3,10 +3,10 @@
 TypeScript SDK for the [DukaPay](https://github.com/ExcelDsigN-tech/dukapay)
 lending & remittance protocol.
 
-- **`DukaPayClient`** — typed client for every API resource (loans, pool, scores, remittance, auth)
-- **Wallet adapters** — `FreighterAdapter`, `AlbedoAdapter`, or your own via the `WalletAdapter` interface
-- **`ContractHelpers`** — stroop/bps conversions, address formatting, network constants
-- **React hooks** — `useWallet`, `useLoans`, `useFloat` (import from `@dukapay/sdk/react`)
+- **`DukaPayClient`**: typed client for every API resource (loans, pool, scores, remittance, auth)
+- **Wallet adapters**: `FreighterAdapter`, `AlbedoAdapter`, or your own via the `WalletAdapter` interface
+- **`ContractHelpers`**: stroop/bps conversions, address formatting, network constants
+- **React hooks**: `useWallet`, `useLoans`, `useFloat` (import from `@dukapay/sdk/react`)
 
 ## Install
 
@@ -19,10 +19,10 @@ npm install @dukapay/sdk
 ## Quick start
 
 ```ts
-import { DukaPayClient, FreighterAdapter, ContractHelpers } from '@dukapay/sdk';
+import { DukaPayClient, FreighterAdapter } from '@dukapay/sdk';
 
 const client = new DukaPayClient({
-  baseUrl: 'https://api.dukapay.io',
+  baseUrl: 'https://your-backend.example',
   network: 'mainnet',
   wallet: new FreighterAdapter(),
 });
@@ -32,11 +32,14 @@ await client.loginWithWallet();
 
 // Typed calls
 const me = await client.address();
-const { items: loans } = await client.loans.list({ borrower: me! });
+const { loans } = await client.loans.list({ borrower: me! });
 
-// Build + sign + submit a repayment
-const unsigned = await client.loans.buildRepay(loans[0].id, ContractHelpers.toStroops('25'));
-await client.signAndSubmit(unsigned, (xdr) => client.loans.submit(loans[0].id, xdr));
+// Build + sign + submit a repayment (amount in whole tokens, e.g. 250.5 USDC)
+const unsigned = await client.loans.buildRepay(loans[0].loanId, 25, me!);
+await client.signAndSubmit(
+  { xdr: unsigned.unsignedTxXdr },
+  (xdr) => client.loans.submit(loans[0].loanId, xdr),
+);
 ```
 
 ## React
@@ -49,7 +52,7 @@ const wallet = new FreighterAdapter();
 
 function App() {
   return (
-    <DukaPayProvider baseUrl="https://api.dukapay.io" network="mainnet" wallet={wallet}>
+    <DukaPayProvider baseUrl="https://your-backend.example" network="mainnet" wallet={wallet}>
       <Dashboard />
     </DukaPayProvider>
   );
@@ -85,7 +88,7 @@ Domain types in `src/types.ts` are hand-maintained against
 with:
 
 ```bash
-npx openapi-typescript https://api.dukapay.io/openapi.json -o src/generated.ts
+npx openapi-typescript https://your-backend.example/openapi.json -o src/generated.ts
 ```
 
 ## Versioning

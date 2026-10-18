@@ -15,6 +15,7 @@ import { requireLender, requireJwtAuth, requireScopes } from '../middleware/jwtA
 import { requireTenantAccess, requireRole } from '../middleware/rbac.js';
 import { validate, validateBody } from '../middleware/validation.js';
 import { idempotencyMiddleware } from '../middleware/idempotency.js';
+import { poolAnalyticsRateLimiter } from '../middleware/rateLimiter.js';
 import { addressParamSchema } from '../schemas/stellarSchemas.js';
 import {
   buildPoolTransactionSchema,
@@ -73,7 +74,7 @@ const router = Router();
  *       500:
  *         description: Internal server error.
  */
-router.get('/analytics', getAnalytics);
+router.get('/analytics', poolAnalyticsRateLimiter, getAnalytics);
 
 /**
  * @swagger
@@ -311,7 +312,7 @@ router.get(
  *                 description: Address of the token to deposit
  *               amount:
  *                 type: number
- *                 description: Amount to deposit
+ *                 description: Amount to deposit in whole tokens (e.g. USDC), up to 7 decimal places
  *                 example: 1000
  *     responses:
  *       200:
@@ -366,7 +367,7 @@ router.post(
  *                 description: Address of the token to withdraw
  *               amount:
  *                 type: number
- *                 description: Amount (shares) to withdraw
+ *                 description: Pool shares to withdraw, up to 7 decimal places (same scale as the token)
  *                 example: 500
  *     responses:
  *       200:
@@ -422,7 +423,7 @@ router.post(
  *                 description: Address of the token to withdraw
  *               shares:
  *                 type: number
- *                 description: Amount (shares) to withdraw
+ *                 description: Pool shares to withdraw, up to 7 decimal places (same scale as the token)
  *     responses:
  *       200:
  *         description: Unsigned transaction XDR returned

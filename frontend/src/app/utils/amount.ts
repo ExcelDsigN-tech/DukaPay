@@ -90,7 +90,7 @@ export function toStroops(value: string, decimals = STROOP_DECIMALS): bigint | n
 }
 
 /**
- * Format an exact stroop amount as a decimal string with no precision loss —
+ * Format an exact stroop amount as a decimal string with no precision loss:
  * the inverse of {@link toStroops}. Unlike `Number(stroops) / 1e7` followed
  * by `toFixed`, this never routes the value through a floating-point
  * `number`, so it agrees with the settlement amount at full precision.

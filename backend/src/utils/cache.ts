@@ -27,7 +27,7 @@ export const getCache = async <T>(key: string): Promise<T | null> => {
     const raw = await redisClient.get(key);
     return raw ? (JSON.parse(raw) as T) : null;
   } catch (err) {
-    logger.warn('Redis getCache error — bypassing cache', { key, err });
+    logger.warn('Redis getCache error, bypassing cache', { key, err });
     return null;
   }
 };
@@ -40,6 +40,6 @@ export const setCache = async (key: string, value: unknown, ttlSeconds = 30): Pr
     await ensureConnected();
     await redisClient.set(key, JSON.stringify(value), { EX: ttlSeconds });
   } catch (err) {
-    logger.warn('Redis setCache error — skipping cache write', { key, err });
+    logger.warn('Redis setCache error, skipping cache write', { key, err });
   }
 };

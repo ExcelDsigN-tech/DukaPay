@@ -41,5 +41,6 @@ export function resolveInitialTheme(): Theme {
       return presetTheme as Theme;
     }
   }
-  return getStoredTheme() ?? getSystemTheme();
+  // Cobalt (dark) is the default until the user picks a theme.
+  return getStoredTheme() ?? "dark";
 }

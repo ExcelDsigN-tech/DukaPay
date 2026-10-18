@@ -3,12 +3,17 @@
 import { useState, useMemo } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Clock, ArrowUpRight, ArrowDownLeft, ExternalLink } from "lucide-react";
-import { useWalletStore, selectIsWalletConnected } from "../../stores/useWalletStore";
-import { useLoans, useRemittances } from "../../hooks/useApi";
+import {
+  useWalletStore,
+  selectIsWalletConnected,
+  selectWalletAddress,
+} from "../../stores/useWalletStore";
+import { useBorrowerLoans, useRemittances } from "../../hooks/useApi";
 import { ErrorBoundary } from "../../components/global_ui/ErrorBoundary";
 import { StatusIndicator } from "../../components/ui/StatusIndicator";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { downloadCsv, rowsToCsv } from "../../utils/csv";
+import { formatCurrency, formatDate } from "../../utils/formatLocale";
 
 type FilterType = "all" | "loan" | "remittance";
 
@@ -47,7 +52,10 @@ export default function ActivityPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [filterType, setFilterType] = useState<FilterType>("all");
 
-  const { data: loans = [], isLoading: loansLoading } = useLoans({ enabled: isConnected });
+  const address = useWalletStore(selectWalletAddress);
+  const { loans, isLoading: loansLoading } = useBorrowerLoans(
+    isConnected ? (address ?? undefined) : undefined,
+  );
   const { data: remittances = [], isLoading: remittancesLoading } = useRemittances({
     enabled: isConnected,
   });
@@ -61,9 +69,9 @@ export default function ActivityPage() {
       // When present, prioritize it so refinance/extension activity appears.
       id: `loan-${loan.id}`,
       type:
-        (loan as { latestEventType?: string }).latestEventType === "LoanExtended"
+        loan.latestEventType === "LoanExtended"
           ? "Loan Extended"
-          : (loan as { latestEventType?: string }).latestEventType === "LoanRefinanced"
+          : loan.latestEventType === "LoanRefinanced"
             ? "Loan Refinanced"
             : loan.status === "repaid"
               ? "Loan Repaid"
@@ -74,10 +82,10 @@ export default function ActivityPage() {
                   : loan.status === "active"
                     ? "Loan Active"
                     : "Loan Request",
-      description: `Loan #${loan.id} — ${loan.currency}`,
-      amount: `${loan.status === "repaid" ? "+" : "-"}${formatCurrency(loan.amount)}`,
-      timestamp: new Date(loan.createdAt).toISOString(),
-      status: loan.status,
+      description: `Loan #${loan.id}`,
+      amount: `${loan.status === "repaid" ? "+" : "-"}${formatCurrency(loan.principal, locale)}`,
+      timestamp: loan.approvedAt ?? "",
+      status: loan.status === "pending_indexing" ? "pending" : loan.status,
       txHash: undefined,
     }));
 
@@ -88,7 +96,7 @@ export default function ActivityPage() {
         0,
         6,
       )}...${remittance.recipientAddress.slice(-4)}`,
-      amount: `-${formatCurrency(remittance.amount)}`,
+      amount: `-${formatCurrency(remittance.amount, locale)}`,
       timestamp: new Date(remittance.createdAt).toISOString(),
       status: remittance.status,
       txHash: undefined,
@@ -103,10 +111,9 @@ export default function ActivityPage() {
       combined = combined.filter((item) => item.type === "Remittance");
     }
 
-    // Sort by timestamp descending
-    return combined.sort(
-      (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
-    );
+    // Sort by timestamp descending; undated items (still indexing) are newest.
+    const time = (ts: string) => new Date(ts).getTime() || Number.MAX_SAFE_INTEGER;
+    return combined.sort((a, b) => time(b.timestamp) - time(a.timestamp));
   }, [loans, remittances, filterType]);
 
   const totalPages = Math.ceil(allActivity.length / ITEMS_PER_PAGE);
@@ -116,7 +123,7 @@ export default function ActivityPage() {
   function handleExportCsv() {
     const today = new Date().toISOString().split("T")[0];
     const rows = allActivity.map((item) => ({
-      date: formatDate(item.timestamp),
+      date: formatDate(item.timestamp, locale),
       type: item.type,
       amount: item.amount,
       status: item.status,
@@ -130,7 +137,7 @@ export default function ActivityPage() {
 
   if (!isConnected) {
     return (
-      <main className="space-y-8 min-h-screen p-8 lg:p-12 max-w-4xl mx-auto animate-in fade-in duration-500">
+      <div className="space-y-8 min-h-screen p-8 lg:p-12 max-w-4xl mx-auto animate-in fade-in duration-500">
         <div className="rounded-2xl bg-zinc-50 p-12 text-center dark:bg-zinc-900/50 border border-dashed border-zinc-200 dark:border-zinc-800">
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-50 dark:bg-indigo-500/10 mb-6">
             <Clock className="h-8 w-8 text-indigo-600 dark:text-indigo-400" />
@@ -140,12 +147,12 @@ export default function ActivityPage() {
             {t("connectWalletToViewActivity")}
           </p>
         </div>
-      </main>
+      </div>
     );
   }
 
   return (
-    <main className="space-y-8 min-h-screen p-8 lg:p-12 max-w-4xl mx-auto">
+    <div className="space-y-8 min-h-screen p-8 lg:p-12 max-w-4xl mx-auto">
       <header className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50 flex items-center gap-2">
@@ -277,7 +284,7 @@ export default function ActivityPage() {
                       {item.amount}
                     </p>
                     <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                      {formatDate(item.timestamp)}
+                      {formatDate(item.timestamp, locale)}
                     </p>
                     <StatusIndicator
                       label={t(`status.${item.status}`)}
@@ -341,20 +348,8 @@ export default function ActivityPage() {
           </div>
         </ErrorBoundary>
       )}
-    </main>
+    </div>
   );
-}
-
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value);
-}
-
-function formatDate(timestamp: string): string {
-  return new Date(timestamp).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
 }
 
 function getStatusTone(status: string): "success" | "warning" | "danger" | "info" | "neutral" {

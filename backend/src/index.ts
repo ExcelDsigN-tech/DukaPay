@@ -1,16 +1,15 @@
-import dotenv from 'dotenv';
-dotenv.config();
+// Must stay the first import: ES modules evaluate every import before this
+// file's body runs, so a later dotenv.config() is too late for modules that
+// read process.env at load time (db pool, Redis URLs).
+import 'dotenv/config';
 
 import { validateEnvVars } from './config/env.js';
 validateEnvVars();
 
-// Sentry must be initialized before any other imports so it can instrument them
-import { initSentry } from './config/sentry.js';
-initSentry();
-
 const app = (await import('./app.js')).default;
 import logger from './utils/logger.js';
 import { closePool } from './db/connection.js';
+import { cacheService } from './services/cacheService.js';
 import { startIndexer, stopIndexer } from './services/indexerManager.js';
 import {
   startDefaultCheckerScheduler,
@@ -20,7 +19,7 @@ import {
   startWebhookRetryProcessor,
   stopWebhookRetryProcessor,
 } from './services/webhookRetryProcessor.js';
-import { eventStreamService } from './services/eventStreamService.js';
+import { eventStreamService, type LoanEventPayload } from './services/eventStreamService.js';
 import { pubsubService } from './services/pubsubService.js';
 import {
   startNotificationCleanupScheduler,
@@ -34,12 +33,16 @@ import {
   startCrossContractReconciler,
   stopCrossContractReconciler,
 } from './services/crossContractReconciler.js';
+import {
+  startAgentDashboardPublisher,
+  stopAgentDashboardPublisher,
+} from './services/agentDashboardUpdates.js';
 import { sorobanService } from './services/sorobanService.js';
 import { validateLoanConfigOnStartup } from './config/loanConfig.js';
 import { startLoanDueCheckCron, stopLoanDueCheckCron } from './cron/loanCheckCron.js';
 // Imported the score decay scheduler initialization wrapper
 import { startScoreDecayScheduler } from './cron/scoreDecayJob.js';
-import { initializePauseState } from './middleware/pauseGuard.js';
+import { initializePauseState, startPauseStateRefresh } from './middleware/pauseGuard.js';
 import { startAuditAnchorJob, stopAuditAnchorJob } from './cron/auditAnchorJob.js';
 
 const port = process.env.PORT || 3001;
@@ -73,6 +76,8 @@ try {
   logger.error('Failed to initialize pause state', { err });
   process.exit(1);
 }
+// Keep re-reading it so a database outage is noticed and alerted on promptly.
+startPauseStateRefresh(Number.parseInt(process.env.PAUSE_STATE_REFRESH_MS ?? '30000', 10));
 
 const server = app.listen(port, () => {
   logger.info(`Server is running on port ${port}`);
@@ -92,6 +97,9 @@ const server = app.listen(port, () => {
   // Start cross-contract (disbursement <-> score) reconciliation ledger sweep
   startCrossContractReconciler();
 
+  // Start agent dashboard real-time updates publisher
+  startAgentDashboardPublisher();
+
   // Start periodic notification cleanup
   startNotificationCleanupScheduler();
 
@@ -102,8 +110,9 @@ const server = app.listen(port, () => {
   // Initialize Redis subscriber to receive events from other instances
   pubsubService.initSubscriber((payload) => {
     try {
-      // Forward to local SSE clients
-      eventStreamService.broadcast(payload as any);
+      // Forward to local SSE clients. The payload crossed a Redis round-trip, so
+      // it arrives untyped; narrow it to the event shape `broadcast` expects.
+      eventStreamService.broadcast(payload as LoanEventPayload);
     } catch (e) {
       logger.withContext().error('Failed to forward pubsub SSE payload', { err: e });
     }
@@ -136,6 +145,7 @@ const shutdown = async (signal: 'SIGTERM' | 'SIGINT') => {
     stopWebhookRetryProcessor();
     stopScoreReconciliationScheduler();
     stopCrossContractReconciler();
+    stopAgentDashboardPublisher();
     stopNotificationCleanupScheduler();
 
     if (
@@ -161,6 +171,7 @@ const shutdown = async (signal: 'SIGTERM' | 'SIGINT') => {
 
     await closePool();
     logger.info('Database pool drained.');
+    await cacheService.close();
     process.exit(0);
   } catch (err) {
     logger.error('Graceful shutdown failed', { signal, err });

@@ -36,7 +36,7 @@ function disputeRow(id: number, status: string, created_at: string, seq = id) {
 }
 
 // Wires the three sequential queries the controller issues when no snapshot_seq
-// is supplied: pin MAX(seq), fetch the page, then count the total at that snapshot.
+// is supplied: pin MAXHseq), fetch the page, then count the total at that snapshot.
 function mockQuerySequence(options: {
   dataRows: Record<string, unknown>[];
   maxSeq?: number;

@@ -16,20 +16,20 @@ DukaPay is an on-chain agent-banking float & settlement protocol on Stellar. Thi
 
 ### Core concepts
 
-- **Collateral** — USDC locked by an agent as backing for issued e-money. Stable by construction, so no oracle.
-- **Float** — on-chain liability owed by the agent to customers (e-money in circulation). Governed by `float ≤ collateral × haircut`.
-- **Haircut** — solvency buffer parameter (e.g. 0.8 means float can be at most 80% of collateral).
-- **Bond** — additional USDC locked at onboarding to guarantee agent behavior; frozen while the agent carries float.
-- **Batch** — a time-windowed set of transactions that net to zero and finalize atomically.
+- **Collateral**: USDC locked by an agent as backing for issued e-money. Stable by construction, so no oracle.
+- **Float**: on-chain liability owed by the agent to customers (e-money in circulation). Governed by `float ≤ collateral × haircut`.
+- **Haircut**: solvency buffer parameter (e.g. 0.8 means float can be at most 80% of collateral).
+- **Bond**: additional USDC locked at onboarding to guarantee agent behavior; frozen while the agent carries float.
+- **Batch**: a time-windowed set of transactions that net to zero and finalize atomically.
 
 ## 2. On-chain / off-chain split
 
 | Layer | Where | Why |
 |-------|-------|-----|
-| Float ledger, collateral, bonds, agent registry, net settlement, disputes | **On-chain** (Soroban contracts) | Multi-party trust with real money — needs shared, auditable, immutable state. Collateralization and net settlement are consensus problems, not CRUD problems. |
-| KYC document checks, mobile-money operator adapters, dispute evidence, maps, dashboards | **Off-chain** (backend + frontend) | Private, regulatory, or UX concerns — not money movement. |
+| Float ledger, collateral, bonds, agent registry, net settlement, disputes | **On-chain** (Soroban contracts) | Multi-party trust with real money needs shared, auditable, immutable state. Collateralization and net settlement are consensus problems, not CRUD problems. |
+| KYC document checks, mobile-money operator adapters, dispute evidence, maps, dashboards | **Off-chain** (backend + frontend) | Private, regulatory, or UX concerns, not money movement. |
 
-Trade-off named: **permissioned** agent registration (KYC'd + bonded agents, operator role) is the default. Permissionless onboarding is a later option, not the default — unlicensed agents would be an AML disaster and no operator would deploy it.
+Trade-off named: **permissioned** agent registration (KYC'd + bonded agents, operator role) is the default. Permissionless onboarding is a later option, not the default: unlicensed agents would be an AML disaster and no operator would deploy it.
 
 ## 3. Smart contracts
 
@@ -58,8 +58,8 @@ Three Soroban contracts under `contracts/`. All use checked arithmetic; all exte
 
 Earlier design called for a standalone `settlement-netter` contract with a batch/window/dispute lifecycle (`open_batch`, `submit_txn`, `net`, `finalize`, `raise_dispute`). That contract was never built; the core netting invariant it was meant to enforce was instead implemented directly on `agent_vault`:
 
-- `settle_net(entries: Vec<(Address, i128)>)` — operator-only. Entries are `(agent, delta)` pairs; deltas must sum to zero (float conserved across the batch), each resulting float is re-checked against the solvency invariant, batch size is bounded (`BATCH_MAX`).
-- What's **not** built: the separate batch-lifecycle wrapper (`open_batch`/`window_end`/`raise_dispute` held on-chain pending adjudication). Loan-level disputes are handled off-chain today via `adminDisputeController.ts` / the `loan_disputes` table — there is no on-chain settlement-dispute hold.
+- `settle_net(entries: Vec<(Address, i128)>)`: operator-only. Entries are `(agent, delta)` pairs; deltas must sum to zero (float conserved across the batch), each resulting float is re-checked against the solvency invariant, batch size is bounded (`BATCH_MAX`).
+- What's **not** built: the separate batch-lifecycle wrapper (`open_batch`/`window_end`/`raise_dispute` held on-chain pending adjudication). Loan-level disputes are handled off-chain today via `adminDisputeController.ts` / the `loan_disputes` table. There is no on-chain settlement-dispute hold.
 
 If an on-chain, windowed settlement-dispute mechanism is needed later, it would be new scope, not a revival of the original `settlement-netter` design as originally spec'd.
 

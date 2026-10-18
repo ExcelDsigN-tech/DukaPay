@@ -2,7 +2,7 @@
 
 If you’ve spent any time in the Ethereum ecosystem, you probably take **Foundry** for granted. You write an `invariant_` test, run `forge test`, and a few seconds later, you have a nice report of edge cases. 
 
-But when you move to **Stellar’s Soroban**, things change. You aren't just in a different VM; you're in a different execution paradigm. Fuzzing Soroban contracts (Rust/WASM) requires a shift in mindset—from "watching transactions revert" to "stopping processes from crashing."
+But when you move to **Stellar’s Soroban**, things change. You aren't just in a different VM; you're in a different execution paradigm. Fuzzing Soroban contracts (Rust/WASM) requires a shift in mindset, from "watching transactions revert" to "stopping processes from crashing."
 
 Here is why fuzzing in the Rust/WASM world is a completely different beast than the EVM.
 
@@ -32,7 +32,7 @@ In Soroban, even in tests, you often cannot touch storage unless you are explici
 ### 4. The WASM Performance Trade-off
 While the setup is more manual, the performance is devastatingly fast. Because you are fuzzing compiled WASM/Rust code at nearly native speeds, you can often reach execution rates of **10,000+ runs per second**. 
 
-In a recent campaign for a lending protocol, we found a critical logic overflow in under 10 seconds—an edge case that would have required millions of "random" manual transactions to hit on a testnet.
+In a recent campaign for a lending protocol, we found a critical logic overflow in under 10 seconds: an edge case that would have required millions of "random" manual transactions to hit on a testnet.
 
 ---
 

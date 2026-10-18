@@ -109,3 +109,94 @@ updates:
       scripts-minor-patch:
         patterns: ["*"]
         update-types: ["minor", "patch"]
+
+  # ── npm: published TypeScript SDK ───────────────────────────────────────────
+  # The SDK ships to third-party integrators, so a vulnerable transitive
+  # dependency here reaches downstream consumers.
+  - package-ecosystem: "npm"
+    directory: "/sdk"
+    schedule:
+      interval: "daily"
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5
+    groups:
+      sdk-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    ignore:
+      # tsup major upgrades change the build output layout
+      - dependency-name: "tsup"
+        update-types: ["version-update:semver-major"]
+      # TypeScript major bumps surface new strictness errors across the SDK
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+
+  # ── cargo: indexer service ─────────────────────────────────────────────────
+  # The indexer is a standalone crate outside the /contracts workspace, so it
+  # needs its own update entry.
+  - package-ecosystem: "cargo"
+    directory: "/indexer"
+    schedule:
+      interval: "daily"
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 3
+    groups:
+      indexer-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    ignore:
+      # sqlx major bumps change the query macros and require a re-audit
+      - dependency-name: "sqlx"
+        update-types: ["version-update:semver-major"]
+
+  # ── npm: k6 load-test suite ────────────────────────────────────────────────
+  - package-ecosystem: "npm"
+    directory: "/tests/load"
+    schedule:
+      interval: "daily"
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 2
+    groups:
+      load-tests-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  # ── docker: production base images ─────────────────────────────────────────
+  # Without a docker ecosystem entry the node:22-alpine and other base images in
+  # the production Dockerfiles are never bumped, so base-image advisories
+  # never produce a PR.
+  - package-ecosystem: "docker"
+    directory: "/backend"
+    schedule:
+      interval: "daily"
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 3
+    groups:
+      backend-docker:
+        patterns: ["*"]
+
+  - package-ecosystem: "docker"
+    directory: "/frontend"
+    schedule:
+      interval: "daily"
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 3
+    groups:
+      frontend-docker:
+        patterns: ["*"]
+
+  - package-ecosystem: "docker"
+    directory: "/indexer"
+    schedule:
+      interval: "daily"
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 3
+    groups:
+      indexer-docker:
+        patterns: ["*"]

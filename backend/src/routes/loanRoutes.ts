@@ -24,6 +24,7 @@ import { requireTenantAccess } from '../middleware/rbac.js';
 import { requireLoanBorrowerAccess, requireLoanOwner } from '../middleware/loanAccess.js';
 import { validate, validateBody, validateParams, validateQuery } from '../middleware/validation.js';
 import { idempotencyMiddleware } from '../middleware/idempotency.js';
+import { strictRateLimiter } from '../middleware/rateLimiter.js';
 import { borrowerParamSchema } from '../schemas/stellarSchemas.js';
 import {
   previewAmortizationSchema,
@@ -144,7 +145,14 @@ router.get('/config', getLoanConfigEndpoint);
  *         description: Reject transaction built
  */
 
-router.post('/:loanId/build-cancel', requireJwtAuth, requireLoanOwner, buildCancelLoanTx);
+router.post(
+  '/:loanId/build-cancel',
+  strictRateLimiter,
+  requireJwtAuth,
+  requireScopes('write:loans'),
+  requireLoanOwner,
+  buildCancelLoanTx,
+);
 
 /**
  * @swagger
@@ -167,8 +175,8 @@ router.post('/:loanId/build-cancel', requireJwtAuth, requireLoanOwner, buildCanc
  *             required: [amount, termDays]
  *             properties:
  *               amount:
- *                 type: integer
- *                 minimum: 1
+ *                 type: number
+ *                 description: Loan amount in whole tokens (e.g. USDC), up to 7 decimal places
  *                 example: 10000
  *               termDays:
  *                 type: integer
@@ -269,7 +277,14 @@ router.post(
  *       404:
  *         description: Loan not found
  */
-router.post('/:loanId/contest-default', requireJwtAuth, requireLoanOwner, contestDefault);
+router.post(
+  '/:loanId/contest-default',
+  strictRateLimiter,
+  requireJwtAuth,
+  requireScopes('write:loans'),
+  requireLoanOwner,
+  contestDefault,
+);
 
 /**
  * @swagger
@@ -588,7 +603,7 @@ router.get(
  *   post:
  *     summary: Build an unsigned loan request transaction
  *     description: >
- *       Builds an unsigned Soroban `request_loan(borrower, amount)` transaction XDR.
+ *       Builds an unsigned Soroban `request_loan(borrower, amount, term)` transaction XDR.
  *       The frontend signs it with the user's wallet and submits via POST /api/loans/submit.
  *     tags: [Loans]
  *     security:
@@ -602,14 +617,19 @@ router.get(
  *             required:
  *               - amount
  *               - borrowerPublicKey
+ *               - termLedgers
  *             properties:
  *               amount:
  *                 type: number
- *                 description: Loan amount requested
+ *                 description: Loan amount requested in whole tokens (e.g. USDC), up to 7 decimal places
  *                 example: 1000
  *               borrowerPublicKey:
  *                 type: string
  *                 description: Borrower's Stellar public key (must match JWT)
+ *               termLedgers:
+ *                 type: integer
+ *                 description: Loan term in ledgers (about 17280 per day)
+ *                 example: 518400
  *     responses:
  *       200:
  *         description: Unsigned transaction XDR returned
@@ -624,6 +644,7 @@ router.get(
  */
 router.post(
   '/request',
+  strictRateLimiter,
   requireJwtAuth,
   requireScopes('write:loans'),
   validateBody(requestLoanSchema),
@@ -660,8 +681,8 @@ router.post(
  *               - borrowerPublicKey
  *             properties:
  *               amount:
- *                 type: integer
- *                 description: Amount of collateral to deposit
+ *                 type: number
+ *                 description: Amount of collateral to deposit in whole tokens (e.g. USDC), up to 7 decimal places
  *               borrowerPublicKey:
  *                 type: string
  *                 description: Borrower's Stellar public key
@@ -677,6 +698,7 @@ router.post(
  */
 router.post(
   '/:loanId/build-deposit-collateral',
+  strictRateLimiter,
   requireJwtAuth,
   requireScopes('write:loans'),
   requireLoanOwner,
@@ -728,6 +750,7 @@ router.post(
  */
 router.post(
   '/:loanId/build-release-collateral',
+  strictRateLimiter,
   requireJwtAuth,
   requireScopes('write:loans'),
   requireLoanOwner,
@@ -767,8 +790,8 @@ router.post(
  *               - borrowerPublicKey
  *             properties:
  *               newAmount:
- *                 type: integer
- *                 description: New loan principal amount
+ *                 type: number
+ *                 description: New loan principal amount in whole tokens (e.g. USDC), up to 7 decimal places
  *               newTerm:
  *                 type: integer
  *                 description: New loan term in ledgers
@@ -787,6 +810,7 @@ router.post(
  */
 router.post(
   '/:loanId/build-refinance',
+  strictRateLimiter,
   requireJwtAuth,
   requireScopes('write:loans'),
   requireLoanOwner,
@@ -842,6 +866,7 @@ router.post(
  */
 router.post(
   '/:loanId/build-extend',
+  strictRateLimiter,
   requireJwtAuth,
   requireScopes('write:loans'),
   requireLoanOwner,
@@ -893,6 +918,7 @@ router.post(
  */
 router.post(
   '/:loanId/liquidate/build',
+  strictRateLimiter,
   requireJwtAuth,
   requireScopes('write:loans'),
   validateParams(repayLoanParamsSchema),
@@ -937,6 +963,7 @@ router.post(
  */
 router.post(
   '/submit',
+  strictRateLimiter,
   requireJwtAuth,
   requireScopes('write:loans'),
   validateBody(submitTxSchema),
@@ -975,7 +1002,7 @@ router.post(
  *             properties:
  *               amount:
  *                 type: number
- *                 description: Repayment amount
+ *                 description: Repayment amount in whole tokens (e.g. USDC), up to 7 decimal places
  *                 example: 500
  *               borrowerPublicKey:
  *                 type: string
@@ -998,6 +1025,7 @@ router.post(
  */
 router.post(
   '/:loanId/repay',
+  strictRateLimiter,
   requireJwtAuth,
   requireScopes('write:loans'),
   requireLoanOwner,
@@ -1054,6 +1082,7 @@ router.post(
  */
 router.post(
   '/:loanId/submit',
+  strictRateLimiter,
   requireJwtAuth,
   requireScopes('write:loans'),
   requireLoanOwner,

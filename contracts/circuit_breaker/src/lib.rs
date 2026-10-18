@@ -3,9 +3,9 @@
 //!
 //! Provides a defense-in-depth kill switch for the protocol:
 //!
-//! * **Global pause** — halts every guarded function across all contracts.
-//! * **Contract pause** — halts every guarded function of a single contract.
-//! * **Function pause** — halts a single function on a single contract.
+//! * **Global pause**: halts every guarded function across all contracts.
+//! * **Contract pause**: halts every guarded function of a single contract.
+//! * **Function pause**: halts a single function on a single contract.
 //!
 //! Any member of the governance signer set (the "security council", by
 //! default 5 members) may trip a pause. Lifting a pause requires a
@@ -202,11 +202,11 @@ impl CircuitBreaker {
 
     /// Constructor.
     ///
-    /// `admin`    — protocol admin (may rotate signers, threshold, timelock,
+    /// `admin`:    protocol admin (may rotate signers, threshold, timelock,
     ///              cancel proposals). Need not be a signer.
-    /// `signers`  — governance security-council members (1..=MAX_SIGNERS).
-    /// `threshold`— approvals required to execute an override (default 3).
-    /// `override_timelock` — seconds the override must wait before executing
+    /// `signers`:  governance security-council members (1..=MAX_SIGNERS).
+    /// `threshold`: approvals required to execute an override (default 3).
+    /// `override_timelock`: seconds the override must wait before executing
     ///              (default 24h, minimum 1h).
     pub fn __constructor(
         env: Env,
@@ -573,35 +573,58 @@ impl CircuitBreaker {
     /// active (non-expired) pause: global, contract-wide, or function-level.
     ///
     /// Guarded contracts call this at the top of sensitive entry points.
+    /// Performs lazy cleanup of expired pause entries to prevent unbounded storage growth.
     pub fn is_blocked(env: Env, contract: Address, function: Symbol) -> bool {
         let now = env.ledger().timestamp();
 
-        // Global pause.
+        // Global pause cleanup: remove if expired.
         if let Some(expiry) = env.storage().instance().get::<Symbol, u64>(&KEY_GLOBAL) {
             if now < expiry {
                 return true;
             }
+            env.storage().instance().remove(&KEY_GLOBAL);
         }
 
-        let state: Map<Address, Map<Symbol, u64>> = env
+        let mut state: Map<Address, Map<Symbol, u64>> = env
             .storage()
             .instance()
             .get(&KEY_STATE)
             .unwrap_or(Map::new(&env));
 
-        if let Some(inner) = state.get(contract.clone()) {
+        if let Some(mut inner) = state.get(contract.clone()) {
             let wildcard = Self::wildcard(&env);
-            if let Some(expiry) = inner.get(wildcard) {
+            let mut should_remove_contract = false;
+
+            // Check and clean contract-wide pause.
+            if let Some(expiry) = inner.get(wildcard.clone()) {
                 if now < expiry {
                     return true;
                 }
+                inner.remove(wildcard);
             }
-            if let Some(expiry) = inner.get(function) {
+
+            // Check and clean function-specific pause.
+            if let Some(expiry) = inner.get(function.clone()) {
                 if now < expiry {
                     return true;
                 }
+                inner.remove(function);
+            }
+
+            // Update storage only if inner map is not empty.
+            if inner.is_empty() {
+                state.remove(contract);
+                should_remove_contract = true;
+            } else {
+                state.set(contract.clone(), inner);
+            }
+
+            // Update root state map only if it changed.
+            if should_remove_contract || !state.is_empty() {
+                env.storage().instance().set(&KEY_STATE, &state);
             }
         }
+
         false
     }
 

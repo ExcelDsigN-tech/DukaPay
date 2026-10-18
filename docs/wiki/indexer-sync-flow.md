@@ -64,4 +64,4 @@ The indexer runs as a background process (`indexerManager.ts`) that initiates pe
 - `backend/src/db/connection.js`: Database connection and query execution.
 
 ## Related Documentation
-- [Indexer Recovery Runbook](../runbooks/indexer-recovery.md) — Procedures for handling indexer lag, RPC outages, and quarantined events.
+- [Indexer Recovery Runbook](../runbooks/indexer-recovery.md): Procedures for handling indexer lag, RPC outages, and quarantined events.

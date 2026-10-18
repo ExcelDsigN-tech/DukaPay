@@ -5,7 +5,6 @@ import {
   getScoreBreakdown,
   getOnChainScoreHistory,
   getRemittanceNft,
-  getLeaderboard,
 } from '../controllers/scoreController.js';
 import { validate } from '../middleware/validation.js';
 import {
@@ -16,55 +15,11 @@ import {
 } from '../schemas/scoreSchemas.js';
 import { requireApiKey } from '../middleware/auth.js';
 import { scoreUpdateRateLimit } from '../middleware/rateLimitMiddleware.js';
+import { scoreReadRateLimiter } from '../middleware/rateLimiter.js';
 import { requireJwtAuth, requireScopes } from '../middleware/jwtAuth.js';
 import { requireTenantAccess } from '../middleware/rbac.js';
 
 const router = Router();
-
-/**
- * @swagger
- * /score/leaderboard:
- *   get:
- *     summary: Retrieve the credit score leaderboard
- *     description: >
- *       Returns the top 50 credit scores ordered descending. Public endpoint;
- *       cached for 60 seconds. Each entry contains the wallet address, its
- *       current score, and the corresponding band.
- *     tags: [Score]
- *     responses:
- *       200:
- *         description: Leaderboard retrieved successfully.
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               required: [success, leaderboard, source]
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 leaderboard:
- *                   type: array
- *                   items:
- *                     type: object
- *                     required: [userId, score, band]
- *                     properties:
- *                       userId:
- *                         type: string
- *                         example: GBABCDEFGHIJK...
- *                       score:
- *                         type: integer
- *                         example: 750
- *                       band:
- *                         type: string
- *                         enum: [Excellent, Good, Fair, Poor]
- *                 source:
- *                   type: string
- *                   enum: [cache, database]
- *       500:
- *         description: Internal server error.
- */
-router.get('/leaderboard', getLeaderboard);
 
 /**
  * @swagger
@@ -106,6 +61,7 @@ router.get('/leaderboard', getLeaderboard);
 router.get(
   '/:userId',
   requireJwtAuth,
+  scoreReadRateLimiter,
   requireScopes('read:score'),
   requireTenantAccess,
   validate(getScoreSchema),
@@ -143,6 +99,7 @@ router.get(
 router.get(
   '/:walletAddress/history',
   requireJwtAuth,
+  scoreReadRateLimiter,
   requireScopes('read:score'),
   requireTenantAccess,
   validate(getScoreHistorySchema),
@@ -212,6 +169,7 @@ router.get(
 router.get(
   '/:walletAddress/nft',
   requireJwtAuth,
+  scoreReadRateLimiter,
   requireScopes('read:score'),
   requireTenantAccess,
   validate(getRemittanceNftSchema),
@@ -254,6 +212,7 @@ router.get(
 router.get(
   '/:userId/breakdown',
   requireJwtAuth,
+  scoreReadRateLimiter,
   requireScopes('read:score'),
   requireTenantAccess,
   validate(getScoreSchema),
@@ -305,7 +264,7 @@ router.get(
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  *       401:
- *         description: Unauthorised — missing or invalid API key.
+ *         description: Unauthorised (missing or invalid API key).
  *         content:
  *           application/json:
  *             schema:

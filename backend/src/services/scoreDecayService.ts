@@ -1,4 +1,4 @@
-// Service for score decay logic — exponential time-weighted decay
+// Service for score decay logic: exponential time-weighted decay
 // Implements: score * e^(-lambda * days_since_event) where lambda = ln(2)/halfLife
 import { query } from '../db/connection.js';
 

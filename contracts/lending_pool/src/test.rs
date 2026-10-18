@@ -1,9 +1,10 @@
 use crate::{events, LendingPool, LendingPoolClient};
+use circuit_breaker::{CircuitBreaker, CircuitBreakerClient};
 use soroban_sdk::testutils::{Address as _, Events as _, Ledger as _};
 use soroban_sdk::token::Client as TokenClient;
 use soroban_sdk::token::StellarAssetClient;
 use soroban_sdk::xdr::ToXdr;
-use soroban_sdk::{Address, BytesN, Env, FromVal, IntoVal, TryFromVal};
+use soroban_sdk::{Address, BytesN, Env, FromVal, IntoVal, Symbol, TryFromVal, Vec};
 
 fn create_token_contract<'a>(
     env: &Env,
@@ -17,6 +18,22 @@ fn create_token_contract<'a>(
 
 fn create_upgrade_hash(env: &Env) -> BytesN<32> {
     BytesN::from_array(env, &[7u8; 32])
+}
+
+/// Deploy a governance `CircuitBreaker` with three signers and threshold 1,
+/// returning the contract id, client and a signer the tests can act as.
+fn deploy_circuit_breaker(env: &Env) -> (Address, CircuitBreakerClient, Address) {
+    let admin = Address::generate(env);
+    let s1 = Address::generate(env);
+    let s2 = Address::generate(env);
+    let s3 = Address::generate(env);
+    let mut signers = Vec::new(env);
+    signers.push_back(s1.clone());
+    signers.push_back(s2);
+    signers.push_back(s3);
+    let id = env.register(CircuitBreaker, (&admin, signers.clone(), 1u32, 3_600u64));
+    let client = CircuitBreakerClient::new(env, &id);
+    (id, client, s1)
 }
 
 #[test]
@@ -70,7 +87,7 @@ fn test_deposit_flow() {
 
     // First deposit: 1:1 share minting.
     assert_eq!(pool_client.get_shares(&provider, &token_id), 3000);
-    // No yield yet — asset value equals shares.
+    // No yield yet: asset value equals shares.
     assert_eq!(pool_client.get_deposit(&provider, &token_id), 3000);
     assert_eq!(pool_client.get_total_shares(&token_id), 3000);
 }
@@ -381,6 +398,117 @@ fn test_emergency_withdraw_bypasses_pause_and_cooldown() {
     assert_eq!(token_client.balance(&pool_id), 0);
 }
 
+// ── Circuit breaker integration (emergency_withdraw must not bypass it) ───────
+// #492/#493: emergency_withdraw deliberately bypasses the pool-internal pause
+// flag and the withdrawal cooldown, but it must still honour the DukaPay
+// CircuitBreaker (global, contract-level or function-level pauses), otherwise
+// the breaker's purpose of halting fund movement during an incident is
+// defeated.
+
+#[test]
+fn test_emergency_withdraw_blocked_by_global_pause() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let token_admin = Address::generate(&env);
+    let (token_id, stellar_asset_client, token_client) = create_token_contract(&env, &token_admin);
+
+    let pool_id = env.register(LendingPool, (&token_admin,));
+    let pool_client = LendingPoolClient::new(&env, &pool_id);
+
+    let (breaker_id, breaker_client, signer) = deploy_circuit_breaker(&env);
+    pool_client.set_circuit_breaker(&Some(breaker_id));
+
+    let provider = Address::generate(&env);
+    stellar_asset_client.mint(&provider, &1_500);
+    pool_client.deposit(&provider, &token_id, &1_500, &0);
+
+    breaker_client.pause_all(&signer);
+    assert!(breaker_client.is_blocked(&pool_id, &Symbol::new(&env, "withdraw")));
+
+    let result = pool_client.try_emergency_withdraw(&provider, &token_id, &1_500, &0);
+    assert_eq!(result, Err(Ok(crate::PoolError::CircuitBreakerTripped)));
+
+    assert_eq!(token_client.balance(&pool_id), 1_500);
+    assert_eq!(token_client.balance(&provider), 0);
+}
+
+#[test]
+fn test_emergency_withdraw_blocked_by_contract_pause() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let token_admin = Address::generate(&env);
+    let (token_id, stellar_asset_client, _token_client) = create_token_contract(&env, &token_admin);
+
+    let pool_id = env.register(LendingPool, (&token_admin,));
+    let pool_client = LendingPoolClient::new(&env, &pool_id);
+
+    let (breaker_id, breaker_client, signer) = deploy_circuit_breaker(&env);
+    pool_client.set_circuit_breaker(&Some(breaker_id));
+
+    let provider = Address::generate(&env);
+    stellar_asset_client.mint(&provider, &1_500);
+    pool_client.deposit(&provider, &token_id, &1_500, &0);
+
+    breaker_client.pause_contract(&signer, &pool_id);
+    assert!(breaker_client.is_contract_paused(&pool_id));
+
+    let result = pool_client.try_emergency_withdraw(&provider, &token_id, &1_500, &0);
+    assert_eq!(result, Err(Ok(crate::PoolError::CircuitBreakerTripped)));
+}
+
+#[test]
+fn test_emergency_withdraw_blocked_by_function_pause() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let token_admin = Address::generate(&env);
+    let (token_id, stellar_asset_client, _token_client) = create_token_contract(&env, &token_admin);
+
+    let pool_id = env.register(LendingPool, (&token_admin,));
+    let pool_client = LendingPoolClient::new(&env, &pool_id);
+
+    let (breaker_id, breaker_client, signer) = deploy_circuit_breaker(&env);
+    pool_client.set_circuit_breaker(&Some(breaker_id));
+
+    let provider = Address::generate(&env);
+    stellar_asset_client.mint(&provider, &1_500);
+    pool_client.deposit(&provider, &token_id, &1_500, &0);
+
+    breaker_client.pause_function(&signer, &pool_id, &Symbol::new(&env, "withdraw"));
+    assert!(breaker_client.is_function_paused(&pool_id, &Symbol::new(&env, "withdraw")));
+
+    let result = pool_client.try_emergency_withdraw(&provider, &token_id, &1_500, &0);
+    assert_eq!(result, Err(Ok(crate::PoolError::CircuitBreakerTripped)));
+}
+
+#[test]
+fn test_emergency_withdraw_allowed_when_unrelated_function_paused() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let token_admin = Address::generate(&env);
+    let (token_id, stellar_asset_client, token_client) = create_token_contract(&env, &token_admin);
+
+    let pool_id = env.register(LendingPool, (&token_admin,));
+    let pool_client = LendingPoolClient::new(&env, &pool_id);
+
+    let (breaker_id, breaker_client, signer) = deploy_circuit_breaker(&env);
+    pool_client.set_circuit_breaker(&Some(breaker_id));
+
+    let provider = Address::generate(&env);
+    stellar_asset_client.mint(&provider, &1_500);
+    pool_client.deposit(&provider, &token_id, &1_500, &0);
+
+    breaker_client.pause_function(&signer, &pool_id, &Symbol::new(&env, "deposit"));
+    assert!(!breaker_client.is_blocked(&pool_id, &Symbol::new(&env, "withdraw")));
+
+    pool_client.emergency_withdraw(&provider, &token_id, &1_500, &0);
+    assert_eq!(token_client.balance(&provider), 1_500);
+    assert_eq!(token_client.balance(&pool_id), 0);
+}
+
 // ── Deposit / Withdraw invariants ─────────────────────────────────────────────
 
 #[test]
@@ -447,7 +575,7 @@ fn test_share_price_increases_when_interest_arrives() {
 
     // Simulate loan repayment with 100 tokens of interest, realized through
     // the explicit accrual path (a bare transfer to the pool's address is
-    // deliberately ignored for pricing — see #1380).
+    // deliberately ignored for pricing).
     stellar_asset_client.mint(&token_admin, &100);
     pool_client.distribute_yield(&token_admin, &token_id, &100);
 
@@ -592,7 +720,7 @@ fn test_subsequent_depositor_does_not_dilute_existing_holders() {
 
     // provider_b deposits 1100 at the new exchange rate:
     //   shares_minted = 1100 * (1000 + 1000) / (1100 + 1000) = 1047
-    //   (rounded down — provider_b is *not* credited the pre-existing yield).
+    //   (rounded down; provider_b is *not* credited the pre-existing yield).
     pool_client.deposit(&provider_b, &token_id, &1_100, &0);
     // Managed assets: 2200 | Shares: 2047
 
@@ -643,7 +771,7 @@ fn test_full_loan_cycle_with_interest() {
     // return is a bare transfer paired with adjust_outstanding; the 80
     // interest is realized through the explicit accrual path (which
     // performs its own transfer) so it -- and only it -- moves the share
-    // price. A bare transfer alone would not (#1380).
+    // price. A bare transfer alone would not.
     stellar_asset_client.mint(&borrower, &80);
     token_client.transfer(&borrower, &pool_id, &800);
     pool_client.adjust_outstanding(&token_id, &-800);
@@ -1305,7 +1433,7 @@ fn test_withdrawal_with_utilization() {
     // (utilization does not dilute share price), but only 200 tokens are
     // actually liquid. The withdrawal must revert with InsufficientLiquidity
     // rather than silently paying out less than the shares are worth
-    // (#1380 bound-safety invariant).
+    // (bound-safety invariant).
     let result = pool_client.try_withdraw(&provider, &token_id, &500, &0);
     assert_eq!(result, Err(Ok(crate::PoolError::InsufficientLiquidity)));
     assert_eq!(token_client.balance(&provider), 0);
@@ -1600,10 +1728,35 @@ fn test_adjust_outstanding_zero_delta_is_a_no_op() {
     assert_eq!(pool_client.get_total_outstanding(&token), 1_000);
 }
 
-// ── #1380: slippage bounds & virtual-share/asset offset ───────────────────────
+#[test]
+fn test_adjust_outstanding_blocked_during_circuit_breaker_pause() {
+    // #494: `adjust_outstanding` mutates loan accounting, so it must honour
+    // the circuit breaker even though it is admin-gated.
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let token = Address::generate(&env);
+    let pool_id = env.register(LendingPool, (&admin,));
+    let pool_client = LendingPoolClient::new(&env, &pool_id);
+
+    let (breaker_id, breaker_client, signer) = deploy_circuit_breaker(&env);
+    pool_client.set_circuit_breaker(&Some(breaker_id));
+
+    pool_client.adjust_outstanding(&token, &1_000);
+
+    breaker_client.pause_all(&signer);
+
+    let result = pool_client.try_adjust_outstanding(&token, &500);
+    assert_eq!(result, Err(Ok(crate::PoolError::CircuitBreakerTripped)));
+
+    assert_eq!(pool_client.get_total_outstanding(&token), 1_000);
+}
+
+// ── slippage bounds & virtual-share/asset offset ───────────────────────
 //
 // These tests reproduce the single-ledger share-price manipulation described
-// in #1380 and assert it is now prevented: a bare token transfer to the
+// and assert it is now prevented: a bare token transfer to the
 // pool's address ("donation") cannot move the share price, the classic
 // first-depositor inflation attack is defused by the virtual offset, and
 // `min_shares_out`/`min_assets_out` cause settlement to revert rather than
@@ -1611,7 +1764,7 @@ fn test_adjust_outstanding_zero_delta_is_a_no_op() {
 
 #[test]
 fn test_donation_to_pool_address_does_not_move_share_price() {
-    // The exact extraction walkthrough from #1380, replayed against the
+    // The exact extraction walkthrough, replayed against the
     // fixed contract: attacker deposits a token unit, donates a huge amount
     // directly to the pool's token balance (bypassing `deposit`), then a
     // victim deposits. Under the pre-fix code the victim would be minted
@@ -1844,7 +1997,7 @@ fn test_round_trip_deposit_then_redeem_is_never_profitable() {
     // Property-style check over a range of deposit sizes and pool states
     // (including states perturbed by unsolicited donations): depositing `d`
     // and immediately redeeming all resulting shares must never return more
-    // than `d` (round-trip non-profitability, #1380). A fixed-seed
+    // than `d` (round-trip non-profitability). A fixed-seed
     // xorshift PRNG is used instead of pulling in a property-testing crate.
     fn next(state: &mut u64) -> u64 {
         *state ^= *state << 13;
@@ -2019,6 +2172,49 @@ fn test_reentrancy_guard_blocks_reentrant_withdraw() {
     });
     pool_client.withdraw(&provider, &token_id, &100, &0);
     assert_eq!(pool_client.get_shares(&provider, &token_id), 900);
+}
+
+#[test]
+fn test_loan_manager_yield_and_loss_update_share_nav() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let manager = Address::generate(&env);
+    let (token, stellar, _) = create_token_contract(&env, &admin);
+    let pool_id = env.register(LendingPool, (&admin,));
+    let pool = LendingPoolClient::new(&env, &pool_id);
+    pool.set_loan_manager(&manager);
+
+    let provider = Address::generate(&env);
+    stellar.mint(&provider, &1_000);
+    pool.deposit(&provider, &token, &1_000, &0);
+
+    pool.record_loan_yield(&token, &100);
+    assert_eq!(pool.get_pool_stats(&token).total_managed_assets, 1_100);
+    assert_eq!(pool.get_pool_stats(&token).total_yield_distributed, 100);
+
+    pool.record_loan_loss(&token, &200);
+    assert_eq!(pool.get_pool_stats(&token).total_managed_assets, 900);
+}
+
+#[test]
+fn test_only_configured_loan_manager_can_report_yield() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let manager = Address::generate(&env);
+    let (token, _, _) = create_token_contract(&env, &admin);
+    let pool_id = env.register(LendingPool, (&admin,));
+    let pool = LendingPoolClient::new(&env, &pool_id);
+    pool.set_loan_manager(&manager);
+
+    // Drop the permissive test authorizer: only the configured manager may
+    // satisfy the explicit require_auth in the reporting entrypoint.
+    env.mock_auths(&[]);
+    assert!(pool.try_record_loan_yield(&token, &100).is_err());
+    assert_eq!(pool.get_pool_stats(&token).total_managed_assets, 0);
 }
 
 #[test]

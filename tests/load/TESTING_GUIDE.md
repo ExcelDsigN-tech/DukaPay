@@ -43,7 +43,7 @@ Complete guide for running, analyzing, and maintaining load tests.
    # Set environment variables
    export TEST_ENV=staging
    export TEST_AUTH_TOKEN=your-token
-   export STAGING_API_URL=https://api.staging.dukapay.io
+   export STAGING_API_URL=https://your-staging-backend.example
    ```
 
 ## Test Scenarios
@@ -440,6 +440,7 @@ Located at `.github/workflows/load-tests.yml`
 4. Choose:
    - Environment: `staging` or `production`
    - Load profile: `smoke`, `normal`, `stress`, `spike`
+   - Target URL (optional): overrides the environment's API base URL
 5. Run
 
 ### Viewing CI Results
@@ -467,13 +468,13 @@ Located at `.github/workflows/load-tests.yml`
 **Solutions**:
 ```bash
 # Check API health
-curl https://api.staging.dukapay.io/health
+curl https://your-staging-backend.example/health
 
 # Verify auth token
 echo $TEST_AUTH_TOKEN
 
 # Check rate limits
-curl -I https://api.staging.dukapay.io/api/v1/pool/stats
+curl -I https://your-staging-backend.example/api/pool/stats
 
 # Review API logs
 kubectl logs -n dukapay deployment/api --tail=100
@@ -498,7 +499,7 @@ kubectl top pods -n dukapay
 # Connect to database and check slow query log
 
 # Check network latency
-ping api.staging.dukapay.io
+ping your-staging-backend.example
 
 # Scale up if needed
 kubectl scale deployment/api --replicas=5
@@ -520,10 +521,10 @@ kubectl scale deployment/api --replicas=5
 echo $STAGING_API_URL
 
 # Test connectivity
-curl -v https://api.staging.dukapay.io
+curl -v https://your-staging-backend.example
 
 # Check DNS
-nslookup api.staging.dukapay.io
+nslookup your-staging-backend.example
 
 # Verify firewall rules
 ```
@@ -570,7 +571,7 @@ k6 run --vus 10 --duration 30s scenarios/api-read.js
 ```javascript
 // Modify scenario to test one endpoint
 export default function () {
-  const response = http.get('https://api.staging.dukapay.io/health');
+  const response = http.get('https://your-staging-backend.example/health');
   console.log(response.status, response.body);
   sleep(1);
 }
@@ -637,6 +638,3 @@ export default function () {
 
 For questions or issues:
 - **GitHub Issues**: Report bugs
-- **Telegram**: https://t.me/+eRqhka27TVo0NzM8
-- **Email**: ops@dukapay.io
-- **Documentation**: https://docs.dukapay.io

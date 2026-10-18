@@ -1,7 +1,7 @@
 //! Tests for the upgrade timelock + multi-sig governance (Issue #452).
 
 use crate::upgrade_timelock::{UPGRADE_TIMELOCK_SECONDS, UPGRADE_TTL_SECONDS};
-use crate::{GovernanceContract, GovernanceContractClient};
+use crate::{GovernanceContract, GovernanceContractClient, GovernanceError};
 use soroban_sdk::testutils::{Address as _, Ledger, LedgerInfo};
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Symbol, Vec};
 
@@ -74,7 +74,7 @@ fn setup() -> Ctx {
     let gov = GovernanceContractClient::new(&env, &gov_id);
 
     let target_client = MockUpgradeableClient::new(&env, &target_id);
-    // Governance is the admin of the target — upgrades must route through it.
+    // Governance is the admin of the target: upgrades must route through it.
     target_client.set_admin(&gov_id);
 
     let signers = [
@@ -185,6 +185,18 @@ fn non_signer_cannot_queue() {
     let c = setup();
     let stranger = Address::generate(&c.env);
     c.gov.queue_upgrade(&stranger, &c.target, &hash(&c.env, 1));
+}
+
+#[test]
+fn queue_upgrade_rejects_governance_self_upgrade_target() {
+    let c = setup();
+
+    let result = c
+        .gov
+        .try_queue_upgrade(&c.signers[0], &c.gov.address, &hash(&c.env, 1));
+
+    assert_eq!(result, Err(Ok(GovernanceError::InvalidUpgradeTarget)));
+    assert!(c.gov.get_pending_upgrade().is_none());
 }
 
 #[test]

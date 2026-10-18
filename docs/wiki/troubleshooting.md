@@ -27,7 +27,7 @@ CircuitBreakerClient::get_pause_state()
 
 **Resolution:**
 - Local pause: admin calls `unpause`.
-- Circuit breaker: a 3-of-5 governance override is required —
+- Circuit breaker: a 3-of-5 governance override is required:
   `propose_override` → `approve_override` (×threshold) → `execute_override`
   (after the override timelock). Note every pause **auto-expires after 72h**.
 
@@ -62,9 +62,8 @@ the oracle signer key (see key management).
 
 ## Emergency contacts
 
-- Pause authority (security council signers) for the CircuitBreaker.
+- Pause authority (governance signers, not yet assigned) for the CircuitBreaker.
 - Governance admins for `MultisigGovernance` upgrades.
-- On-call in the Telegram ops channel.
 
 ## Log hygiene
 

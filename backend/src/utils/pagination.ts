@@ -3,17 +3,17 @@
  *
  * This module deliberately holds two *complementary* pagination strategies that
  * previously lived in separate files (`lib/pagination.ts` and
- * `utils/pagination.ts`). They were never duplicates — their APIs are disjoint —
+ * `utils/pagination.ts`). They were never duplicates (their APIs are disjoint),
  * but two modules with the same filename in sibling folders meant a controller
  * could import the wrong one, and `indexerController.ts` in fact imported from
  * both. Consolidating them removes that ambiguity and lets the shared limits be
  * declared once.
  *
- *  1. **Offset pagination and query parsing** — parses Express query params
+ *  1. **Offset pagination and query parsing**: parses Express query params
  *     (limit/offset/sort/status/date_range/amount_range) and builds response
  *     envelopes. Use for admin-style listings where a total count is wanted.
  *
- *  2. **Keyset (cursor) pagination** — opaque base64url cursors over
+ *  2. **Keyset (cursor) pagination**: opaque base64url cursors over
  *     (created_at, seq) with a pinned snapshot seq, for feeds that must stay
  *     stable under concurrent writes. Prefer this for user-facing lists.
  *

@@ -8,11 +8,7 @@
   "servers": [
     {
       "url": "/api",
-      "description": "Legacy API base path"
-    },
-    {
-      "url": "/api/v1",
-      "description": "Versioned API base path"
+      "description": "API base path"
     }
   ],
   "components": {
@@ -71,6 +67,116 @@
           "success",
           "message"
         ]
+      },
+      "AgentDashboard": {
+        "type": "object",
+        "properties": {
+          "agentPublicKey": {
+            "type": "string"
+          },
+          "floatUtilization": {
+            "type": "object",
+            "properties": {
+              "totalFloat": {
+                "type": "number"
+              },
+              "allocated": {
+                "type": "number"
+              },
+              "utilizationPct": {
+                "type": "number"
+              }
+            }
+          },
+          "earnings": {
+            "type": "object",
+            "properties": {
+              "daily": {
+                "type": "number"
+              },
+              "weekly": {
+                "type": "number"
+              },
+              "monthly": {
+                "type": "number"
+              },
+              "total": {
+                "type": "number"
+              }
+            }
+          },
+          "borrowerPortfolio": {
+            "type": "object",
+            "properties": {
+              "totalLoans": {
+                "type": "integer"
+              },
+              "activeLoans": {
+                "type": "integer"
+              },
+              "defaultedLoans": {
+                "type": "integer"
+              },
+              "totalOutstanding": {
+                "type": "number"
+              },
+              "byStatus": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "pendingSettlements": {
+            "type": "object",
+            "properties": {
+              "count": {
+                "type": "integer"
+              },
+              "totalValue": {
+                "type": "number"
+              }
+            }
+          },
+          "collateralRatio": {
+            "type": "object",
+            "properties": {
+              "totalCollateral": {
+                "type": "number"
+              },
+              "totalDebt": {
+                "type": "number"
+              },
+              "ratio": {
+                "type": "number"
+              }
+            }
+          },
+          "recentTransactions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string"
+                },
+                "amount": {
+                  "type": "number",
+                  "description": "Whole tokens for money events; raw value otherwise."
+                },
+                "loanId": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "timestamp": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          }
+        }
       },
       "SimpleSuccessResponse": {
         "type": "object",
@@ -308,8 +414,20 @@
             "type": "string"
           },
           "amount": {
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "nullable": true,
+            "description": "Money events: whole tokens (e.g. 250.5 USDC). Config events (rates, ledgers, scores): the raw on-chain value."
+          },
+          "amountStroops": {
             "type": "string",
-            "nullable": true
+            "description": "Exact amount in stroops (10^-7 token). Money events only."
           },
           "timestamp": {
             "type": "string",
@@ -1242,7 +1360,20 @@
             "type": "string"
           },
           "amount": {
-            "type": "string"
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "nullable": true,
+            "description": "Money events: whole tokens (e.g. 250.5 USDC). Config events (rates, ledgers, scores): the raw on-chain value."
+          },
+          "amountStroops": {
+            "type": "string",
+            "description": "Exact amount in stroops (10^-7 token). Money events only."
           },
           "ledger": {
             "type": "integer"
@@ -1917,6 +2048,9 @@
                   "action": {
                     "type": "string",
                     "enum": [
+                      "uphold",
+                      "overturn",
+                      "settle",
                       "confirm",
                       "reverse"
                     ],
@@ -1924,11 +2058,14 @@
                   },
                   "resolution": {
                     "type": "string",
-                    "description": "Detailed reason for resolution (minimum 5 characters)"
+                    "minLength": 5,
+                    "maxLength": 1000,
+                    "description": "Detailed reason for resolution (minimum 5 characters, maximum 1000 characters)"
                   },
                   "adminNote": {
                     "type": "string",
-                    "description": "Optional admin note visible to borrower"
+                    "maxLength": 500,
+                    "description": "Optional admin note visible to borrower (maximum 500 characters)"
                   }
                 }
               }
@@ -1967,7 +2104,9 @@
                 "open",
                 "resolved",
                 "rejected",
-                "all"
+                "all",
+                "pending",
+                "dismissed"
               ]
             },
             "description": "Filter by dispute status (default `open`)"
@@ -2182,16 +2321,21 @@
                   "action": {
                     "type": "string",
                     "enum": [
+                      "uphold",
+                      "overturn",
+                      "settle",
                       "confirm",
                       "reverse"
                     ]
                   },
                   "resolution": {
                     "type": "string",
-                    "minLength": 5
+                    "minLength": 5,
+                    "maxLength": 1000
                   },
                   "adminNote": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 500
                   }
                 }
               }
@@ -2256,6 +2400,7 @@
                 "properties": {
                   "admin_note": {
                     "type": "string",
+                    "maxLength": 500,
                     "description": "Optional note written as the resolution reason"
                   }
                 }
@@ -2734,6 +2879,344 @@
         }
       }
     },
+    "/admin/users": {
+      "get": {
+        "summary": "List users (paginated, filterable)",
+        "tags": [
+          "Admin"
+        ],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "maximum": 200
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            }
+          },
+          {
+            "in": "query",
+            "name": "role",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "active",
+                "suspended"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated user list"
+          }
+        }
+      }
+    },
+    "/admin/users/{publicKey}": {
+      "get": {
+        "summary": "Get a single user's details",
+        "tags": [
+          "Admin"
+        ],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "publicKey",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User details"
+          },
+          "404": {
+            "description": "User not found"
+          }
+        }
+      }
+    },
+    "/admin/users/{publicKey}/status": {
+      "patch": {
+        "summary": "Suspend or activate a user",
+        "tags": [
+          "Admin"
+        ],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "isSuspended"
+                ],
+                "properties": {
+                  "isSuspended": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Status updated"
+          }
+        }
+      }
+    },
+    "/admin/users/{publicKey}/role": {
+      "patch": {
+        "summary": "Change a user's role",
+        "tags": [
+          "Admin"
+        ],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "role"
+                ],
+                "properties": {
+                  "role": {
+                    "type": "string",
+                    "enum": [
+                      "admin",
+                      "super_admin",
+                      "ops",
+                      "support",
+                      "borrower",
+                      "lender"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Role updated"
+          }
+        }
+      }
+    },
+    "/admin/kyc/override": {
+      "post": {
+        "summary": "Override KYC verification status for a user",
+        "tags": [
+          "Admin"
+        ],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "publicKey",
+                  "verified"
+                ],
+                "properties": {
+                  "publicKey": {
+                    "type": "string"
+                  },
+                  "verified": {
+                    "type": "boolean"
+                  },
+                  "level": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "KYC status overridden"
+          }
+        }
+      }
+    },
+    "/admin/system/health": {
+      "get": {
+        "summary": "Get system health status (DB, Redis, Stellar RPC, jobs)",
+        "tags": [
+          "Admin"
+        ],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Health report"
+          }
+        }
+      }
+    },
+    "/admin/settlement/trigger": {
+      "post": {
+        "summary": "Manually trigger batch settlement run",
+        "tags": [
+          "Admin"
+        ],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "loanIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer"
+                    }
+                  },
+                  "force": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Settlement run completed"
+          }
+        }
+      }
+    },
+    "/admin/feature-flags": {
+      "get": {
+        "summary": "List all feature flags",
+        "tags": [
+          "Admin"
+        ],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Feature flags list"
+          }
+        }
+      }
+    },
+    "/admin/feature-flags/{key}": {
+      "put": {
+        "summary": "Update a feature flag's enabled state or value",
+        "tags": [
+          "Admin"
+        ],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "value": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Flag updated"
+          },
+          "404": {
+            "description": "Flag not found"
+          }
+        }
+      }
+    },
     "/agents/my-assignments": {
       "get": {
         "summary": "List borrower wallets assigned to the authenticated agent",
@@ -2914,6 +3397,49 @@
         }
       }
     },
+    "/agents/dashboard": {
+      "get": {
+        "summary": "Get agent dashboard metrics",
+        "tags": [
+          "Agent"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Agent dashboard data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentDashboard"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agents/dashboard/cache": {
+      "delete": {
+        "summary": "Clear agent dashboard cache",
+        "tags": [
+          "Agent"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cache cleared"
+          }
+        }
+      }
+    },
     "/audit/proof/{logId}": {
       "get": {
         "summary": "Get the Merkle inclusion proof for an audit log",
@@ -3003,7 +3529,7 @@
             "description": "Invalid log ID."
           },
           "401": {
-            "description": "Unauthorised — missing or invalid API key."
+            "description": "Unauthorised (missing or invalid API key)."
           },
           "404": {
             "description": "Audit proof not found."
@@ -3257,6 +3783,28 @@
         "responses": {
           "200": {
             "description": "Logged out successfully"
+          },
+          "401": {
+            "description": "Missing or invalid Bearer token"
+          }
+        }
+      }
+    },
+    "/auth/logout-all": {
+      "post": {
+        "summary": "Revoke all sessions for the authenticated user",
+        "description": "Invalidates all active token families for the current user. Use this after credential compromise to revoke all devices immediately.\n",
+        "tags": [
+          "Auth"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "All sessions revoked successfully"
           },
           "401": {
             "description": "Missing or invalid Bearer token"
@@ -3792,8 +4340,8 @@
                 ],
                 "properties": {
                   "amount": {
-                    "type": "integer",
-                    "minimum": 1,
+                    "type": "number",
+                    "description": "Loan amount in whole tokens (e.g. USDC), up to 7 decimal places",
                     "example": 10000
                   },
                   "termDays": {
@@ -4397,7 +4945,7 @@
     "/loans/request": {
       "post": {
         "summary": "Build an unsigned loan request transaction",
-        "description": "Builds an unsigned Soroban `request_loan(borrower, amount)` transaction XDR. The frontend signs it with the user's wallet and submits via POST /api/loans/submit.\n",
+        "description": "Builds an unsigned Soroban `request_loan(borrower, amount, term)` transaction XDR. The frontend signs it with the user's wallet and submits via POST /api/loans/submit.\n",
         "tags": [
           "Loans"
         ],
@@ -4414,17 +4962,23 @@
                 "type": "object",
                 "required": [
                   "amount",
-                  "borrowerPublicKey"
+                  "borrowerPublicKey",
+                  "termLedgers"
                 ],
                 "properties": {
                   "amount": {
                     "type": "number",
-                    "description": "Loan amount requested",
+                    "description": "Loan amount requested in whole tokens (e.g. USDC), up to 7 decimal places",
                     "example": 1000
                   },
                   "borrowerPublicKey": {
                     "type": "string",
                     "description": "Borrower's Stellar public key (must match JWT)"
+                  },
+                  "termLedgers": {
+                    "type": "integer",
+                    "description": "Loan term in ledgers (about 17280 per day)",
+                    "example": 518400
                   }
                 }
               }
@@ -4486,8 +5040,8 @@
                 ],
                 "properties": {
                   "amount": {
-                    "type": "integer",
-                    "description": "Amount of collateral to deposit"
+                    "type": "number",
+                    "description": "Amount of collateral to deposit in whole tokens (e.g. USDC), up to 7 decimal places"
                   },
                   "borrowerPublicKey": {
                     "type": "string",
@@ -4608,8 +5162,8 @@
                 ],
                 "properties": {
                   "newAmount": {
-                    "type": "integer",
-                    "description": "New loan principal amount"
+                    "type": "number",
+                    "description": "New loan principal amount in whole tokens (e.g. USDC), up to 7 decimal places"
                   },
                   "newTerm": {
                     "type": "integer",
@@ -4848,7 +5402,7 @@
                 "properties": {
                   "amount": {
                     "type": "number",
-                    "description": "Repayment amount",
+                    "description": "Repayment amount in whole tokens (e.g. USDC), up to 7 decimal places",
                     "example": 500
                   },
                   "borrowerPublicKey": {
@@ -5551,7 +6105,7 @@
                   },
                   "amount": {
                     "type": "number",
-                    "description": "Amount to deposit",
+                    "description": "Amount to deposit in whole tokens (e.g. USDC), up to 7 decimal places",
                     "example": 1000
                   }
                 }
@@ -5613,7 +6167,7 @@
                   },
                   "amount": {
                     "type": "number",
-                    "description": "Amount (shares) to withdraw",
+                    "description": "Pool shares to withdraw, up to 7 decimal places (same scale as the token)",
                     "example": 500
                   }
                 }
@@ -5675,7 +6229,7 @@
                   },
                   "shares": {
                     "type": "number",
-                    "description": "Amount (shares) to withdraw"
+                    "description": "Pool shares to withdraw, up to 7 decimal places (same scale as the token)"
                   }
                 }
               }
@@ -5932,6 +6486,24 @@
         }
       }
     },
+    "/privacy/dsar/pending": {
+      "get": {
+        "summary": "List pending DSAR requests (admin only)",
+        "tags": [
+          "Privacy"
+        ],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of pending DSARs"
+          }
+        }
+      }
+    },
     "/privacy/dsar/{dsarId}": {
       "get": {
         "summary": "Check DSAR request status",
@@ -5959,24 +6531,6 @@
           },
           "404": {
             "description": "DSAR not found"
-          }
-        }
-      }
-    },
-    "/privacy/dsar/pending": {
-      "get": {
-        "summary": "List pending DSAR requests (admin only)",
-        "tags": [
-          "Privacy"
-        ],
-        "security": [
-          {
-            "ApiKeyAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "List of pending DSARs"
           }
         }
       }
@@ -6318,78 +6872,6 @@
         }
       }
     },
-    "/score/leaderboard": {
-      "get": {
-        "summary": "Retrieve the credit score leaderboard",
-        "description": "Returns the top 50 credit scores ordered descending. Public endpoint; cached for 60 seconds. Each entry contains the wallet address, its current score, and the corresponding band.\n",
-        "tags": [
-          "Score"
-        ],
-        "responses": {
-          "200": {
-            "description": "Leaderboard retrieved successfully.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "success",
-                    "leaderboard",
-                    "source"
-                  ],
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": true
-                    },
-                    "leaderboard": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "required": [
-                          "userId",
-                          "score",
-                          "band"
-                        ],
-                        "properties": {
-                          "userId": {
-                            "type": "string",
-                            "example": "GBABCDEFGHIJK..."
-                          },
-                          "score": {
-                            "type": "integer",
-                            "example": 750
-                          },
-                          "band": {
-                            "type": "string",
-                            "enum": [
-                              "Excellent",
-                              "Good",
-                              "Fair",
-                              "Poor"
-                            ]
-                          }
-                        }
-                      }
-                    },
-                    "source": {
-                      "type": "string",
-                      "enum": [
-                        "cache",
-                        "database"
-                      ]
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server error."
-          }
-        }
-      }
-    },
     "/score/{userId}": {
       "get": {
         "summary": "Retrieve a user's credit score",
@@ -6674,7 +7156,7 @@
             }
           },
           "401": {
-            "description": "Unauthorised — missing or invalid API key.",
+            "description": "Unauthorised (missing or invalid API key).",
             "content": {
               "application/json": {
                 "schema": {
@@ -7174,14 +7656,16 @@
             "in": "query",
             "name": "actor",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "maxLength": 255
             }
           },
           {
             "in": "query",
             "name": "action",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "maxLength": 255
             }
           },
           {
@@ -7211,7 +7695,20 @@
             "in": "query",
             "name": "limit",
             "schema": {
-              "type": "integer"
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 25
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000,
+              "default": 0
             }
           },
           {

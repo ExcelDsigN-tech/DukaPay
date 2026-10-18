@@ -3,6 +3,7 @@ import { query } from '../db/connection.js';
 import { AppError } from '../errors/AppError.js';
 import logger from '../utils/logger.js';
 import { sorobanService } from './sorobanService.js';
+import { toStroops } from '../money/decimal.js';
 
 export interface InitiateTransferInput {
   fromAgent: string;
@@ -10,6 +11,7 @@ export interface InitiateTransferInput {
   amount: number;
   reason?: string | undefined;
   createdBy: string;
+  userRole?: string | undefined;
 }
 
 export interface ApproveTransferInput {
@@ -184,7 +186,7 @@ export class AgentFloatService {
     transfer: AgentFloatTransferRow;
     approvals: TransferApprovalRow[];
   }> {
-    const { fromAgent, toAgent, amount, reason, createdBy } = input;
+    const { fromAgent, toAgent, amount, reason, createdBy, userRole } = input;
 
     if (fromAgent === toAgent) {
       throw AppError.badRequest(
@@ -194,13 +196,18 @@ export class AgentFloatService {
     if (!amount || amount <= 0) {
       throw AppError.badRequest('Transfer amount must be positive.');
     }
+    const isAdmin = userRole === 'admin' || userRole === 'super_admin';
+    if (createdBy !== fromAgent && !isAdmin) {
+      throw AppError.forbidden(
+        'Only the source agent or an administrator may initiate a float transfer.',
+      );
+    }
 
     // Enforce daily/weekly pair limits
     await this.checkLimits(fromAgent, toAgent, amount);
 
     const transferId = `ft_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
-    const initialRole =
-      createdBy === fromAgent ? 'initiator' : createdBy === toAgent ? 'recipient' : 'admin';
+    const initialRole = createdBy === fromAgent ? 'initiator' : 'admin';
 
     // Insert transfer record
     const transferRes = await query(
@@ -265,7 +272,7 @@ export class AgentFloatService {
       role = 'initiator';
     } else if (approver === transfer.to_agent) {
       role = 'recipient';
-    } else if (userRole === 'admin') {
+    } else if (userRole === 'admin' || userRole === 'super_admin') {
       role = 'admin';
     } else {
       throw AppError.forbidden(
@@ -307,26 +314,38 @@ export class AgentFloatService {
     // Threshold check (2-of-3)
     if (newCount >= transfer.required_approvals) {
       // Execute the float transfer on Soroban contract if configured
+      let onChainError: string | null = null;
       try {
         if (process.env.AGENT_VAULT_CONTRACT_ID) {
           const result = await sorobanService.buildTransferToAgentTx(
             transfer.from_agent,
             transfer.to_agent,
-            Number(transfer.amount),
+            // Stored in whole tokens; the contract takes stroops.
+            toStroops(String(transfer.amount)),
           );
           unsignedTxXdr = result.unsignedTxXdr;
         }
         executedOnChain = true;
       } catch (err) {
-        logger.warn('Soroban contract execution deferred or skipped', { err });
+        onChainError = err instanceof Error ? err.message : String(err);
+        logger.error('Soroban contract execution failed', {
+          err,
+          transferId,
+          fromAgent: transfer.from_agent,
+          toAgent: transfer.to_agent,
+          amount: transfer.amount,
+        });
       }
 
+      // Mark as FAILED if on-chain execution failed, COMPLETED otherwise
+      const transferStatus = onChainError ? 'FAILED' : 'COMPLETED';
       const updateRes = await query(
         `UPDATE agent_float_transfers
-         SET status = 'COMPLETED', approval_count = $2, updated_at = NOW()
+         SET status = $3, approval_count = $2, updated_at = NOW(),
+             error_message = $4
          WHERE id = $1
          RETURNING *`,
-        [transferId, newCount],
+        [transferId, newCount, transferStatus, onChainError],
       );
       updatedTransfer = updateRes.rows[0] as AgentFloatTransferRow;
 

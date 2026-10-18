@@ -8,7 +8,7 @@ import logger from '../utils/logger.js';
  * Cross-contract reconciliation with Saga pattern (issues #1377, #420).
  *
  * A loan's custody change and its credit-score mutation share one atomic boundary.
- * When they don't — partial settlement — we track via saga with compensation.
+ * When they don't (partial settlement), we track via saga with compensation.
  *
  * State machine: PENDING -> PARTIAL -> COMPLETED / FAILED
  *  Also maps legacy: pending -> PENDING, half_applied -> PARTIAL, reconciled -> COMPLETED, failed -> FAILED
@@ -91,7 +91,7 @@ export class SettlementSaga {
         await step.action();
         this.executed.push(step);
       } catch (err) {
-        // Partial failure — compensate executed steps in reverse order
+        // Partial failure: compensate executed steps in reverse order
         await this.compensate();
         return { state: 'FAILED', failedStep: step.name };
       }
@@ -114,7 +114,7 @@ export class SettlementSaga {
   }
 }
 
-// Compensation handlers registry — each contract interaction has a compensating action
+// Compensation handlers registry: each contract interaction has a compensating action
 export const compensationHandlers: Record<
   string,
   (params: Record<string, unknown>) => Promise<void>
@@ -457,7 +457,7 @@ class CrossContractReconciler {
         }
 
         if (row.attempts + 1 >= staleAttempts) {
-          // Transition to PARTIAL (half_applied) — saga partial failure
+          // Transition to PARTIAL (half_applied): saga partial failure
           await this.markState(row.id, 'PARTIAL');
           result.halfAppliedCount += 1;
 
@@ -483,7 +483,7 @@ class CrossContractReconciler {
             }
           }
         } else {
-          // Still PENDING — not yet stale
+          // Still PENDING, not yet stale
           await this.markState(row.id, 'PENDING');
           result.stillPendingCount += 1;
         }

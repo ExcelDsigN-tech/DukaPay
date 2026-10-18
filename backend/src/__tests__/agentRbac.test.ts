@@ -11,8 +11,6 @@ import { jest, describe, it, expect, beforeEach, afterEach } from '@jest/globals
 import express, { type Express, type Request, type Response, type NextFunction } from 'express';
 import request from 'supertest';
 
-const okHandler = (_req: Request, res: Response) => res.json({ success: true, data: {} });
-
 jest.unstable_mockModule('../controllers/agentController.js', () => ({
   getMyAssignments: jest.fn((_req: Request, res: Response) =>
     res.json({ success: true, data: { agentPublicKey: 'X', assignments: [] } }),
@@ -116,7 +114,7 @@ describe('Agent route RBAC', () => {
       expect(res.status).toBe(201);
     });
 
-    it('rejects an agent with 403 — agents cannot mutate assignments', async () => {
+    it('rejects an agent with 403: agents cannot mutate assignments', async () => {
       const res = await assign().set('Authorization', `Bearer ${agentToken()}`);
       expect(res.status).toBe(403);
     });

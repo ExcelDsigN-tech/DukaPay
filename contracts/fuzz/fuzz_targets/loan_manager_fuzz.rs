@@ -54,15 +54,16 @@ fuzz_target!(|data: FuzzAction| {
     let nft_id = env.register(RemittanceNFT, (&admin,));
     let nft_client = RemittanceNFTClient::new(&env, &nft_id);
 
-    // 2. Setup LoanManager. constructor takes (nft_contract, lending_pool, token, admin).
+    // 2. Setup LoanManager. constructor takes (nft_contract, lending_pool, token, admin, governance).
     let pool_admin = Address::generate(&env);
     let lending_pool_id = env.register(LendingPool, (&pool_admin,));
     let token_admin = Address::generate(&env);
     let token_contract_id = env.register_stellar_asset_contract_v2(token_admin.clone());
     let token_id = token_contract_id.address();
+    let governance = Address::generate(&env);
     let loan_manager_id = env.register(
         LoanManager,
-        (&nft_id, &lending_pool_id, &token_id, &admin),
+        (&nft_id, &lending_pool_id, &token_id, &admin, &governance),
     );
     let loan_manager_client = LoanManagerClient::new(&env, &loan_manager_id);
 

@@ -1,5 +1,19 @@
+import { jest } from '@jest/globals';
 import request from 'supertest';
-import app from '../app.js';
+
+// Admin routes write an audit row after the response is sent. Mock the pool so
+// that write never opens a real connection that outlives the test.
+const mockQuery = jest.fn<() => Promise<{ rows: unknown[]; rowCount: number }>>();
+mockQuery.mockResolvedValue({ rows: [], rowCount: 0 });
+jest.unstable_mockModule('../db/connection.js', () => ({
+  default: { query: mockQuery },
+  query: mockQuery,
+  getClient: jest.fn(),
+  closePool: jest.fn(),
+  withTransaction: jest.fn(),
+}));
+
+const { default: app } = await import('../app.js');
 
 describe('Admin reindex endpoint', () => {
   const apiKey = 'test-internal-api-key';
@@ -9,14 +23,14 @@ describe('Admin reindex endpoint', () => {
   });
 
   it('rejects requests without API key', async () => {
-    const response = await request(app).post('/api/admin/reindex?fromLedger=1&toLedger=2');
+    const response = await request(app).post('/api/admin/reindex?fromLedge=1&toLedger=2');
 
     expect(response.status).toBe(401);
   });
 
   it('validates ledger range query parameters', async () => {
     const response = await request(app)
-      .post('/api/admin/reindex?fromLedger=abc&toLedger=2')
+      .post('/api/admin/reindex?fromLedge=abc&toLedge=2')
       .set('x-api-key', apiKey);
 
     expect(response.status).toBe(400);
