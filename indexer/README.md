@@ -1,8 +1,13 @@
 # DukaPay Standalone Event Indexer
 
-High-throughput Soroban contract-event indexer written in Rust. Replaces the
-in-process TypeScript indexer (`backend/src/services/eventIndexer.ts`) for
-mainnet load.
+> **Experimental:** this standalone Rust indexer is not production-ready. The
+> supported deployment remains the backend's in-process indexer until this
+> crate has completed operational validation. No Kubernetes deployment is
+> provided for this experimental component.
+
+High-throughput Soroban contract-event indexer written in Rust. It is an
+experimental alternative to the in-process TypeScript indexer and is not yet
+the production indexing path.
 
 ## Why
 
@@ -25,8 +30,9 @@ export INDEXER_SINK=stdout
 cargo run --release
 ```
 
-Downstream: the existing backend consumer reads `DecodedEvent` NDJSON from the
-sink (Kafka topic `dukapay.contract-events`) instead of polling the RPC.
+The configured sink emits `DecodedEvent` NDJSON. Kafka output is optional and
+requires an independently operated consumer; the backend does not currently
+depend on a Kafka consumer for correctness.
 
 ## Configuration (all env vars)
 
@@ -66,11 +72,11 @@ Kafka support requires building with `--features kafka`.
 - `indexer_sink_writes_total`
 - `indexer_lag_ok`: 1/0 against `INDEXER_LAG_ALERT_THRESHOLD`
 
-## Deploy
+## Deployment status
 
-`infra/kubernetes/indexer/deployment.yaml`: StatefulSet (one pod per shard) +
-HPA scaling on `indexer_ledger_lag`. Requires a `dukapay-indexer` Secret
-(`rpc-url`, `checkpoint-dsn`) and ConfigMap (`contract-ids`, `kafka-brokers`).
+There is no supported Kubernetes deployment for this experimental component.
+Run it manually or package it for your own environment only after reviewing
+its checkpoint and sink configuration.
 
 ## Delivery semantics
 

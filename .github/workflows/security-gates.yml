@@ -49,9 +49,9 @@ jobs:
 
   gitleaks:
     name: Gitleaks secrets
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'pull_request' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    continue-on-error: true
+    continue-on-error: false
     permissions:
       contents: read
       pull-requests: write
@@ -65,6 +65,16 @@ jobs:
       - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Verify the gate rejects a dummy secret
+        shell: bash
+        run: |
+          tmp=$(mktemp -d)
+          trap 'rm -rf "$tmp"' EXIT
+          printf 'TEST_ONLY_DUMMY_SECRET=ghp_012345678901234567890123456789012345\n' > "$tmp/fixture.env"
+          if gitleaks detect --source "$tmp" --no-banner --redact; then
+            echo 'Gitleaks accepted the dummy secret fixture' >&2
+            exit 1
+          fi
 
   trivy:
     name: Trivy filesystem scan

@@ -29,9 +29,6 @@
  *   npx tsx scripts/money-parity.ts --randomized 5000 --seed 0x432432
  *
  * Caveats, stated rather than hidden:
- *   - `backend/src/money/calculations.ts` is float/`Math.round`-based and does
- *     not share the kernel, so it is deliberately not compared here; doing so
- *     would compare two different formulas, not two implementations of one.
  *   - `decimal.ts` uses unbounded `bigint` while the contract's intermediates are
  *     checked `i128`, and `split_pro_rata`'s contract entry point does not reject
  *     a negative total that `decimal.ts` does. Randomized `round_div`/`split_pro_rata`
