@@ -176,11 +176,7 @@ impl GovernanceContract {
     /// `admin`:           current DukaPay admin.
     /// `target_contract`: the DukaPay contract whose admin will be updated
     ///                     when finalize_admin_transfer is called.
-    pub fn __constructor(
-        env: Env,
-        admin: Address,
-        target_contract: Address,
-    ) {
+    pub fn __constructor(env: Env, admin: Address, target_contract: Address) {
         env.storage().instance().set(&KEY_ADMIN, &admin);
         env.storage().instance().set(&KEY_TARGET, &target_contract);
         env.storage().instance().set(&KEY_VERSION, &CURRENT_VERSION);

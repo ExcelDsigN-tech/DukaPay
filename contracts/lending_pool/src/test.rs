@@ -4,7 +4,7 @@ use soroban_sdk::testutils::{Address as _, Events as _, Ledger as _};
 use soroban_sdk::token::Client as TokenClient;
 use soroban_sdk::token::StellarAssetClient;
 use soroban_sdk::xdr::ToXdr;
-use soroban_sdk::{Address, BytesN, Env, FromVal, IntoVal, Symbol, TryFromVal, Vec};
+use soroban_sdk::{Address, BytesN, Env, FromVal, IntoVal, Symbol, TryFromVal, Val, Vec};
 
 fn create_token_contract<'a>(
     env: &Env,
@@ -1184,8 +1184,6 @@ fn test_pool_stats() {
 
 // ── Additional coverage tests ─────────────────────────────────────────────────
 
-
-
 #[test]
 fn test_accept_admin_with_no_proposed_returns_error() {
     let env = Env::default();
@@ -2348,8 +2346,15 @@ fn test_no_callable_initializer_after_deploy() {
     env.mock_all_auths();
     let admin = Address::generate(&env);
     let pool_id = env.register(LendingPool, (&admin,));
-    let pool_client = LendingPoolClient::new(&env, &pool_id);
-    assert_eq!(pool_client.version(), LendingPool::CURRENT_VERSION);
+    let result = env.try_invoke_contract::<Val, Val>(
+        &pool_id,
+        &Symbol::new(&env, "initialize"),
+        (admin,).into_val(&env),
+    );
+    assert!(
+        result.is_err(),
+        "old initialize entrypoint is still callable"
+    );
 }
 
 #[soroban_sdk::contract]

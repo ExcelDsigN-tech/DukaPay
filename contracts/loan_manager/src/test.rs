@@ -4,7 +4,8 @@ use remittance_nft::{RemittanceNFT, RemittanceNFTClient};
 use soroban_sdk::testutils::{Events, Ledger as _};
 use soroban_sdk::token::{Client as TokenClient, StellarAssetClient};
 use soroban_sdk::{
-    contract, contractimpl, testutils::Address as _, Address, BytesN, Env, FromVal, String,
+    contract, contractimpl, testutils::Address as _, Address, BytesN, Env, FromVal, IntoVal,
+    String, Symbol, Val,
 };
 
 /// Test amounts written in USDC, converted to stroops (the unit the contracts use).
@@ -60,7 +61,13 @@ fn setup_test<'a>(
     let governance = Address::generate(env);
     let loan_manager_id = env.register(
         LoanManager,
-        (&nft_contract_id, &pool_contract_id, &token_id, &admin, &governance),
+        (
+            &nft_contract_id,
+            &pool_contract_id,
+            &token_id,
+            &admin,
+            &governance,
+        ),
     );
     let loan_manager_client = LoanManagerClient::new(env, &loan_manager_id);
     pool_client.set_loan_manager(&loan_manager_id);
@@ -3956,8 +3963,16 @@ fn test_set_rate_oracle_emits_rate_oracle_updated_event() {
 fn test_no_callable_initializer_after_deploy() {
     let env = Env::default();
     env.mock_all_auths();
-    let (manager, _nft_client, _pool_client, _token_id, _admin) = setup_test(&env);
-    assert_eq!(manager.version(), 4);
+    let (manager, nft_client, pool, token, admin) = setup_test(&env);
+    let result = env.try_invoke_contract::<Val, Val>(
+        &manager.address,
+        &Symbol::new(&env, "initialize"),
+        (nft_client.address, pool, token, admin).into_val(&env),
+    );
+    assert!(
+        result.is_err(),
+        "old initialize entrypoint is still callable"
+    );
 }
 
 #[soroban_sdk::contract]

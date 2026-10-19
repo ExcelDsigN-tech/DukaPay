@@ -154,13 +154,13 @@ fn test_bond_updated_event() {
 
 #[test]
 fn test_no_callable_initializer_after_deploy() {
-    let (env, client, _owner, _op) = setup();
+    let (env, client, owner, operator) = setup();
     let result = env.try_invoke_contract::<Val, Val>(
         &client.address,
         &Symbol::new(&env, "init"),
-        ().into_val(&env),
+        (owner, operator).into_val(&env),
     );
-    assert!(result.is_err());
+    assert!(result.is_err(), "old init entrypoint is still callable");
 }
 
 proptest! {

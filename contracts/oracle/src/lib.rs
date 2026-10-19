@@ -630,7 +630,7 @@ fn sort_in_place(arr: &mut Vec<i128>) {
 mod test {
     use super::*;
     use soroban_sdk::testutils::{Address as _, Ledger, LedgerInfo};
-    use soroban_sdk::{symbol_short, vec, Env, IntoVal};
+    use soroban_sdk::{symbol_short, vec, Env, IntoVal, Val};
 
     fn setup_full() -> (Env, Address, Address, Address, Address, Address, Address) {
         let env = Env::default();
@@ -923,9 +923,22 @@ mod test {
 
     #[test]
     fn test_no_callable_initializer_after_deploy() {
-        let (env, oracle_id, asset) = setup();
-        // Verify oracle is operational and returns NotInitialized error for unset price
-        assert_eq!(get_price_result(&env, &oracle_id, asset), Err(OracleError::NotInitialized));
+        let (env, oracle_id, _asset, admin, _pyth, _chain, _dex) = setup_full();
+        let sources = vec![
+            &env,
+            symbol_short!("pyth"),
+            symbol_short!("chain"),
+            symbol_short!("dex"),
+        ];
+        let result = env.try_invoke_contract::<Val, Val>(
+            &oracle_id,
+            &Symbol::new(&env, "initialize"),
+            (admin, sources).into_val(&env),
+        );
+        assert!(
+            result.is_err(),
+            "old initialize entrypoint is still callable"
+        );
     }
 
     fn accept_admin(env: &Env, oracle_id: &Address) -> Result<(), OracleError> {

@@ -1,6 +1,6 @@
 use super::*;
 use soroban_sdk::testutils::{Address as _, Ledger, LedgerInfo};
-use soroban_sdk::{Address, BytesN, Env, Vec};
+use soroban_sdk::{Address, BytesN, Env, IntoVal, Symbol, Val, Vec};
 #[allow(deprecated)]
 #[contract]
 pub struct MockTarget;
@@ -129,9 +129,16 @@ fn exposes_target_pending_admin_and_approval_queries() {
 
 #[test]
 fn test_no_callable_initializer_after_deploy() {
-    let (_env, client, admin, _) = setup();
-    // Confirm governance is active and has no separate public initialize entrypoint
-    assert_eq!(client.get_current_admin(), admin);
+    let (env, client, admin, target) = setup();
+    let result = env.try_invoke_contract::<Val, Val>(
+        &client.address,
+        &Symbol::new(&env, "initialize"),
+        (admin, target).into_val(&env),
+    );
+    assert!(
+        result.is_err(),
+        "old initialize entrypoint is still callable"
+    );
 }
 
 #[test]

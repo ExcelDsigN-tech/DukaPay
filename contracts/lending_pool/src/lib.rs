@@ -1349,7 +1349,11 @@ impl LendingPool {
             .instance()
             .get(&DataKey::CallDepth)
             .unwrap_or(1);
-        let next_depth = if current_depth > 0 { current_depth - 1 } else { 0 };
+        let next_depth = if current_depth > 0 {
+            current_depth - 1
+        } else {
+            0
+        };
         env.storage()
             .instance()
             .set(&DataKey::CallDepth, &next_depth);

@@ -3,7 +3,7 @@ use crate::{
     PAUSE_DURATION_SECONDS,
 };
 use soroban_sdk::testutils::{Address as _, Ledger as _};
-use soroban_sdk::{Address, Env, Symbol, Vec};
+use soroban_sdk::{Address, Env, IntoVal, Symbol, Val, Vec};
 
 fn setup() -> (Env, Address, Address, Vec<Address>) {
     let env = Env::default();
@@ -36,9 +36,16 @@ fn init_stores_config() {
 
 #[test]
 fn test_no_callable_initializer_after_deploy() {
-    let (_env, contract_id, _admin, _) = setup();
-    let client = CircuitBreakerClient::new(&_env, &contract_id);
-    assert_eq!(client.get_threshold(), 3);
+    let (env, contract_id, admin, signers) = setup();
+    let result = env.try_invoke_contract::<Val, Val>(
+        &contract_id,
+        &Symbol::new(&env, "initialize"),
+        (admin, signers, 3u32, 86_400u64).into_val(&env),
+    );
+    assert!(
+        result.is_err(),
+        "old initialize entrypoint is still callable"
+    );
 }
 
 #[test]

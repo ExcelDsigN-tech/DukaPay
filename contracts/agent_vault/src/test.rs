@@ -3,7 +3,7 @@ use proptest::prelude::*;
 use soroban_sdk::testutils::{Address as _, Events as _, Ledger as _};
 use soroban_sdk::token::Client as TokenClient;
 use soroban_sdk::token::StellarAssetClient;
-use soroban_sdk::{vec, Address, Env, FromVal, Symbol, Vec};
+use soroban_sdk::{vec, Address, Env, FromVal, IntoVal, Symbol, Val, Vec};
 
 const MAX_HAIRCUT: u32 = 8_000; // 80%
 const MIN_COLLATERAL: i128 = 100;
@@ -24,7 +24,10 @@ fn setup() -> Setup {
     let owner = Address::generate(&env);
     let operator = Address::generate(&env);
     let (token, stellar, token_client) = create_token_contract(&env, &owner);
-    let id = env.register(AgentVault, (&owner, &operator, &token, &MAX_HAIRCUT, &MIN_COLLATERAL));
+    let id = env.register(
+        AgentVault,
+        (&owner, &operator, &token, &MAX_HAIRCUT, &MIN_COLLATERAL),
+    );
     let client = AgentVaultClient::new(&env, &id);
     Setup {
         env,
@@ -85,7 +88,20 @@ fn test_init_sets_config() {
 #[test]
 fn test_no_callable_initializer_after_deploy() {
     let s = setup();
-    assert!(s.client.get_params().max_haircut_bps > 0);
+    let owner = s.client.get_owner();
+    let result = s.env.try_invoke_contract::<Val, Val>(
+        &s.vault,
+        &Symbol::new(&s.env, "init"),
+        (
+            owner,
+            s.operator.clone(),
+            s.token.clone(),
+            MAX_HAIRCUT,
+            MIN_COLLATERAL,
+        )
+            .into_val(&s.env),
+    );
+    assert!(result.is_err(), "old init entrypoint is still callable");
 }
 
 #[test]
@@ -96,7 +112,10 @@ fn test_constructor_rejects_zero_haircut() {
     let owner = Address::generate(&env);
     let operator = Address::generate(&env);
     let (token, _, _) = create_token_contract(&env, &owner);
-    env.register(AgentVault, (&owner, &operator, &token, &0u32, &MIN_COLLATERAL));
+    env.register(
+        AgentVault,
+        (&owner, &operator, &token, &0u32, &MIN_COLLATERAL),
+    );
 }
 
 #[test]
@@ -107,7 +126,10 @@ fn test_constructor_rejects_haircut_above_10000() {
     let owner = Address::generate(&env);
     let operator = Address::generate(&env);
     let (token, _, _) = create_token_contract(&env, &owner);
-    env.register(AgentVault, (&owner, &operator, &token, &10_001u32, &MIN_COLLATERAL));
+    env.register(
+        AgentVault,
+        (&owner, &operator, &token, &10_001u32, &MIN_COLLATERAL),
+    );
 }
 
 #[test]
@@ -118,7 +140,10 @@ fn test_constructor_rejects_negative_min_collateral() {
     let owner = Address::generate(&env);
     let operator = Address::generate(&env);
     let (token, _, _) = create_token_contract(&env, &owner);
-    env.register(AgentVault, (&owner, &operator, &token, &MAX_HAIRCUT, &-1i128));
+    env.register(
+        AgentVault,
+        (&owner, &operator, &token, &MAX_HAIRCUT, &-1i128),
+    );
 }
 
 // ── Collateral ───────────────────────────────────────────────────────────────
@@ -456,7 +481,10 @@ fn test_mint_float_requires_operator() {
     let owner = Address::generate(&env);
     let operator = Address::generate(&env);
     let (token, stellar, _) = create_token_contract(&env, &owner);
-    let id = env.register(AgentVault, (&owner, &operator, &token, &MAX_HAIRCUT, &MIN_COLLATERAL));
+    let id = env.register(
+        AgentVault,
+        (&owner, &operator, &token, &MAX_HAIRCUT, &MIN_COLLATERAL),
+    );
     let client = AgentVaultClient::new(&env, &id);
 
     let a = agent(&env);
@@ -475,7 +503,10 @@ fn test_set_circuit_breaker_unauthorized() {
     let owner = Address::generate(&env);
     let operator = Address::generate(&env);
     let (token, _, _) = create_token_contract(&env, &owner);
-    let id = env.register(AgentVault, (&owner, &operator, &token, &MAX_HAIRCUT, &MIN_COLLATERAL));
+    let id = env.register(
+        AgentVault,
+        (&owner, &operator, &token, &MAX_HAIRCUT, &MIN_COLLATERAL),
+    );
     let client = AgentVaultClient::new(&env, &id);
     let breaker = Address::generate(&env);
     client.set_circuit_breaker(&Some(breaker));
@@ -738,7 +769,6 @@ mod upgrade {
         assert!(s.client.try_upgrade(&new_hash).is_err());
     }
 
-    #[test]
     #[test]
     fn upgrade_before_init_reports_not_initialized() {
         // With constructors, every deployed vault is already initialized.

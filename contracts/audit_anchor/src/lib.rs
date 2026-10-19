@@ -88,8 +88,8 @@ mod test {
         let result = env.try_invoke_contract::<Val, Val>(
             &contract_id,
             &Symbol::new(&env, "init"),
-            ().into_val(&env),
+            (owner,).into_val(&env),
         );
-        assert!(result.is_err());
+        assert!(result.is_err(), "old init entrypoint is still callable");
     }
 }
