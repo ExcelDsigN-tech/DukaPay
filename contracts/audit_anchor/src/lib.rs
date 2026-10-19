@@ -59,7 +59,7 @@ impl AuditAnchor {
             .persistent()
             .set(&DataKey::LeafCount(epoch), &leaf_count);
 
-        // Extend TTL so anchored audit roots are never silently archived.
+        // Extend TTL on write, matching the sibling contracts.
         env.storage().persistent().extend_ttl(
             &DataKey::Root(epoch),
             Self::PERSISTENT_TTL_THRESHOLD,
@@ -86,10 +86,7 @@ impl AuditAnchor {
 #[cfg(test)]
 mod test {
     use super::*;
-    use soroban_sdk::{
-        testutils::Address as _,
-        Address, BytesN, Env,
-    };
+    use soroban_sdk::{testutils::Address as _, Address, BytesN, Env};
 
     fn setup() -> (Env, AuditAnchorClient<'static>, Address) {
         let env = Env::default();
@@ -157,7 +154,6 @@ mod test {
     // ── Unauthorized anchor ──────────────────────────────────────────────────
 
     #[test]
-    #[should_panic]
     fn anchor_without_owner_auth_fails() {
         let env = Env::default();
         env.mock_all_auths();
@@ -170,7 +166,11 @@ mod test {
         env.mock_auths(&[]);
 
         let root = BytesN::from_array(&env, &[9; 32]);
-        // No auth provided → require_auth() panics.
-        client.anchor(&1, &root, &1);
+        // No auth provided → require_auth() returns an auth error.
+        let result = client.try_anchor(&1, &root, &1);
+        assert!(
+            result.is_err(),
+            "anchor without owner auth must be rejected"
+        );
     }
 }

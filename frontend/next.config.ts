@@ -13,16 +13,16 @@ const withSerwist = withSerwistInit({
 // The documented local/dev default (http://localhost:3001, see .env.example)
 // is neither 'self' (different port) nor https:, so connect-src must name it
 // explicitly or every browser fetch to the API is silently CSP-blocked.
-// (Now handled in middleware.ts for nonce-based CSP)
+// (Now handled in proxy.ts for nonce-based CSP)
 
 // Next.js dev mode (webpack and Turbopack alike) executes hot-reloaded
 // module chunks via eval(); without 'unsafe-eval' the dev bundle can't run
 // at all, so nothing hydrates. Production builds don't need it.
-// (Now handled in middleware.ts)
+// (Now handled in proxy.ts)
 
 // The App Router streams its RSC/hydration payload through inline
 // <script> tags (self.__next_f.push(...), self.__next_r, etc.) on every
-// render, dev and prod alike. We now use a nonce-based CSP via middleware
+// render, dev and prod alike. We now use a nonce-based CSP via proxy.ts
 // to secure these hydration scripts without relying on 'unsafe-inline'.
 
 const nextConfig: NextConfig = {

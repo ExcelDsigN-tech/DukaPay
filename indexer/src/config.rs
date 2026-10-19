@@ -183,10 +183,7 @@ mod tests {
 
     /// Clear all INDEXER_* and STELLAR_RPC_URL vars, then set the given ones.
     /// Holds `ENV_LOCK` for the entire operation so tests are serialized.
-    fn isolated_env<F: FnOnce() -> Result<Config>>(
-        vars: &[(&str, &str)],
-        f: F,
-    ) -> Result<Config> {
+    fn isolated_env<F: FnOnce() -> Result<Config>>(vars: &[(&str, &str)], f: F) -> Result<Config> {
         let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
 
         let all_keys = [
@@ -277,8 +274,7 @@ mod tests {
 
     #[test]
     fn fails_when_neither_rpc_url_is_set() {
-        let err = isolated_env(&[("INDEXER_CONTRACT_IDS", "CABC")], Config::from_env)
-            .unwrap_err();
+        let err = isolated_env(&[("INDEXER_CONTRACT_IDS", "CABC")], Config::from_env).unwrap_err();
         let msg = err.to_string();
         assert!(
             msg.contains("INDEXER_RPC_URL") || msg.contains("STELLAR_RPC_URL"),

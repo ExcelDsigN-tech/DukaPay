@@ -117,7 +117,10 @@ mod tests {
         // Attempting to push the same event on the reloaded queue returns false
         // because recorded_events is populated from the file.
         let duplicate = dlq2.push(&event, "decode failed", 3).await.unwrap();
-        assert!(!duplicate, "same event read back from disk should be a duplicate");
+        assert!(
+            !duplicate,
+            "same event read back from disk should be a duplicate"
+        );
 
         let _ = tokio::fs::remove_file(&path).await;
     }
@@ -146,15 +149,15 @@ mod tests {
 
     #[tokio::test]
     async fn new_with_missing_file_starts_empty() {
-        let path = format!("/tmp/dukapay_dlq_missing_{}.ndjson", std::process::id());
-        let _ = tokio::fs::remove_file(&path).await;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("missing_dlq.ndjson");
+        let path = path.to_str().unwrap().to_string();
+        // File doesn't exist yet — new() should start with an empty set.
 
         let dlq = DeadLetterQueue::new(&path).await.unwrap();
         let event = fake_event("ev3", "CABC", 300);
         let new = dlq.push(&event, "err", 1).await.unwrap();
         assert!(new);
-
-        let _ = tokio::fs::remove_file(&path).await;
     }
 
     // ── Different contracts are independent ───────────────────────────────────

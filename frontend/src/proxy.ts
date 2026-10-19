@@ -16,7 +16,7 @@ const intlMiddleware = createMiddleware({
 // Spanish and Tagalog were removed. Send old links to the English page.
 const RETIRED_LOCALE = /^\/(es|tl)(?=\/|$)/;
 
-export default function middleware(request: NextRequest) {
+export default function proxy(request: NextRequest) {
   if (RETIRED_LOCALE.test(request.nextUrl.pathname)) {
     const url = request.nextUrl.clone();
     url.pathname = url.pathname.replace(RETIRED_LOCALE, `/${DEFAULT_LOCALE}`);

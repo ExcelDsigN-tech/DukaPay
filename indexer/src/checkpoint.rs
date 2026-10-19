@@ -204,15 +204,13 @@ mod tests {
 
     #[tokio::test]
     async fn new_with_missing_file_starts_empty() {
-        let path = format!("/tmp/dukapay_test_missing_{}.json", std::process::id());
-        // Ensure the file doesn't exist.
-        let _ = tokio::fs::remove_file(&path).await;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("missing_checkpoint.json");
+        let path = path.to_str().unwrap().to_string();
+        // File doesn't exist yet — new() should start empty rather than error.
 
         let store = FileCheckpointStore::new(&path).await.unwrap();
         assert_eq!(store.load(0, "C1").await.unwrap(), None);
-
-        // Clean up the file written by the first save.
-        let _ = tokio::fs::remove_file(&path).await;
     }
 
     // ── Corrupt file ──────────────────────────────────────────────────────────
