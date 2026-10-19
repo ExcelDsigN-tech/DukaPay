@@ -12,7 +12,7 @@ Builds all contracts in the workspace and generates WASM files.
 ```
 
 ### 2. Deployment Script (`deploy.ts`)
-Deploys, initializes, and links contracts on Stellar networks.
+Deploys contracts with atomic constructors and links them on Stellar networks.
 
 ```bash
 # Install dependencies (first time)

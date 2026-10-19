@@ -118,8 +118,8 @@ its **owner** (the vault's admin role; the operator cannot upgrade). It keeps
 all storage in place, bumps `version()` (1 for a new or pre-versioning vault,
 +1 per upgrade), and emits `ContractUpgraded (old_version, new_version)` like the
 other contracts. The vault has no owner-transfer function, so to put it under
-the timelock, initialise it (`init`) with the `multisig_governance` contract
-address as `owner`; an already-initialised vault keeps its current owner.
+the timelock, deploy it with the `multisig_governance` contract address as the
+`__constructor` `owner`; an already-deployed vault keeps its current owner.
 
 ---
 
