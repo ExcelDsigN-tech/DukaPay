@@ -7,7 +7,8 @@ use loan_manager::{LoanManager, LoanManagerClient};
 use remittance_nft::{RemittanceNFT, RemittanceNFTClient};
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{Address, BytesN, Env, IntoVal, Symbol, Val};
-use std::collections::HashMap;
+
+const N_USERS: usize = 8;
 
 macro_rules! rcall {
     ($env:expr, $client:expr, $func:expr, ($($arg:expr),*)) => {
@@ -22,6 +23,7 @@ macro_rules! rcall {
 #[derive(Arbitrary, Debug)]
 enum FuzzAction {
     RequestLoan {
+        user_id: u8,
         amount: i128,
         score: u32,
     },
@@ -29,12 +31,17 @@ enum FuzzAction {
         loan_id: u32,
     },
     Repay {
+        user_id: u8,
         amount: i128,
         initial_score: u32,
     },
     MultipleOperations {
         operations: Vec<LoanOperation>,
     },
+}
+
+fn user_of(users: &[Address], idx: u8) -> Address {
+    users[(idx as usize) % N_USERS].clone()
 }
 
 #[derive(Arbitrary, Debug)]
@@ -70,12 +77,16 @@ fuzz_target!(|data: FuzzAction| {
     // Authorize LoanManager to update scores in NFT contract
     nft_client.authorize_minter(&loan_manager_id);
 
+    // A stable pool of users so separate operations in one run hit the same accounts.
+    let users: std::vec::Vec<Address> = (0..N_USERS).map(|_| Address::generate(&env)).collect();
+
     match data {
         FuzzAction::RequestLoan {
+            user_id,
             amount,
             score,
         } => {
-            let user = Address::generate(&env);
+            let user = user_of(&users, user_id);
 
             // Skip invalid amounts
             if amount <= 0 {
@@ -110,10 +121,11 @@ fuzz_target!(|data: FuzzAction| {
         }
 
         FuzzAction::Repay {
+            user_id,
             amount,
             initial_score,
         } => {
-            let user = Address::generate(&env);
+            let user = user_of(&users, user_id);
 
             // Skip invalid amounts
             if amount <= 0 {
@@ -148,26 +160,24 @@ fuzz_target!(|data: FuzzAction| {
         }
 
         FuzzAction::MultipleOperations { operations } => {
-            let mut users = HashMap::new();
+            let mut initialized = [false; N_USERS];
 
             for op in operations {
-                let user_addr = users
-                    .entry(op.user_id)
-                    .or_insert_with(|| {
-                        let addr = Address::generate(&env);
-                        let history_hash = BytesN::from_array(&env, &[0u8; 32]);
-                        // Initialize user with some score
-                        nft_client.mint(
-                            &addr,
-                            &op.score,
-                            &history_hash,
-                            &soroban_sdk::String::from_str(&env, "ipfs://test"),
-                            &BytesN::from_array(&env, &[0u8; 32]),
-                            &None,
-                        );
-                        addr
-                    })
-                    .clone();
+                let user_addr = user_of(&users, op.user_id);
+                let user_idx = (op.user_id as usize) % N_USERS;
+                if !initialized[user_idx] {
+                    let history_hash = BytesN::from_array(&env, &[0u8; 32]);
+                    // Initialize the user once, with the score from their first operation.
+                    nft_client.mint(
+                        &user_addr,
+                        &op.score,
+                        &history_hash,
+                        &soroban_sdk::String::from_str(&env, "ipfs://test"),
+                        &BytesN::from_array(&env, &[0u8; 32]),
+                        &None,
+                    );
+                    initialized[user_idx] = true;
+                }
 
                 match op.operation_type % 2 {
                     0 if op.amount > 0 => {

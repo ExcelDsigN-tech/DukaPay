@@ -6,7 +6,8 @@ use libfuzzer_sys::fuzz_target;
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::token::{Client as TokenClient, StellarAssetClient};
 use soroban_sdk::{Address, Env, IntoVal, Symbol, Val};
-use std::collections::HashMap;
+
+const N_USERS: usize = 8;
 
 macro_rules! rcall {
     ($env:expr, $client:expr, $func:expr, ($($arg:expr),*)) => {
@@ -20,10 +21,14 @@ macro_rules! rcall {
 
 #[derive(Arbitrary, Debug)]
 enum FuzzAction {
-    Deposit { amount: i128 },
-    Withdraw { amount: i128 },
-    GetDeposit,
+    Deposit { user_id: u8, amount: i128 },
+    Withdraw { user_id: u8, amount: i128 },
+    GetDeposit { user_id: u8 },
     MultipleOperations { operations: Vec<Operation> },
+}
+
+fn user_of(users: &[Address], idx: u8) -> Address {
+    users[(idx as usize) % N_USERS].clone()
 }
 
 #[derive(Arbitrary, Debug)]
@@ -56,9 +61,12 @@ fuzz_target!(|data: FuzzAction| {
     let pool_id = env.register(LendingPool, (&pool_admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
 
+    // A stable pool of users so separate operations in one run hit the same accounts.
+    let users: std::vec::Vec<Address> = (0..N_USERS).map(|_| Address::generate(&env)).collect();
+
     match data {
-        FuzzAction::Deposit { amount } => {
-            let user = Address::generate(&env);
+        FuzzAction::Deposit { user_id, amount } => {
+            let user = user_of(&users, user_id);
 
             // Skip invalid amounts
             if amount <= 0 {
@@ -85,8 +93,8 @@ fuzz_target!(|data: FuzzAction| {
             }
         }
 
-        FuzzAction::Withdraw { amount } => {
-            let user = Address::generate(&env);
+        FuzzAction::Withdraw { user_id, amount } => {
+            let user = user_of(&users, user_id);
 
             // Skip invalid amounts
             if amount <= 0 {
@@ -124,8 +132,8 @@ fuzz_target!(|data: FuzzAction| {
             }
         }
 
-        FuzzAction::GetDeposit => {
-            let user = Address::generate(&env);
+        FuzzAction::GetDeposit { user_id } => {
+            let user = user_of(&users, user_id);
             let balance = pool_client.get_deposit(&user, &token_id);
 
             // Verify invariant: balance should never be negative
@@ -133,14 +141,10 @@ fuzz_target!(|data: FuzzAction| {
         }
 
         FuzzAction::MultipleOperations { operations } => {
-            let mut users = HashMap::new();
             let mut total_expected_deposits = 0i128;
 
             for op in operations {
-                let user_addr = users
-                    .entry(op.user_id)
-                    .or_insert_with(|| Address::generate(&env))
-                    .clone();
+                let user_addr = user_of(&users, op.user_id);
 
                 if op.is_deposit {
                     if op.amount <= 0 {
@@ -181,9 +185,9 @@ fuzz_target!(|data: FuzzAction| {
             );
 
             // Verify all individual balances are non-negative
-            for (_, user_addr) in users {
+            for user_addr in &users {
                 assert!(
-                    pool_client.get_deposit(&user_addr, &token_id) >= 0,
+                    pool_client.get_deposit(user_addr, &token_id) >= 0,
                     "Individual balance should never be negative"
                 );
             }

@@ -7,7 +7,17 @@ use remittance_nft::{
 };
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{Address, BytesN, Env, IntoVal, Symbol, Val};
-use std::collections::HashMap;
+
+const N_USERS: usize = 8;
+const N_MINTERS: usize = 4;
+
+fn user_of(users: &[Address], idx: u8) -> Address {
+    users[(idx as usize) % N_USERS].clone()
+}
+
+fn minter_of(minters: &[Address], idx: u8) -> Address {
+    minters[(idx as usize) % N_MINTERS].clone()
+}
 
 macro_rules! rcall {
     ($env:expr, $client:expr, $func:expr, ($($arg:expr),*)) => {
@@ -21,20 +31,28 @@ macro_rules! rcall {
 
 #[derive(Arbitrary, Debug)]
 enum FuzzAction {
-    AuthorizeMinter,
-    RevokeMinter,
+    AuthorizeMinter {
+        minter_id: u8,
+    },
+    RevokeMinter {
+        minter_id: u8,
+    },
     Mint {
+        user_id: u8,
         initial_score: u32,
         minter_id: Option<u8>,
     },
     UpdateScore {
+        user_id: u8,
         repayment_amount: i128,
         minter_id: Option<u8>,
     },
     UpdateHistoryHash {
+        user_id: u8,
         minter_id: Option<u8>,
     },
     LegacyMigration {
+        user_id: u8,
         legacy_score: u32,
     },
     MultipleOperations {
@@ -60,9 +78,14 @@ fuzz_target!(|data: FuzzAction| {
     let nft_id = env.register(RemittanceNFT, (&admin,));
     let nft_client = RemittanceNFTClient::new(&env, &nft_id);
 
+    // Stable pools so separate operations in one run hit the same accounts.
+    let users: std::vec::Vec<Address> = (0..N_USERS).map(|_| Address::generate(&env)).collect();
+    let minters: std::vec::Vec<Address> =
+        (0..N_MINTERS).map(|_| Address::generate(&env)).collect();
+
     match data {
-        FuzzAction::AuthorizeMinter => {
-            let minter = Address::generate(&env);
+        FuzzAction::AuthorizeMinter { minter_id } => {
+            let minter = minter_of(&minters, minter_id);
 
             let result = rcall!(&env, nft_client, "authorize_minter", (minter));
 
@@ -75,8 +98,8 @@ fuzz_target!(|data: FuzzAction| {
             }
         }
 
-        FuzzAction::RevokeMinter => {
-            let minter = Address::generate(&env);
+        FuzzAction::RevokeMinter { minter_id } => {
+            let minter = minter_of(&minters, minter_id);
 
             // First authorize, then revoke
             nft_client.authorize_minter(&minter);
@@ -93,11 +116,12 @@ fuzz_target!(|data: FuzzAction| {
         }
 
         FuzzAction::Mint {
+            user_id,
             initial_score,
             minter_id,
         } => {
-            let user = Address::generate(&env);
-            let minter = minter_id.map(|_| Address::generate(&env));
+            let user = user_of(&users, user_id);
+            let minter = minter_id.map(|id| minter_of(&minters, id));
             let history_hash = BytesN::from_array(&env, &[0u8; 32]);
 
             if let Some(ref m) = minter {
@@ -135,11 +159,12 @@ fuzz_target!(|data: FuzzAction| {
         }
 
         FuzzAction::UpdateScore {
+            user_id,
             repayment_amount,
             minter_id,
         } => {
-            let user = Address::generate(&env);
-            let minter = minter_id.map(|_| Address::generate(&env));
+            let user = user_of(&users, user_id);
+            let minter = minter_id.map(|id| minter_of(&minters, id));
 
             // First mint an NFT for the user
             let history_hash = BytesN::from_array(&env, &[0u8; 32]);
@@ -177,9 +202,9 @@ fuzz_target!(|data: FuzzAction| {
             }
         }
 
-        FuzzAction::UpdateHistoryHash { minter_id } => {
-            let user = Address::generate(&env);
-            let minter = minter_id.map(|_| Address::generate(&env));
+        FuzzAction::UpdateHistoryHash { user_id, minter_id } => {
+            let user = user_of(&users, user_id);
+            let minter = minter_id.map(|id| minter_of(&minters, id));
             let new_history_hash = BytesN::from_array(&env, &[1u8; 32]);
 
             // First mint an NFT for the user
@@ -215,9 +240,10 @@ fuzz_target!(|data: FuzzAction| {
         }
 
         FuzzAction::LegacyMigration {
+            user_id,
             legacy_score,
         } => {
-            let user = Address::generate(&env);
+            let user = user_of(&users, user_id);
 
             // Manually set legacy score in storage
             // In a real scenario, this would be done by an older version of the contract
@@ -256,24 +282,12 @@ fuzz_target!(|data: FuzzAction| {
         }
 
         FuzzAction::MultipleOperations { operations } => {
-            let mut users = HashMap::new();
-            let mut minters = HashMap::new();
-
             for op in operations {
-                let user_addr = users
-                    .entry(op.user_id)
-                    .or_insert_with(|| Address::generate(&env))
-                    .clone();
-                let minter_addr = op.minter_id.map(|id| {
-                    minters
-                        .entry(id)
-                        .or_insert_with(|| {
-                            let addr = Address::generate(&env);
-                            nft_client.authorize_minter(&addr);
-                            addr
-                        })
-                        .clone()
-                });
+                let user_addr = user_of(&users, op.user_id);
+                let minter_addr = op.minter_id.map(|id| minter_of(&minters, id));
+                if let Some(ref minter) = minter_addr {
+                    nft_client.authorize_minter(minter);
+                }
 
                 match op.operation_type % 4 {
                     0 => {

@@ -617,6 +617,11 @@ jobs:
         run: cargo build --manifest-path contracts/fuzz/Cargo.toml
         env:
           RUSTFLAGS: -D warnings
+      - name: How to fix
+        if: failure()
+        run: |
+          echo "::error::Run ./scripts/ci-local.sh fix, then ./scripts/ci-local.sh contracts to reproduce this locally. See CONTRIBUTING.md#testing."
+          echo "Run ./scripts/ci-local.sh fix, then ./scripts/ci-local.sh contracts to reproduce this locally. See CONTRIBUTING.md#testing." >> "$GITHUB_STEP_SUMMARY"
 
   indexer:
     needs: [supply-chain-audit, changes]
