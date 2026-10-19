@@ -617,6 +617,9 @@ jobs:
         run: cargo build --manifest-path contracts/fuzz/Cargo.toml
         env:
           RUSTFLAGS: -D warnings
+          # Running from the repo root bypasses contracts/rust-toolchain.toml;
+          # pin the same toolchain the contracts checks use.
+          RUSTUP_TOOLCHAIN: 1.85.0
       - name: How to fix
         if: failure()
         run: |
