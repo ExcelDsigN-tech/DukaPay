@@ -38,7 +38,9 @@
       "oracle": {
         "wasm": "../contracts/target/wasm32v1-none/release/oracle.wasm",
         "sources": [
-          "binance"
+          { "source": "binance", "address": "YOUR_ORACLE_SOURCE_1_PUBLIC_KEY" },
+          { "source": "coinbase", "address": "YOUR_ORACLE_SOURCE_2_PUBLIC_KEY" },
+          { "source": "kraken", "address": "YOUR_ORACLE_SOURCE_3_PUBLIC_KEY" }
         ]
       },
       "audit_anchor": {
@@ -85,7 +87,9 @@
       "oracle": {
         "wasm": "../contracts/target/wasm32v1-none/release/oracle.wasm",
         "sources": [
-          "binance"
+          { "source": "binance", "address": "YOUR_ORACLE_SOURCE_1_PUBLIC_KEY" },
+          { "source": "coinbase", "address": "YOUR_ORACLE_SOURCE_2_PUBLIC_KEY" },
+          { "source": "kraken", "address": "YOUR_ORACLE_SOURCE_3_PUBLIC_KEY" }
         ]
       },
       "audit_anchor": {

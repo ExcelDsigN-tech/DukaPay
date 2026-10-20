@@ -11,6 +11,25 @@ registry, the on-chain state, and `backend/.env` agree.
 
 ---
 
+## Before you deploy
+
+`scripts/deploy-config.json` ships placeholders that must be replaced in the block for the
+network you deploy to. `scripts/deploy.ts` checks them before uploading anything and exits
+with a message naming each field to fix.
+
+| Field | Fill in |
+|---|---|
+| `admin` | Admin `G...` public key. If left as `YOUR_ADMIN_PUBLIC_KEY`, the deployer's own key is used. |
+| `token` | Pool token contract (`C...`). The `mainnet` block ships `YOUR_MAINNET_POOL_TOKEN_ADDRESS`. |
+| `contracts.circuit_breaker.signers` | One `G...` public key per signer (`YOUR_SIGNER_1_PUBLIC_KEY` ...), no duplicates. |
+| `contracts.circuit_breaker.threshold` | Integer from 1 to the number of signers. |
+| `contracts.oracle.sources` | At least 2 `{ "source": "<name>", "address": "G..." }` entries (`YOUR_ORACLE_SOURCE_1_PUBLIC_KEY` ...). |
+
+Each oracle source is the key that signs that feed's price submissions, so every entry needs
+its own address: the deploy fails if two sources share one. The oracle needs at least 2 fresh
+sources (`MIN_SOURCES` in `contracts/oracle/src/lib.rs`) before it returns a price. Source
+names are Soroban symbols (1-32 characters of `[A-Za-z0-9_]`).
+
 ## How to record a deployment
 
 After running the deployer:

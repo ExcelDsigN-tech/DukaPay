@@ -14,6 +14,7 @@ import { createHash } from 'crypto';
 import * as fs from 'fs-extra';
 import * as path from 'path';
 import * as dotenv from 'dotenv';
+import { checkDeployConfig, OracleSource } from './deploy-config-check';
 
 dotenv.config();
 
@@ -223,6 +224,15 @@ async function main() {
     const config = (await fs.readJson(CONFIG_PATH))[network];
     if (!config) throw new Error(`No config for network: ${network}`);
 
+    // Fail on placeholder or malformed keys before uploading anything, so a
+    // bad config never leaves a half-finished deployment behind.
+    const configErrors = checkDeployConfig(config, network);
+    if (configErrors.length > 0) {
+        throw new Error(
+            `Invalid scripts/deploy-config.json:\n${configErrors.map((e) => `  - ${e}`).join('\n')}`,
+        );
+    }
+
     const secretKey = process.env.SECRET_KEY;
     if (!secretKey) throw new Error('SECRET_KEY environment variable is required');
 
@@ -299,11 +309,7 @@ async function main() {
     console.log('\n[2/4] Creating contract instances with constructors…');
 
     const breakerConfig = config.contracts.circuit_breaker;
-    if (!breakerConfig) throw new Error(`Missing circuit_breaker config for network: ${network}`);
-    const breakerSigners = (breakerConfig.signers || []) as string[];
-    if (breakerSigners.length === 0) {
-        throw new Error(`circuit_breaker.signers is empty for network: ${network}`);
-    }
+    const breakerSigners = breakerConfig.signers as string[];
 
     console.log('  CircuitBreaker');
     const breakerContractId = await createInstance(
@@ -315,18 +321,14 @@ async function main() {
         [
             adminAddr,
             breakerSigners,
-            { type: 'u32', value: breakerConfig.threshold ?? 1 },
+            { type: 'u32', value: breakerConfig.threshold },
             { type: 'u64', value: BigInt(breakerConfig.override_timelock ?? 86_400) },
         ],
     );
     console.log(`    → ${breakerContractId}`);
 
-    const oracleConfig = config.contracts.oracle;
-    if (!oracleConfig) throw new Error(`Missing oracle config for network: ${network}`);
-    const oracleSources = (oracleConfig.sources || []) as string[];
-    if (oracleSources.length === 0) {
-        throw new Error(`oracle.sources is empty for network: ${network}`);
-    }
+    // Each source signs its own price submissions with its own key.
+    const oracleSources = config.contracts.oracle.sources as OracleSource[];
 
     console.log('  Oracle');
     const oracleContractId = await createInstance(
@@ -335,13 +337,7 @@ async function main() {
         contractSalt('oracle'),
         account,
         passphrase,
-        [
-            adminAddr,
-            oracleSources.map((source) => ({
-                source,
-                address: adminAddr,
-            })),
-        ],
+        [adminAddr, oracleSources.map(({ source, address }) => ({ source, address }))],
     );
     console.log(`    → ${oracleContractId}`);
 

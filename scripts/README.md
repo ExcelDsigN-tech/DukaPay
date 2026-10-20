@@ -27,10 +27,30 @@ SECRET_KEY=S... npm run deploy -- testnet
 - `deploy-config.json`: Contains network RPC URLs, passphrase, and initial contract parameters.
 - `.env`: (Optional) Can store `SECRET_KEY`, the deployer's secret key. Network settings (RPC URL, passphrase) are read from `deploy-config.json`.
 
+### Before you deploy
+
+Replace the placeholders in the `deploy-config.json` block for your network. `deploy.ts`
+validates them before uploading any WASM and exits with an error naming each bad field.
+
+- `admin`: admin `G...` key. `YOUR_ADMIN_PUBLIC_KEY` falls back to the deployer's key.
+- `token`: pool token contract `C...` (`mainnet` ships `YOUR_MAINNET_POOL_TOKEN_ADDRESS`).
+- `contracts.circuit_breaker.signers`: distinct `G...` keys replacing `YOUR_SIGNER_N_PUBLIC_KEY`;
+  `threshold` must be between 1 and the number of signers.
+- `contracts.oracle.sources`: at least 2 entries, each with its own signing key:
+
+  ```json
+  "sources": [
+    { "source": "binance", "address": "G..." },
+    { "source": "coinbase", "address": "G..." }
+  ]
+  ```
+
+  `source` is a Soroban symbol (1-32 characters of `[A-Za-z0-9_]`); two sources may not share an `address`.
+
 ## Workflow
 
 1. **Build**: Run `./scripts/build.sh`.
-2. **Configure**: Update `scripts/deploy-config.json` if needed (admin address, token address).
+2. **Configure**: Fill in the placeholders in `scripts/deploy-config.json` (see [Before you deploy](#before-you-deploy)).
 3. **Deploy**: Run `SECRET_KEY=... npm run deploy -- testnet` from the `scripts` directory.
 4. **Verify**: Check `frontend/.env.local` and `backend/.env` for updated contract IDs.
 
