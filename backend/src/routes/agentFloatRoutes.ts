@@ -38,9 +38,8 @@ const router = Router();
  *               toAgent:
  *                 type: string
  *               amount:
- *                 oneOf:
- *                   - type: string
- *                   - type: number
+ *                 type: number
+ *                 description: Transfer amount in whole tokens (e.g. USDC), up to 7 decimal places
  *               reason:
  *                 type: string
  *     responses:
@@ -243,13 +242,11 @@ router.get(
  *               toAgent:
  *                 type: string
  *               dailyLimit:
- *                 oneOf:
- *                   - type: string
- *                   - type: number
+ *                 type: number
+ *                 description: Daily limit in whole tokens (e.g. USDC), up to 7 decimal places
  *               weeklyLimit:
- *                 oneOf:
- *                   - type: string
- *                   - type: number
+ *                 type: number
+ *                 description: Weekly limit in whole tokens (e.g. USDC), up to 7 decimal places
  *     responses:
  *       200:
  *         description: Pair limits updated.

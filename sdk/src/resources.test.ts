@@ -525,7 +525,7 @@ describe('AgentsResource', () => {
     expect(del).toHaveBeenCalledWith('/agents/dashboard/cache');
   });
 
-  it('initiates a float transfer with numeric or string amounts and optional reason', async () => {
+  it('initiates a float transfer with whole-token amounts and optional reason', async () => {
     const post = vi.fn().mockResolvedValue({ success: true, data: {} });
     const resource = new AgentsResource({ post } as unknown as HttpClient);
 
@@ -546,13 +546,13 @@ describe('AgentsResource', () => {
     await resource.initiateFloatTransfer({
       fromAgent: VALID_ADDRESS,
       toAgent: SECOND_ADDRESS,
-      amount: '50000000000',
+      amount: 250.5,
     });
 
     expect(post).toHaveBeenCalledWith('/agents/float-transfer', {
       fromAgent: VALID_ADDRESS,
       toAgent: SECOND_ADDRESS,
-      amount: '50000000000',
+      amount: 250.5,
     });
   });
 
@@ -595,7 +595,15 @@ describe('AgentsResource', () => {
       resource.initiateFloatTransfer({
         fromAgent: VALID_ADDRESS,
         toAgent: SECOND_ADDRESS,
-        amount: '0',
+        amount: 1.123456789,
+      }),
+    ).toThrow(ValidationError);
+
+    expect(() =>
+      resource.initiateFloatTransfer({
+        fromAgent: VALID_ADDRESS,
+        toAgent: SECOND_ADDRESS,
+        amount: '100' as unknown as number,
       }),
     ).toThrow(ValidationError);
   });
@@ -612,6 +620,7 @@ describe('AgentsResource', () => {
 
     expect(() => resource.approveFloatTransfer('')).toThrow(ValidationError);
     expect(() => resource.rejectFloatTransfer('   ')).toThrow(ValidationError);
+    expect(() => resource.approveFloatTransfer('ft/../../loans')).toThrow(ValidationError);
   });
 
   it('gets and sets pair limits with validation', async () => {

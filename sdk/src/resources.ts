@@ -35,20 +35,12 @@ import {
   validateTokenAmount,
 } from './validation.js';
 
-function validatePositiveFloatAmount(value: unknown, fieldName: string): void {
-  if (typeof value === 'string') {
-    validateAmount(value, fieldName);
-    if (parseFloat(value) <= 0) {
-      throw new ValidationError(`Invalid ${fieldName}: must be greater than zero`);
-    }
-    return;
-  }
-  validateTokenAmount(value, fieldName);
-}
-
-function validateNonEmptyId(value: unknown, fieldName: string): asserts value is string {
-  if (typeof value !== 'string' || value.trim() === '') {
-    throw new ValidationError(`Invalid ${fieldName}: must be a non-empty string`);
+/** Matches the backend's float transfer ID format, so the ID is safe to put in a path. */
+function validateTransferId(value: unknown, fieldName: string): asserts value is string {
+  if (typeof value !== 'string' || !/^[A-Za-z0-9_-]{3,128}$/.test(value)) {
+    throw new ValidationError(
+      `Invalid ${fieldName}: must be 3-128 letters, digits, underscores or hyphens`,
+    );
   }
 }
 
@@ -312,7 +304,8 @@ export class AgentsResource {
   initiateFloatTransfer(params: {
     fromAgent: string;
     toAgent: string;
-    amount: number | string;
+    /** Whole tokens (e.g. 250.5 USDC), up to 7 decimal places. */
+    amount: number;
     reason?: string;
   }): Promise<InitiateFloatTransferResponse> {
     validateStellarAddress(params.fromAgent, 'fromAgent');
@@ -320,7 +313,7 @@ export class AgentsResource {
     if (params.fromAgent === params.toAgent) {
       throw new ValidationError('fromAgent and toAgent must be different');
     }
-    validatePositiveFloatAmount(params.amount, 'amount');
+    validateTokenAmount(params.amount, 'amount');
     return this.http.post('/agents/float-transfer', {
       fromAgent: params.fromAgent,
       toAgent: params.toAgent,
@@ -331,13 +324,13 @@ export class AgentsResource {
 
   /** Approves a pending agent float transfer (`POST /agents/float-transfer/{id}/approve`). */
   approveFloatTransfer(transferId: string): Promise<ApproveFloatTransferResponse> {
-    validateNonEmptyId(transferId, 'transferId');
+    validateTransferId(transferId, 'transferId');
     return this.http.post(`/agents/float-transfer/${transferId}/approve`);
   }
 
   /** Rejects a pending agent float transfer (`POST /agents/float-transfer/{id}/reject`). */
   rejectFloatTransfer(transferId: string): Promise<RejectFloatTransferResponse> {
-    validateNonEmptyId(transferId, 'transferId');
+    validateTransferId(transferId, 'transferId');
     return this.http.post(`/agents/float-transfer/${transferId}/reject`);
   }
 
@@ -360,16 +353,18 @@ export class AgentsResource {
   setPairLimits(params: {
     fromAgent: string;
     toAgent: string;
-    dailyLimit: number | string;
-    weeklyLimit: number | string;
+    /** Whole tokens (e.g. 250.5 USDC), up to 7 decimal places. */
+    dailyLimit: number;
+    /** Whole tokens (e.g. 250.5 USDC), up to 7 decimal places. */
+    weeklyLimit: number;
   }): Promise<SetAgentPairLimitsResponse> {
     validateStellarAddress(params.fromAgent, 'fromAgent');
     validateStellarAddress(params.toAgent, 'toAgent');
     if (params.fromAgent === params.toAgent) {
       throw new ValidationError('fromAgent and toAgent must be different');
     }
-    validatePositiveFloatAmount(params.dailyLimit, 'dailyLimit');
-    validatePositiveFloatAmount(params.weeklyLimit, 'weeklyLimit');
+    validateTokenAmount(params.dailyLimit, 'dailyLimit');
+    validateTokenAmount(params.weeklyLimit, 'weeklyLimit');
     return this.http.put('/agents/float-transfer/limits', {
       fromAgent: params.fromAgent,
       toAgent: params.toAgent,
