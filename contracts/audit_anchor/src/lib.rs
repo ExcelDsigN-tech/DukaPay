@@ -24,6 +24,8 @@ pub struct AuditAnchor;
 impl AuditAnchor {
     /// Ledger TTL constants, matching the sibling contracts.
     /// Threshold: ~1 day (17 280 ledgers × 5 s). Bump: ~30 days (518 400 ledgers).
+    const INSTANCE_TTL_THRESHOLD: u32 = 17_280;
+    const INSTANCE_TTL_BUMP: u32 = 518_400;
     const PERSISTENT_TTL_THRESHOLD: u32 = 17_280;
     const PERSISTENT_TTL_BUMP: u32 = 518_400;
 
@@ -55,6 +57,9 @@ impl AuditAnchor {
             .set(&DataKey::LeafCount(epoch), &leaf_count);
 
         // Extend TTL on write, matching the sibling contracts.
+        env.storage()
+            .instance()
+            .extend_ttl(Self::INSTANCE_TTL_THRESHOLD, Self::INSTANCE_TTL_BUMP);
         env.storage().persistent().extend_ttl(
             &DataKey::Root(epoch),
             Self::PERSISTENT_TTL_THRESHOLD,
@@ -81,7 +86,9 @@ impl AuditAnchor {
 #[cfg(test)]
 mod test {
     use super::*;
-    use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, IntoVal, Symbol, Val};
+    use soroban_sdk::testutils::storage::Instance as _;
+    use soroban_sdk::testutils::{Address as _, Ledger as _};
+    use soroban_sdk::{Address, BytesN, Env, IntoVal, Symbol, Val};
 
     fn setup() -> (Env, AuditAnchorClient<'static>, Address) {
         let env = Env::default();
@@ -109,6 +116,33 @@ mod test {
     fn get_root_returns_none_for_unanchored_epoch() {
         let (_env, client, _owner) = setup();
         assert_eq!(client.get_root(&99), None);
+    }
+
+    fn instance_ttl(env: &Env, contract_id: &Address) -> u32 {
+        env.as_contract(contract_id, || env.storage().instance().get_ttl())
+    }
+
+    #[test]
+    fn anchor_extends_instance_ttl() {
+        let (env, client, _owner) = setup();
+        let ttl_before = instance_ttl(&env, &client.address);
+        assert!(ttl_before < AuditAnchor::INSTANCE_TTL_THRESHOLD);
+
+        let root = BytesN::from_array(&env, &[7; 32]);
+        client.anchor(&1, &root, &3);
+
+        let ttl_after = instance_ttl(&env, &client.address);
+        assert_eq!(ttl_after, AuditAnchor::INSTANCE_TTL_BUMP);
+
+        env.ledger().with_mut(|li| {
+            li.sequence_number += 510_000;
+        });
+        let ttl_decayed = instance_ttl(&env, &client.address);
+        assert!(ttl_decayed < AuditAnchor::INSTANCE_TTL_THRESHOLD);
+
+        client.anchor(&2, &root, &3);
+        let ttl_renewed = instance_ttl(&env, &client.address);
+        assert_eq!(ttl_renewed, AuditAnchor::INSTANCE_TTL_BUMP);
     }
 
     // ── EmptyEpoch ───────────────────────────────────────────────────────────
