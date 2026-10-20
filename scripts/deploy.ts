@@ -442,6 +442,10 @@ async function main() {
     console.log('  NFT.authorize_minter(LoanManager)');
     await invoke(server, nftContractId, 'authorize_minter', [managerContractId], account, passphrase);
 
+    // Let the pool accept yield/loss accounting updates only from this manager.
+    console.log('  LendingPool.set_loan_manager(LoanManager)');
+    await invoke(server, poolContractId, 'set_loan_manager', [managerContractId], account, passphrase);
+
     // Wire CircuitBreaker into AgentVault, LendingPool, and LoanManager
     console.log('  AgentVault.set_circuit_breaker');
     await invoke(server, vaultContractId, 'set_circuit_breaker', [breakerContractId], account, passphrase);
@@ -523,7 +527,6 @@ async function main() {
     console.log(`  CircuitBreaker          : ${breakerContractId}`);
     console.log(`  Oracle                  : ${oracleContractId}`);
     console.log(`  AuditAnchor             : ${anchorContractId}`);
-    console.log(`  AUDIT_ANCHOR_CONTRACT_ID: ${anchorContractId}`);
 }
 
 main().catch(error => {
