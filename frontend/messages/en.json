@@ -632,7 +632,20 @@
     "recentTransactions": "Recent Transactions",
     "noTransactions": "No recent transactions.",
     "autoRefresh": "Auto-refresh",
-    "refresh": "Refresh Now"
+    "refresh": "Refresh Now",
+    "vaultTitle": "Agent vault actions",
+    "vaultDescription": "Amounts are entered in whole tokens and converted to stroops before signing.",
+    "vaultMissingInput": "Connect a wallet and enter an amount.",
+    "vaultSubmitted": "Transaction submitted.",
+    "vaultFailed": "Transaction failed.",
+    "vaultDeposit": "Deposit collateral",
+    "vaultWithdraw": "Withdraw collateral",
+    "vaultCashOut": "Cash out",
+    "vaultCashIn": "Record cash in (admin)",
+    "vaultAgentKey": "Agent public key",
+    "vaultAmount": "Amount",
+    "vaultWaiting": "Waiting for wallet…",
+    "vaultBuild": "Build and sign"
   },
   "Governance": {
     "title": "Governance Console",

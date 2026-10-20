@@ -28,7 +28,7 @@ export interface User {
   email: string;
   displayName?: string;
   walletAddress?: string;
-  role?: "admin" | "super_admin" | "ops" | "support" | "borrower" | "lender";
+  role?: "admin" | "super_admin" | "ops" | "support" | "agent" | "borrower" | "lender";
   scopes?: string[];
   kycVerified: boolean;
   /** ISO 8601 timestamp of when the session was established */
