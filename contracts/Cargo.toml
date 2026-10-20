@@ -9,8 +9,8 @@ members = [
   "agent_registry",
   "agent_vault",
   "audit_anchor",
-  "oracle",
   "circuit_breaker",
+  "oracle",
 ]
 exclude = [
   "fuzz",

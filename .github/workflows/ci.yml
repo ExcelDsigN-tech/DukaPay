@@ -613,9 +613,13 @@ jobs:
           name: contracts-coverage
           path: contracts/cobertura.xml
           retention-days: 7
-      - name: Check fuzz targets compile
-        run: cargo check
-        working-directory: contracts/fuzz
+      - name: Build fuzz targets
+        run: cargo build --manifest-path contracts/fuzz/Cargo.toml
+        env:
+          RUSTFLAGS: -D warnings
+          # Running from the repo root bypasses contracts/rust-toolchain.toml;
+          # pin the same toolchain the contracts checks use.
+          RUSTUP_TOOLCHAIN: 1.85.0
       - name: How to fix
         if: failure()
         run: |

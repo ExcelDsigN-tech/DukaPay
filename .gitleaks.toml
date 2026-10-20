@@ -3,6 +3,11 @@
 
 title = "DukaPay gitleaks config"
 
+# Without this, a config file replaces gitleaks' built-in rules instead of
+# adding to them, and an allowlist-only file scans with zero rules.
+[extend]
+useDefault = true
+
 [allowlist]
   # Allowlist rules that are known false positives in this repo.
   description = "Global allowlist"
@@ -24,4 +29,19 @@ title = "DukaPay gitleaks config"
     '''\.env\.example$''',
     '''docs/''',
     '''README''',
+  ]
+
+  # Stellar contract addresses (C + 55 base32 chars) are public on-chain IDs
+  # that generic-api-key mistakes for keys. Secret seeds start with S, so
+  # this doesn't hide them.
+  regexes = [
+    '''^C[A-Z2-7]{55}$''',
+    # Truncated placeholder token address in scripts/deploy-config.json at 40f6da18.
+    '''^CAS3J7GYCCXG7W35XU4643F2M3T63BGCV2X4D6C4V7G4X6C4$''',
+  ]
+
+  # #784 committed a fake ghp_ token as a gitleaks self-test fixture; the
+  # fixture is now generated at runtime (#808). Never a real credential.
+  commits = [
+    "c966b6e34de5e93892bc8d7167f5ab59b0433066",
   ]

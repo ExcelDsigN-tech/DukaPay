@@ -64,7 +64,6 @@ const KEY_OVERRIDE_COUNT: Symbol = symbol_short!("OCNT");
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum CircuitBreakerError {
-    AlreadyInitialized = 5001,
     NotInitialized = 5002,
     Unauthorized = 5003,
     SignerNotAllowed = 5004,
@@ -201,7 +200,7 @@ pub struct CircuitBreaker;
 impl CircuitBreaker {
     // ── Initialization ────────────────────────────────────────────────────────
 
-    /// Initialize the circuit breaker.
+    /// Constructor.
     ///
     /// `admin`:    protocol admin (may rotate signers, threshold, timelock,
     ///              cancel proposals). Need not be a signer.
@@ -209,38 +208,35 @@ impl CircuitBreaker {
     /// `threshold`: approvals required to execute an override (default 3).
     /// `override_timelock`: seconds the override must wait before executing
     ///              (default 24h, minimum 1h).
-    pub fn initialize(
+    pub fn __constructor(
         env: Env,
         admin: Address,
         signers: Vec<Address>,
         threshold: u32,
         override_timelock: u64,
-    ) -> Result<(), CircuitBreakerError> {
-        if env.storage().instance().has(&KEY_ADMIN) {
-            return Err(CircuitBreakerError::AlreadyInitialized);
-        }
+    ) {
         if signers.is_empty() {
-            return Err(CircuitBreakerError::EmptySignerList);
+            panic!("empty signer list");
         }
         if signers.len() > MAX_SIGNERS {
-            return Err(CircuitBreakerError::TooManySigners);
+            panic!("too many signers");
         }
         // Reject duplicate signers so a key cannot double-count toward quorum.
         let mut seen: Vec<Address> = Vec::new(&env);
         for s in signers.iter() {
             if seen.iter().any(|x| x == s) {
-                return Err(CircuitBreakerError::DuplicateSigner);
+                panic!("duplicate signer");
             }
             seen.push_back(s);
         }
         if threshold < 1 {
-            return Err(CircuitBreakerError::ThresholdTooLow);
+            panic!("threshold too low");
         }
         if threshold > signers.len() {
-            return Err(CircuitBreakerError::ThresholdExceedsSigners);
+            panic!("threshold exceeds signers");
         }
         if override_timelock < MIN_OVERRIDE_TIMELOCK {
-            return Err(CircuitBreakerError::TimelockTooShort);
+            panic!("timelock too short");
         }
 
         env.storage().instance().set(&KEY_ADMIN, &admin);
@@ -259,7 +255,6 @@ impl CircuitBreaker {
             (Symbol::new(&env, "BreakerInit"),),
             (admin, signers.len(), threshold, override_timelock),
         );
-        Ok(())
     }
 
     pub fn version(env: Env) -> u32 {
