@@ -45,6 +45,10 @@ const MAX_SIGNERS: u32 = 32;
 pub const CONTRACT_WILDCARD: &str = "__all__";
 
 const CURRENT_VERSION: u32 = 1;
+/// TTL constants mirroring agent_vault's bump pattern (#790). All state here
+/// lives in instance storage.
+const INSTANCE_TTL_THRESHOLD: u32 = 17_280;
+const INSTANCE_TTL_BUMP: u32 = 518_400;
 
 // ─── Storage keys ─────────────────────────────────────────────────────────────
 
@@ -250,6 +254,9 @@ impl CircuitBreaker {
         let empty_state: Map<Address, Map<Symbol, u64>> = Map::new(&env);
         env.storage().instance().set(&KEY_STATE, &empty_state);
         // No global pause on init.
+        // Without this, the instance could archive before is_blocked is ever
+        // called even once, which would brick every entry point (#790).
+        Self::bump_instance_ttl(&env);
 
         env.events().publish(
             (Symbol::new(&env, "BreakerInit"),),
@@ -575,6 +582,7 @@ impl CircuitBreaker {
     /// Guarded contracts call this at the top of sensitive entry points.
     /// Performs lazy cleanup of expired pause entries to prevent unbounded storage growth.
     pub fn is_blocked(env: Env, contract: Address, function: Symbol) -> bool {
+        Self::bump_instance_ttl(&env);
         let now = env.ledger().timestamp();
 
         // Global pause cleanup: remove if expired.
@@ -763,6 +771,12 @@ impl CircuitBreaker {
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
+
+    fn bump_instance_ttl(env: &Env) {
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_BUMP);
+    }
 
     fn wildcard(env: &Env) -> Symbol {
         Symbol::new(env, CONTRACT_WILDCARD)

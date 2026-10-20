@@ -535,6 +535,92 @@ fn test_circuit_breaker_tripped_blocks_deposit() {
     );
 }
 
+// ── AgentRegistry integration (#788) ────────────────────────────────────────
+
+#[test]
+#[should_panic]
+fn test_set_registry_unauthorized() {
+    let env = Env::default();
+    let owner = Address::generate(&env);
+    let operator = Address::generate(&env);
+    let (token, _, _) = create_token_contract(&env, &owner);
+    let id = env.register(
+        AgentVault,
+        (&owner, &operator, &token, &MAX_HAIRCUT, &MIN_COLLATERAL),
+    );
+    let client = AgentVaultClient::new(&env, &id);
+    let registry = Address::generate(&env);
+    client.set_registry(&Some(registry));
+}
+
+#[soroban_sdk::contract]
+struct MockRegistry;
+
+#[soroban_sdk::contractimpl]
+impl MockRegistry {
+    pub fn __constructor(env: Env, status: Option<crate::AgentStatus>) {
+        env.storage()
+            .instance()
+            .set(&Symbol::new(&env, "status"), &status);
+    }
+
+    pub fn get_agent(
+        env: Env,
+        _agent: Address,
+    ) -> Result<crate::AgentInfo, crate::RegistryError> {
+        let status: Option<crate::AgentStatus> = env
+            .storage()
+            .instance()
+            .get(&Symbol::new(&env, "status"))
+            .unwrap();
+        status
+            .map(|status| crate::AgentInfo {
+                status,
+                kyc_ref: Symbol::new(&env, "kyc"),
+                bond_amount: 1,
+                license_expiry: 0,
+                region: Symbol::new(&env, "KE"),
+                reputation: 0,
+            })
+            .ok_or(crate::RegistryError::AgentNotFound)
+    }
+}
+
+fn mock_registry(env: &Env, status: Option<crate::AgentStatus>) -> Address {
+    env.register(MockRegistry, (status,))
+}
+
+#[test]
+fn test_mint_float_rejects_non_active_agent() {
+    for status in [
+        None,
+        Some(crate::AgentStatus::Pending),
+        Some(crate::AgentStatus::Suspended),
+        Some(crate::AgentStatus::Expired),
+    ] {
+        let s = setup();
+        let registry = mock_registry(&s.env, status);
+        s.client.set_registry(&Some(registry));
+        let a = agent(&s.env);
+        fund(&s, &a, 1_000);
+        assert_eq!(
+            s.client.try_mint_float(&a, &100),
+            Err(Ok(VaultError::AgentNotFound))
+        );
+    }
+}
+
+#[test]
+fn test_mint_float_allows_active_agent() {
+    let s = setup();
+    let registry = mock_registry(&s.env, Some(crate::AgentStatus::Active));
+    s.client.set_registry(&Some(registry));
+    let a = agent(&s.env);
+    fund(&s, &a, 1_000);
+    s.client.mint_float(&a, &100);
+    assert_eq!(s.client.get_vault(&a).float, 100);
+}
+
 // ── Invariant checks ────────────────────────────────────────────────────────
 
 #[test]
