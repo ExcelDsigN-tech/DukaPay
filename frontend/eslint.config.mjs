@@ -8,6 +8,9 @@ export default defineConfig([
   ...nextTypescript,
   noHardcodedStrings,
   {
+    linterOptions: {
+      reportUnusedDisableDirectives: "error",
+    },
     rules: {
       // React Compiler optimization hints, not correctness bugs.
       "react-hooks/preserve-manual-memoization": "warn",

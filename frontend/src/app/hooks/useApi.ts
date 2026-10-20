@@ -17,7 +17,7 @@ import {
   type UseQueryOptions,
   type UseMutationOptions,
 } from "@tanstack/react-query";
-import { LoanStatusBadge, type LoanStatus } from "../components/ui/LoanStatusBadge";
+import type { LoanStatus } from "../components/ui/LoanStatusBadge";
 import { useUserStore } from "../stores/useUserStore";
 import { logoutUser, SessionExpiredError } from "../lib/session";
 import { useWallet } from "../components/providers/WalletProvider";

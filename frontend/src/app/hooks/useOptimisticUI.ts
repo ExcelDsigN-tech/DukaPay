@@ -2,7 +2,7 @@
 
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 
 export type TransactionStatus =
   | "idle"
@@ -204,7 +204,8 @@ export const useOptimisticUI = create<OptimisticUIStore>()(
 
       clearTransaction: (id) =>
         set((state) => {
-          const { [id]: _removed, ...rest } = state.transactions;
+          const rest = { ...state.transactions };
+          delete rest[id];
           return { transactions: rest };
         }),
 

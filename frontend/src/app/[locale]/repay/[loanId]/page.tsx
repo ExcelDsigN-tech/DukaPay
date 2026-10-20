@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { CheckCircle2, Wallet } from "lucide-react";
@@ -13,10 +13,7 @@ import {
   TransactionStatusTracker,
   type TransactionStatusState,
 } from "../../../components/ui/TransactionStatusTracker";
-import {
-  mapTransactionError,
-  type TransactionErrorDetails,
-} from "../../../utils/transactionErrors";
+import { mapTransactionError } from "../../../utils/transactionErrors";
 import {
   selectIsWalletConnected,
   selectWalletAddress,
@@ -55,7 +52,6 @@ export default function RepayLoanPage() {
   const [trackerMessage, setTrackerMessage] = useState("");
   const [trackerGuidance, setTrackerGuidance] = useState<string | undefined>(undefined);
   const [trackerTxHash, setTrackerTxHash] = useState<string | null>(null);
-  const [lastError, setLastError] = useState<TransactionErrorDetails | null>(null);
 
   const amountNumber = useMemo(() => Number(amount || "0"), [amount]);
   const decimals = getAssetDecimals("USDC");
@@ -130,7 +126,6 @@ export default function RepayLoanPage() {
       );
     } catch (error) {
       const mapped = mapTransactionError(error);
-      setLastError(mapped);
       toast.error(mapped.title, mapped.message);
     } finally {
       setIsSubmitting(false);
@@ -174,7 +169,6 @@ export default function RepayLoanPage() {
       }
     } catch (error) {
       const mapped = mapTransactionError(error);
-      setLastError(mapped);
       setTrackerState(mapped.cancelledByUser ? "cancelled" : "error");
       setTrackerTitle(mapped.title);
       setTrackerMessage(mapped.message);

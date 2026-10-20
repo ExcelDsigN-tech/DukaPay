@@ -1,6 +1,14 @@
 "use client";
 
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import type { TokenBalance, WalletNetwork, WalletStatus } from "../../stores/useWalletStore";
 import { useWalletStore } from "../../stores/useWalletStore";
 
@@ -140,160 +148,172 @@ export function WalletProvider({ children }: WalletProviderProps) {
   const [isFreighterAvailable, setIsFreighterAvailable] = useState(false);
   const syncRef = useRef<Promise<void> | null>(null);
 
-  async function refreshBalances(nextAddress: string, horizonUrl: string, status: WalletStatus) {
-    setLoadingBalances(true);
+  const refreshBalances = useCallback(
+    async (nextAddress: string, horizonUrl: string, status: WalletStatus) => {
+      setLoadingBalances(true);
 
-    try {
-      const response = await fetch(`${horizonUrl}/accounts/${nextAddress}`);
+      try {
+        const response = await fetch(`${horizonUrl}/accounts/${nextAddress}`);
 
-      if (response.status === 404) {
-        setBalances([]);
-        return;
-      }
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch balances from Horizon (${response.status})`);
-      }
-
-      const data = (await response.json()) as { balances?: HorizonBalance[] };
-      setBalances(mapBalances(data.balances));
-      setError(null, status);
-    } catch (error) {
-      setBalances([]);
-      setError(normalizeWalletError(error), status);
-    }
-  }
-
-  async function syncWallet(interactive: boolean) {
-    if (syncRef.current) {
-      return syncRef.current;
-    }
-
-    const task = (async () => {
-      const api = (await loadFreighterApi()) as unknown as ExtendedFreighterApi;
-      const installationState = await api.isConnected();
-
-      if (installationState.error || !installationState.isConnected) {
-        setIsFreighterAvailable(false);
-        throw new Error("Freighter is not installed or unavailable in this browser.");
-      }
-
-      setIsFreighterAvailable(true);
-
-      const addressResult = (
-        interactive ? await api.requestAccess() : await api.getAddress()
-      ) as FreighterAddressResult;
-
-      if (addressResult.error) {
-        throw new Error(normalizeWalletError(addressResult.error));
-      }
-
-      if (!addressResult.address) {
-        if (!interactive) {
-          disconnect();
+        if (response.status === 404) {
+          setBalances([]);
           return;
         }
 
-        throw new Error("No Stellar address was returned by Freighter.");
-      }
-
-      const networkResult: FreighterNetworkResult = api.getNetworkDetails
-        ? await api.getNetworkDetails()
-        : api.getNetwork
-          ? await api.getNetwork()
-          : { error: "Network info not available." };
-
-      if (networkResult.error) {
-        throw new Error(normalizeWalletError(networkResult.error));
-      }
-
-      const walletNetwork = mapWalletNetwork(networkResult.network);
-      const nextStatus: WalletStatus = walletNetwork.isSupported ? "connected" : "error";
-
-      // Sign in before marking the wallet connected: connected pages fire
-      // authenticated requests at once, and a 401 logs the user out.
-      if (interactive && walletNetwork.isSupported) {
-        await signIn(addressResult.address, walletNetwork.name);
-      }
-
-      setConnected(addressResult.address, walletNetwork);
-      setNetwork(walletNetwork);
-      setStatus(nextStatus);
-
-      if (!walletNetwork.isSupported) {
-        setError(
-          `Unsupported wallet network: ${walletNetwork.name}. Switch to PUBLIC, TESTNET, FUTURENET, or STANDALONE.`,
-          "error",
-        );
-      } else {
-        setError(null, "connected");
-      }
-
-      await refreshBalances(
-        addressResult.address,
-        networkResult.networkUrl || getFallbackHorizonUrl(networkResult.network),
-        nextStatus,
-      );
-    })()
-      .catch((error) => {
-        if (interactive) {
-          disconnect();
-          setError(normalizeWalletError(error), "error");
-          throw error;
+        if (!response.ok) {
+          throw new Error(`Failed to fetch balances from Horizon (${response.status})`);
         }
-      })
-      .finally(() => {
-        syncRef.current = null;
+
+        const data = (await response.json()) as { balances?: HorizonBalance[] };
+        setBalances(mapBalances(data.balances));
+        setError(null, status);
+      } catch (error) {
+        setBalances([]);
+        setError(normalizeWalletError(error), status);
+      }
+    },
+    [setBalances, setError, setLoadingBalances],
+  );
+
+  const postAuth = useCallback(
+    async <T,>(path: string, body: Record<string, string>): Promise<T> => {
+      const response = await fetch(`${API_URL}/api/auth/${path}`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
       });
+      const payload = (await response.json().catch(() => ({}))) as {
+        data?: T;
+        message?: string;
+        error?: { message?: string };
+      };
 
-    syncRef.current = task;
-    return task;
-  }
+      if (!response.ok || !payload.data) {
+        throw new Error(payload.error?.message ?? payload.message ?? "Sign-in failed.");
+      }
 
-  async function postAuth<T>(path: string, body: Record<string, string>): Promise<T> {
-    const response = await fetch(`${API_URL}/api/auth/${path}`, {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    const payload = (await response.json().catch(() => ({}))) as {
-      data?: T;
-      message?: string;
-      error?: { message?: string };
-    };
-
-    if (!response.ok || !payload.data) {
-      throw new Error(payload.error?.message ?? payload.message ?? "Sign-in failed.");
-    }
-
-    return payload.data;
-  }
+      return payload.data;
+    },
+    [],
+  );
 
   /**
    * Signs the backend's challenge with Freighter and exchanges it for the
    * httpOnly session cookie that authenticated API calls need.
    */
-  async function signIn(publicKey: string, networkName: string) {
-    const { message } = await postAuth<{ message: string }>("challenge", { publicKey });
+  const signIn = useCallback(
+    async (publicKey: string, networkName: string) => {
+      const { message } = await postAuth<{ message: string }>("challenge", { publicKey });
 
-    const api = (await loadFreighterApi()) as unknown as ExtendedFreighterApi;
-    const result = await api.signMessage(message, {
-      address: publicKey,
-      networkPassphrase: NETWORK_PASSPHRASES[networkName] ?? NETWORK_PASSPHRASES.TESTNET,
-    });
+      const api = (await loadFreighterApi()) as unknown as ExtendedFreighterApi;
+      const result = await api.signMessage(message, {
+        address: publicKey,
+        networkPassphrase: NETWORK_PASSPHRASES[networkName] ?? NETWORK_PASSPHRASES.TESTNET,
+      });
 
-    if (result.error || !result.signedMessage) {
-      throw new Error(normalizeWalletError(result.error ?? "Message signing was rejected."));
-    }
+      if (result.error || !result.signedMessage) {
+        throw new Error(normalizeWalletError(result.error ?? "Message signing was rejected."));
+      }
 
-    const signature =
-      typeof result.signedMessage === "string"
-        ? result.signedMessage
-        : result.signedMessage.toString("base64");
+      const signature =
+        typeof result.signedMessage === "string"
+          ? result.signedMessage
+          : result.signedMessage.toString("base64");
 
-    await postAuth("login", { publicKey, message, signature });
-  }
+      await postAuth("login", { publicKey, message, signature });
+    },
+    [postAuth],
+  );
+
+  const syncWallet = useCallback(
+    async (interactive: boolean) => {
+      if (syncRef.current) {
+        return syncRef.current;
+      }
+
+      const task = (async () => {
+        const api = (await loadFreighterApi()) as unknown as ExtendedFreighterApi;
+        const installationState = await api.isConnected();
+
+        if (installationState.error || !installationState.isConnected) {
+          setIsFreighterAvailable(false);
+          throw new Error("Freighter is not installed or unavailable in this browser.");
+        }
+
+        setIsFreighterAvailable(true);
+
+        const addressResult = (
+          interactive ? await api.requestAccess() : await api.getAddress()
+        ) as FreighterAddressResult;
+
+        if (addressResult.error) {
+          throw new Error(normalizeWalletError(addressResult.error));
+        }
+
+        if (!addressResult.address) {
+          if (!interactive) {
+            disconnect();
+            return;
+          }
+
+          throw new Error("No Stellar address was returned by Freighter.");
+        }
+
+        const networkResult: FreighterNetworkResult = api.getNetworkDetails
+          ? await api.getNetworkDetails()
+          : api.getNetwork
+            ? await api.getNetwork()
+            : { error: "Network info not available." };
+
+        if (networkResult.error) {
+          throw new Error(normalizeWalletError(networkResult.error));
+        }
+
+        const walletNetwork = mapWalletNetwork(networkResult.network);
+        const nextStatus: WalletStatus = walletNetwork.isSupported ? "connected" : "error";
+
+        // Sign in before marking the wallet connected: connected pages fire
+        // authenticated requests at once, and a 401 logs the user out.
+        if (interactive && walletNetwork.isSupported) {
+          await signIn(addressResult.address, walletNetwork.name);
+        }
+
+        setConnected(addressResult.address, walletNetwork);
+        setNetwork(walletNetwork);
+        setStatus(nextStatus);
+
+        if (!walletNetwork.isSupported) {
+          setError(
+            `Unsupported wallet network: ${walletNetwork.name}. Switch to PUBLIC, TESTNET, FUTURENET, or STANDALONE.`,
+            "error",
+          );
+        } else {
+          setError(null, "connected");
+        }
+
+        await refreshBalances(
+          addressResult.address,
+          networkResult.networkUrl || getFallbackHorizonUrl(networkResult.network),
+          nextStatus,
+        );
+      })()
+        .catch((error) => {
+          if (interactive) {
+            disconnect();
+            setError(normalizeWalletError(error), "error");
+            throw error;
+          }
+        })
+        .finally(() => {
+          syncRef.current = null;
+        });
+
+      syncRef.current = task;
+      return task;
+    },
+    [disconnect, refreshBalances, setConnected, setError, setNetwork, setStatus, signIn],
+  );
 
   async function connectWallet() {
     setStatus("connecting");
@@ -316,7 +336,6 @@ export function WalletProvider({ children }: WalletProviderProps) {
             await Promise.all(regs.map((r) => r.unregister()));
           } catch (swErr) {
             // Non-fatal: log and continue
-            // eslint-disable-next-line no-console
             console.error("Service worker unregister failed:", swErr);
           }
         }
@@ -327,7 +346,6 @@ export function WalletProvider({ children }: WalletProviderProps) {
             const cacheKeys = await caches.keys();
             await Promise.all(cacheKeys.map((k) => caches.delete(k)));
           } catch (cacheErr) {
-            // eslint-disable-next-line no-console
             console.error("Cache clear failed:", cacheErr);
           }
         }
@@ -343,7 +361,6 @@ export function WalletProvider({ children }: WalletProviderProps) {
             }
           }
         } catch (lsErr) {
-          // eslint-disable-next-line no-console
           console.error("localStorage clear failed:", lsErr);
         }
 
@@ -355,7 +372,6 @@ export function WalletProvider({ children }: WalletProviderProps) {
             }
           }
         } catch (ssErr) {
-          // eslint-disable-next-line no-console
           console.error("sessionStorage clear failed:", ssErr);
         }
 
@@ -379,14 +395,12 @@ export function WalletProvider({ children }: WalletProviderProps) {
                     });
                   }
                 } catch (e) {
-                  // eslint-disable-next-line no-console
                   console.error("IndexedDB delete failed for", db.name, e);
                 }
               }),
             );
           }
         } catch (idbErr) {
-          // eslint-disable-next-line no-console
           console.error("IndexedDB cleanup failed:", idbErr);
         }
 
@@ -396,13 +410,11 @@ export function WalletProvider({ children }: WalletProviderProps) {
           window.location.replace(window.location.href);
         } catch (reloadErr) {
           // Fallback to reload
-          // eslint-disable-next-line no-console
           console.error("Force reload failed, falling back to location.reload():", reloadErr);
           window.location.reload();
         }
       } catch (err) {
         // Ensure we always reload to get a clean state
-        // eslint-disable-next-line no-console
         console.error("Disconnect cleanup unexpected error:", err);
         try {
           window.location.reload();
@@ -437,10 +449,10 @@ export function WalletProvider({ children }: WalletProviderProps) {
     throw new Error("Signing failed: No signed transaction returned.");
   }
 
-  async function refreshWallet() {
+  const refreshWallet = useCallback(async () => {
     if (!shouldAutoReconnect && !address) return;
     await syncWallet(false);
-  }
+  }, [address, shouldAutoReconnect, syncWallet]);
 
   // Initial check and Auto-reconnect
   useEffect(() => {
@@ -467,7 +479,7 @@ export function WalletProvider({ children }: WalletProviderProps) {
     return () => {
       cancelled = true;
     };
-  }, [shouldAutoReconnect]);
+  }, [refreshWallet, shouldAutoReconnect]);
 
   // Event Listeners
   useEffect(() => {
@@ -488,7 +500,7 @@ export function WalletProvider({ children }: WalletProviderProps) {
       }
 
       if (typeof api.watchNetwork === "function") {
-        unwatchNetwork = api.watchNetwork((newNetwork: string) => {
+        unwatchNetwork = api.watchNetwork(() => {
           void refreshWallet();
         });
       }
@@ -498,7 +510,7 @@ export function WalletProvider({ children }: WalletProviderProps) {
       if (unwatchAddress) unwatchAddress();
       if (unwatchNetwork) unwatchNetwork();
     };
-  }, [address]);
+  }, [address, disconnect, refreshWallet]);
 
   return (
     <WalletProviderContext.Provider

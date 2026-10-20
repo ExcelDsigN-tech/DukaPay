@@ -25,20 +25,20 @@ const NOTIFICATION_TYPES: Array<NotificationType | "all"> = [
   "score_changed",
 ];
 
-function notificationIcon(type: NotificationType) {
+function NotificationTypeIcon({ type }: { type: NotificationType }) {
   switch (type) {
     case "loan_approved":
-      return Check;
+      return <Check className="h-5 w-5" />;
     case "repayment_confirmed":
-      return CheckCheck;
+      return <CheckCheck className="h-5 w-5" />;
     case "repayment_due":
-      return Clock;
+      return <Clock className="h-5 w-5" />;
     case "loan_defaulted":
-      return AlertTriangle;
+      return <AlertTriangle className="h-5 w-5" />;
     case "score_changed":
-      return TrendingUp;
+      return <TrendingUp className="h-5 w-5" />;
     default:
-      return Bell;
+      return <Bell className="h-5 w-5" />;
   }
 }
 
@@ -70,8 +70,6 @@ function NotificationRow({
   markReadLabel: string;
   locale: string;
 }) {
-  const Icon = notificationIcon(notification.type);
-
   return (
     <article
       className={`rounded-xl border p-4 transition ${
@@ -83,7 +81,7 @@ function NotificationRow({
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-zinc-100 text-indigo-600 dark:bg-zinc-900 dark:text-indigo-300">
-            <Icon className="h-5 w-5" />
+            <NotificationTypeIcon type={notification.type} />
           </div>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
@@ -134,7 +132,7 @@ export default function NotificationsPage() {
     unread: unreadOnly,
   });
 
-  const notifications = data?.notifications ?? [];
+  const notifications = useMemo(() => data?.notifications ?? [], [data?.notifications]);
   const filteredNotifications = useMemo(() => {
     return notifications.filter((notification) => {
       const matchesType = activeType === "all" || notification.type === activeType;

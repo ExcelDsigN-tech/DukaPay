@@ -28,28 +28,28 @@ export class SoundManager {
 
     const soundEffects: Record<SoundEffect, string> = {
       // Level up - triumphant sound
-      levelUp: this.generateTone([523.25, 659.25, 783.99], 0.3),
+      levelUp: this.generateTone(),
 
       // Achievement unlocked - success chime
-      achievement: this.generateTone([659.25, 783.99, 987.77], 0.2),
+      achievement: this.generateTone(),
 
       // Success - positive feedback
-      success: this.generateTone([523.25, 659.25], 0.15),
+      success: this.generateTone(),
 
       // Signature - confirmation sound
-      signature: this.generateTone([440, 554.37], 0.1),
+      signature: this.generateTone(),
 
       // Loan approved - celebration
-      loanApproved: this.generateTone([523.25, 659.25, 783.99, 1046.5], 0.25),
+      loanApproved: this.generateTone(),
 
       // XP gain - quick positive feedback
-      xpGain: this.generateTone([659.25, 783.99], 0.08),
+      xpGain: this.generateTone(),
 
       // Click - subtle interaction
-      click: this.generateTone([440], 0.05),
+      click: this.generateTone(),
 
       // Error - negative feedback
-      error: this.generateTone([329.63, 293.66], 0.15),
+      error: this.generateTone(),
     };
 
     // Create audio elements
@@ -66,10 +66,8 @@ export class SoundManager {
    * Gamification sound effects are currently disabled and all generated
    * clips are intentionally silent placeholders until real audio assets
    * or Web Audio API tone generation is implemented.
-   *
-   * The frequency and duration parameters are currently unused.
    */
-  private generateTone(_frequencies: number[], _duration: number): string {
+  private generateTone(): string {
     return "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
   }
 

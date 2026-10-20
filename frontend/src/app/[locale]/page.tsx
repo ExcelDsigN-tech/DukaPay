@@ -10,20 +10,14 @@ import {
   selectWalletBalances,
 } from "../stores/useWalletStore";
 import { useWalletConnectAction } from "../hooks/useWalletConnectAction";
-import {
-  useBorrowerLoans,
-  useRemittances,
-  useCreditScoreHistory,
-  useScoreBreakdown,
-} from "../hooks/useApi";
+import { useBorrowerLoans, useRemittances, useCreditScoreHistory } from "../hooks/useApi";
 import { DashboardSkeleton } from "../components/skeletons/DashboardSkeleton";
 import { LandingPage } from "../components/landing/LandingPage";
 import { CreditScoreGauge } from "../components/ui/CreditScoreGauge";
 import { EmptyState } from "../components/ui/EmptyState";
-import { CreditScoreBreakdown } from "../components/ui/CreditScoreBreakdown";
 import { ErrorBoundary } from "../components/global_ui/ErrorBoundary";
 import { Tooltip } from "../components/ui/Tooltip";
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState } from "react";
 import type { BorrowerLoan } from "../hooks/useApi";
 import { formatCurrency } from "../utils/formatLocale";
 
@@ -35,17 +29,13 @@ function getLoanDueDate(loan: BorrowerLoan): Date {
 }
 
 function useRepaymentReminder(loans: BorrowerLoan[] | undefined) {
-  const [dismissed, setDismissed] = useState(false);
-
-  useEffect(() => {
-    if (typeof window !== "undefined" && sessionStorage.getItem(SESSION_BANNER_KEY) === "true") {
-      setDismissed(true);
-    }
-  }, []);
+  const [dismissed, setDismissed] = useState(
+    () => typeof window !== "undefined" && sessionStorage.getItem(SESSION_BANNER_KEY) === "true",
+  );
 
   const urgentLoans = useMemo(() => {
     if (!loans) return [];
-    const now = Date.now();
+    const now = new Date().getTime();
     return loans
       .filter((l) => {
         if (l.status !== "active") return false;
@@ -77,7 +67,8 @@ function RepaymentReminderBanner({
   if (!mostUrgent) return null;
 
   const dueDate = getLoanDueDate(mostUrgent);
-  const hoursLeft = Math.max(0, Math.floor((dueDate.getTime() - Date.now()) / (60 * 60 * 1000)));
+  const nowMs = new Date().getTime();
+  const hoursLeft = Math.max(0, Math.floor((dueDate.getTime() - nowMs) / (60 * 60 * 1000)));
 
   return (
     <div
