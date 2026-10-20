@@ -21,10 +21,11 @@ Set the following environment variable in the backend:
 
 ### Scope
 
-The files `backend/src/utils/demo.ts` and `backend/src/utils/demo-rate-limit.ts`
-are standalone demonstration scripts that illustrate how limit capping and rate
-limiting work.  They are not middleware themselves, but they document the
-patterns used by the sandbox middleware that activates when `DEMO_MODE=true`.
+Query parameter limit capping is implemented in `backend/src/utils/queryHelpers.ts`
+(`parseCappedLimit`), rate limiting in `backend/src/services/rateLimitService.ts`
+and `backend/src/middleware/rateLimitMiddleware.ts` (with per-IP limiters in
+`backend/src/middleware/rateLimiter.ts`), and sandbox/development fixture data in
+`backend/src/seed/index.ts`.
 
 Routes that check `DEMO_MODE` respond with mock data and are subject to a
 stricter rate limit (10 requests/minute/IP) to prevent abuse.
