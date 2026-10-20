@@ -30,7 +30,6 @@ pub trait BreakerInterface {
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum VaultError {
-    AlreadyInitialized = 1,
     NotInitialized = 2,
     Unauthorized = 3,
     AgentNotFound = 4,
@@ -219,24 +218,21 @@ impl AgentVault {
 
     // ── Lifecycle ─────────────────────────────────────────────────────────
 
-    /// One-time init. `max_haircut_bps` must be in `1..=10_000`;
+    /// Constructor. `max_haircut_bps` must be in `1..=10_000`;
     /// `min_collateral` must be non-negative.
-    pub fn init(
+    pub fn __constructor(
         env: Env,
         owner: Address,
         operator: Address,
         token: Address,
         max_haircut_bps: u32,
         min_collateral: i128,
-    ) -> Result<(), VaultError> {
-        if env.storage().instance().has(&DataKey::Owner) {
-            return Err(VaultError::AlreadyInitialized);
-        }
+    ) {
         if max_haircut_bps == 0 || max_haircut_bps > 10_000 {
-            return Err(VaultError::InvalidParams);
+            panic!("invalid max_haircut_bps");
         }
         if min_collateral < 0 {
-            return Err(VaultError::InvalidParams);
+            panic!("invalid min_collateral");
         }
         env.storage().instance().set(&DataKey::Owner, &owner);
         env.storage().instance().set(&DataKey::Operator, &operator);
@@ -252,7 +248,6 @@ impl AgentVault {
             .instance()
             .set(&DataKey::Version, &Self::INITIAL_VERSION);
         Self::bump_instance_ttl(&env);
-        Ok(())
     }
 
     // ── Upgrades ──────────────────────────────────────────────────────────
@@ -525,6 +520,17 @@ impl AgentVault {
         vault.haircut_bps = new_haircut_bps;
         Self::write_vault(&env, &agent, &vault);
         events::haircut_updated(&env, &agent, old, new_haircut_bps);
+        Ok(())
+    }
+
+    /// Configure (or clear) the `CircuitBreaker` contract address.
+    /// Admin only.
+    pub fn set_circuit_breaker(env: Env, breaker: Option<Address>) -> Result<(), VaultError> {
+        Self::owner(&env)?.require_auth();
+        env.storage()
+            .instance()
+            .set(&DataKey::CircuitBreaker, &breaker);
+        Self::bump_instance_ttl(&env);
         Ok(())
     }
 

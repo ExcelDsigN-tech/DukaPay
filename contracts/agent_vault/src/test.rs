@@ -3,7 +3,7 @@ use proptest::prelude::*;
 use soroban_sdk::testutils::{Address as _, Events as _, Ledger as _};
 use soroban_sdk::token::Client as TokenClient;
 use soroban_sdk::token::StellarAssetClient;
-use soroban_sdk::{vec, Address, Env, FromVal, Symbol, Vec};
+use soroban_sdk::{vec, Address, Env, FromVal, IntoVal, Symbol, Val, Vec};
 
 const MAX_HAIRCUT: u32 = 8_000; // 80%
 const MIN_COLLATERAL: i128 = 100;
@@ -24,9 +24,11 @@ fn setup() -> Setup {
     let owner = Address::generate(&env);
     let operator = Address::generate(&env);
     let (token, stellar, token_client) = create_token_contract(&env, &owner);
-    let id = env.register(AgentVault, ());
+    let id = env.register(
+        AgentVault,
+        (&owner, &operator, &token, &MAX_HAIRCUT, &MIN_COLLATERAL),
+    );
     let client = AgentVaultClient::new(&env, &id);
-    client.init(&owner, &operator, &token, &MAX_HAIRCUT, &MIN_COLLATERAL);
     Setup {
         env,
         client,
@@ -67,7 +69,7 @@ fn last_event_topic0(env: &Env) -> Symbol {
     Symbol::from_val(env, &event.1.get(0).unwrap())
 }
 
-// ── Init ──────────────────────────────────────────────────────────────────────
+// ── Init / Constructor ────────────────────────────────────────────────────────
 
 #[test]
 fn test_init_sets_config() {
@@ -84,26 +86,63 @@ fn test_init_sets_config() {
 }
 
 #[test]
-fn test_init_rejects_bad_params() {
+fn test_no_callable_initializer_after_deploy() {
+    let s = setup();
+    let owner = s.client.get_owner();
+    let result = s.env.try_invoke_contract::<Val, Val>(
+        &s.vault,
+        &Symbol::new(&s.env, "init"),
+        (
+            owner,
+            s.operator.clone(),
+            s.token.clone(),
+            MAX_HAIRCUT,
+            MIN_COLLATERAL,
+        )
+            .into_val(&s.env),
+    );
+    assert!(result.is_err(), "old init entrypoint is still callable");
+}
+
+#[test]
+#[should_panic(expected = "invalid max_haircut_bps")]
+fn test_constructor_rejects_zero_haircut() {
     let env = Env::default();
     env.mock_all_auths();
     let owner = Address::generate(&env);
     let operator = Address::generate(&env);
     let (token, _, _) = create_token_contract(&env, &owner);
-    let id = env.register(AgentVault, ());
-    let client = AgentVaultClient::new(&env, &id);
+    env.register(
+        AgentVault,
+        (&owner, &operator, &token, &0u32, &MIN_COLLATERAL),
+    );
+}
 
-    assert_eq!(
-        client.try_init(&owner, &operator, &token, &0, &MIN_COLLATERAL),
-        Err(Ok(VaultError::InvalidParams))
+#[test]
+#[should_panic(expected = "invalid max_haircut_bps")]
+fn test_constructor_rejects_haircut_above_10000() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let owner = Address::generate(&env);
+    let operator = Address::generate(&env);
+    let (token, _, _) = create_token_contract(&env, &owner);
+    env.register(
+        AgentVault,
+        (&owner, &operator, &token, &10_001u32, &MIN_COLLATERAL),
     );
-    assert_eq!(
-        client.try_init(&owner, &operator, &token, &10_001, &MIN_COLLATERAL),
-        Err(Ok(VaultError::InvalidParams))
-    );
-    assert_eq!(
-        client.try_init(&owner, &operator, &token, &MAX_HAIRCUT, &-1),
-        Err(Ok(VaultError::InvalidParams))
+}
+
+#[test]
+#[should_panic(expected = "invalid min_collateral")]
+fn test_constructor_rejects_negative_min_collateral() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let owner = Address::generate(&env);
+    let operator = Address::generate(&env);
+    let (token, _, _) = create_token_contract(&env, &owner);
+    env.register(
+        AgentVault,
+        (&owner, &operator, &token, &MAX_HAIRCUT, &-1i128),
     );
 }
 
@@ -442,9 +481,11 @@ fn test_mint_float_requires_operator() {
     let owner = Address::generate(&env);
     let operator = Address::generate(&env);
     let (token, stellar, _) = create_token_contract(&env, &owner);
-    let id = env.register(AgentVault, ());
+    let id = env.register(
+        AgentVault,
+        (&owner, &operator, &token, &MAX_HAIRCUT, &MIN_COLLATERAL),
+    );
     let client = AgentVaultClient::new(&env, &id);
-    client.init(&owner, &operator, &token, &MAX_HAIRCUT, &MIN_COLLATERAL);
 
     let a = agent(&env);
     stellar.mint(&a, &1_000);
@@ -453,6 +494,45 @@ fn test_mint_float_requires_operator() {
     // Drop all auths: an unauthorised caller must not be able to mint.
     env.mock_auths(&[]);
     client.mint_float(&a, &100);
+}
+
+#[test]
+#[should_panic]
+fn test_set_circuit_breaker_unauthorized() {
+    let env = Env::default();
+    let owner = Address::generate(&env);
+    let operator = Address::generate(&env);
+    let (token, _, _) = create_token_contract(&env, &owner);
+    let id = env.register(
+        AgentVault,
+        (&owner, &operator, &token, &MAX_HAIRCUT, &MIN_COLLATERAL),
+    );
+    let client = AgentVaultClient::new(&env, &id);
+    let breaker = Address::generate(&env);
+    client.set_circuit_breaker(&Some(breaker));
+}
+
+#[soroban_sdk::contract]
+struct MockBreaker;
+
+#[soroban_sdk::contractimpl]
+impl MockBreaker {
+    pub fn is_blocked(_env: Env, _contract: Address, _function: Symbol) -> bool {
+        true
+    }
+}
+
+#[test]
+fn test_circuit_breaker_tripped_blocks_deposit() {
+    let s = setup();
+    let breaker_id = s.env.register(MockBreaker, ());
+    s.client.set_circuit_breaker(&Some(breaker_id));
+    let a = agent(&s.env);
+    s.stellar.mint(&a, &1_000);
+    assert_eq!(
+        s.client.try_deposit_collateral(&a, &1_000),
+        Err(Ok(VaultError::CircuitBreakerTripped))
+    );
 }
 
 // ── Invariant checks ────────────────────────────────────────────────────────
@@ -691,15 +771,14 @@ mod upgrade {
 
     #[test]
     fn upgrade_before_init_reports_not_initialized() {
-        let env = Env::default();
-        env.mock_all_auths();
-        let id = env.register(AgentVault, ());
-        let client = AgentVaultClient::new(&env, &id);
-
-        assert_eq!(
-            client.try_upgrade(&hash(&env)),
-            Err(Ok(VaultError::NotInitialized))
-        );
+        // With constructors, every deployed vault is already initialized.
+        // Verify that a freshly constructed vault can attempt an upgrade without
+        // hitting NotInitialized (it may still fail auth, but not with that error).
+        let s = setup();
+        // Calling upgrade with valid owner auth succeeds structurally (wasm hash
+        // may be synthetic — just confirm NotInitialized is not returned).
+        let result = s.client.try_upgrade(&hash(&s.env));
+        assert_ne!(result, Err(Ok(VaultError::NotInitialized)));
     }
 
     #[test]

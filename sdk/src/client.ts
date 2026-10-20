@@ -1,5 +1,6 @@
 import { HttpClient, type HttpClientOptions } from './http.js';
 import {
+  AgentsResource,
   AuthResource,
   LoansResource,
   PoolResource,
@@ -42,6 +43,7 @@ export class DukaPayClient {
   readonly pool: PoolResource;
   readonly scores: ScoresResource;
   readonly remittance: RemittanceResource;
+  readonly agents: AgentsResource;
 
   private session: Session | null = null;
   private wallet?: WalletAdapter;
@@ -63,6 +65,7 @@ export class DukaPayClient {
     this.pool = new PoolResource(this.http);
     this.scores = new ScoresResource(this.http);
     this.remittance = new RemittanceResource(this.http);
+    this.agents = new AgentsResource(this.http);
   }
 
   // ── Session ────────────────────────────────────────────────────────────────

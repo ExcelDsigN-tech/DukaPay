@@ -5,6 +5,7 @@
 #        contracts coverage indexer images sdk
 #   all   everything that needs no external services (no Postgres, no browsers)
 #   full  all + migrations + e2e + coverage
+#   fix   apply every auto-fixer (formatting, lint fixes, generated files)
 # Source of truth is .github/workflows/ci.yml. If this file disagrees with it, ci.yml wins.
 
 set -euo pipefail
@@ -217,6 +218,21 @@ images() {
   [ "$fail" -eq 0 ]
 }
 
+# Install deps only when missing so `fix` stays fast on a warm checkout.
+ensure_deps() { [ -d "$1/node_modules" ] || (cd "$1" && npm ci); }
+
+fix() {
+  set -euo pipefail
+  step fix "rust fmt";        (cd "$ROOT/contracts" && cargo fmt --all); (cd "$ROOT/indexer" && cargo fmt --all)
+  step fix "money codegen";   ensure_deps "$ROOT/scripts"; (cd "$ROOT/scripts" && npm run gen:money)
+  step fix "backend";         ensure_deps "$ROOT/backend"
+  (cd "$ROOT/backend" && npm run lint:fix && NODE_ENV="test" npm run openapi:generate && npm run format)
+  step fix "frontend";        ensure_deps "$ROOT/frontend"
+  (cd "$ROOT/frontend" && npx eslint src e2e lib --fix && npm run format)
+  step fix "sdk";             ensure_deps "$ROOT/sdk"; (cd "$ROOT/sdk" && npx eslint src --fix)
+  echo "Review the changes with git diff, then commit them."
+}
+
 sdk() {
   set -euo pipefail
   cd "$ROOT/sdk"
@@ -227,7 +243,7 @@ sdk() {
   step sdk "build";     npm run build
 }
 
-[ "$#" -eq 0 ] && { sed -n '2,8p' "$0"; exit 1; }
+[ "$#" -eq 0 ] && { sed -n '2,9p' "$0"; exit 1; }
 
 FAST=(supply money backend openapi frontend scripts guards contracts indexer images sdk)
 case "$1" in
@@ -252,6 +268,7 @@ for a in "${AREAS[@]}"; do
     indexer)    area indexer indexer ;;
     images)     area images images ;;
     sdk)        area sdk sdk ;;
+    fix)        area fix fix ;;
     *) echo "Unknown area: $a"; exit 1 ;;
   esac
 done

@@ -38,6 +38,11 @@ jobs:
             exit 1
           fi
           echo "No known malicious packages found."
+      - name: How to fix
+        if: failure()
+        run: |
+          echo "::error::Run ./scripts/ci-local.sh fix, then ./scripts/ci-local.sh supply to reproduce this locally. See CONTRIBUTING.md#testing."
+          echo "Run ./scripts/ci-local.sh fix, then ./scripts/ci-local.sh supply to reproduce this locally. See CONTRIBUTING.md#testing." >> "$GITHUB_STEP_SUMMARY"
 
   # Issue #1378: single source of truth for stroop scale, rounding mode,
   # display precision and pro-rata allocation strategy. `scripts/gen-money.ts`
@@ -63,6 +68,11 @@ jobs:
       - name: Check generated money-policy artifacts are up to date
         run: npx ts-node gen-money.ts --check
         working-directory: scripts
+      - name: How to fix
+        if: failure()
+        run: |
+          echo "::error::Run ./scripts/ci-local.sh fix, then ./scripts/ci-local.sh money to reproduce this locally. See CONTRIBUTING.md#testing."
+          echo "Run ./scripts/ci-local.sh fix, then ./scripts/ci-local.sh money to reproduce this locally. See CONTRIBUTING.md#testing." >> "$GITHUB_STEP_SUMMARY"
 
   # Issue #432: the stroop-integer money kernel exists twice on purpose: once in
   # Rust (`contracts/money`, what the chain executes) and once in TypeScript
@@ -75,7 +85,8 @@ jobs:
   # `tests/money-parity/vectors.json` plus a randomized batch through both
   # implementations and diffs the outputs.
   money-parity:
-    needs: money-policy
+    needs: [money-policy, changes]
+    if: github.event_name == 'push' || needs.changes.outputs.shared == 'true' || needs.changes.outputs.money == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -114,9 +125,15 @@ jobs:
       - name: Cross-language money parity (shared vectors + randomized)
         run: npx tsx money-parity.ts --randomized 5000
         working-directory: scripts
+      - name: How to fix
+        if: failure()
+        run: |
+          echo "::error::Run ./scripts/ci-local.sh fix, then ./scripts/ci-local.sh money to reproduce this locally. See CONTRIBUTING.md#testing."
+          echo "Run ./scripts/ci-local.sh fix, then ./scripts/ci-local.sh money to reproduce this locally. See CONTRIBUTING.md#testing." >> "$GITHUB_STEP_SUMMARY"
 
   backend:
-    needs: [supply-chain-audit, money-policy]
+    needs: [supply-chain-audit, money-policy, changes]
+    if: github.event_name == 'push' || needs.changes.outputs.shared == 'true' || needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     services:
@@ -200,9 +217,15 @@ jobs:
             exit 1
           fi
           echo "No plaintext PII found in logger output."
+      - name: How to fix
+        if: failure()
+        run: |
+          echo "::error::Run ./scripts/ci-local.sh fix, then ./scripts/ci-local.sh backend to reproduce this locally. See CONTRIBUTING.md#testing."
+          echo "Run ./scripts/ci-local.sh fix, then ./scripts/ci-local.sh backend to reproduce this locally. See CONTRIBUTING.md#testing." >> "$GITHUB_STEP_SUMMARY"
 
   openapi-spec:
-    needs: supply-chain-audit
+    needs: [supply-chain-audit, changes]
+    if: github.event_name == 'push' || needs.changes.outputs.shared == 'true' || needs.changes.outputs.openapi == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -224,11 +247,24 @@ jobs:
         env:
           NODE_ENV: test
         run: npm run openapi:validate
+      - name: How to fix
+        if: failure()
+        run: |
+          echo "::error::Run ./scripts/ci-local.sh fix, then ./scripts/ci-local.sh openapi to reproduce this locally. See CONTRIBUTING.md#testing."
+          echo "Run ./scripts/ci-local.sh fix, then ./scripts/ci-local.sh openapi to reproduce this locally. See CONTRIBUTING.md#testing." >> "$GITHUB_STEP_SUMMARY"
 
-  migration-paths:
+  changes:
     runs-on: ubuntu-latest
     outputs:
+      shared: ${{ steps.filter.outputs.shared }}
       migrations: ${{ steps.filter.outputs.migrations }}
+      money: ${{ steps.filter.outputs.money }}
+      backend: ${{ steps.filter.outputs.backend }}
+      openapi: ${{ steps.filter.outputs.openapi }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      contracts: ${{ steps.filter.outputs.contracts }}
+      indexer: ${{ steps.filter.outputs.indexer }}
+      sdk: ${{ steps.filter.outputs.sdk }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       # Pinned to a commit SHA, not the `v3` tag: a tag is mutable and can
@@ -236,14 +272,40 @@ jobs:
       - uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad # v3
         id: filter
         with:
+          # Pull requests skip the heavy jobs whose paths they don't touch.
+          # A skipped required check counts as passing. Pushes to main run everything.
           filters: |
+            shared:
+              - '.github/workflows/**'
+              - 'scripts/ci-local.sh'
+              - '.nvmrc'
             migrations:
               - 'backend/migrations/**'
               - 'backend/package.json'
+            money:
+              - 'money-policy.json'
+              - 'contracts/money/**'
+              - 'backend/src/money/**'
+              - 'scripts/**'
+            backend:
+              - 'money-policy.json'
+              - 'backend/**'
+            openapi:
+              - 'backend/**'
+            frontend:
+              - 'frontend/**'
+            contracts:
+              - 'money-policy.json'
+              - 'contracts/**'
+            indexer:
+              - 'indexer/**'
+            sdk:
+              - 'sdk/**'
+              - 'backend/src/swagger/openapi.json'
 
   migration-check:
-    needs: [supply-chain-audit, migration-paths]
-    if: github.event_name == 'push' || needs.migration-paths.outputs.migrations == 'true'
+    needs: [supply-chain-audit, changes]
+    if: github.event_name == 'push' || needs.changes.outputs.migrations == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     services:
@@ -318,9 +380,15 @@ jobs:
           echo "No plaintext PII columns found."
         env:
           PGPASSWORD: pgpass
+      - name: How to fix
+        if: failure()
+        run: |
+          echo "::error::Run ./scripts/ci-local.sh fix, then ./scripts/ci-local.sh migrations to reproduce this locally. See CONTRIBUTING.md#testing."
+          echo "Run ./scripts/ci-local.sh fix, then ./scripts/ci-local.sh migrations to reproduce this locally. See CONTRIBUTING.md#testing." >> "$GITHUB_STEP_SUMMARY"
 
   frontend:
-    needs: [supply-chain-audit, money-policy]
+    needs: [supply-chain-audit, money-policy, changes]
+    if: github.event_name == 'push' || needs.changes.outputs.shared == 'true' || needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -354,6 +422,11 @@ jobs:
       - name: Bundle-size budget (issue #443)
         run: npm run perf:budget
         working-directory: frontend
+      - name: How to fix
+        if: failure()
+        run: |
+          echo "::error::Run ./scripts/ci-local.sh fix, then ./scripts/ci-local.sh frontend to reproduce this locally. See CONTRIBUTING.md#testing."
+          echo "Run ./scripts/ci-local.sh fix, then ./scripts/ci-local.sh frontend to reproduce this locally. See CONTRIBUTING.md#testing." >> "$GITHUB_STEP_SUMMARY"
 
   scripts-typecheck:
     needs: supply-chain-audit
@@ -376,15 +449,16 @@ jobs:
       - name: Type check deploy scripts
         run: npm run typecheck
         working-directory: scripts
+      - name: How to fix
+        if: failure()
+        run: |
+          echo "::error::Run ./scripts/ci-local.sh fix, then ./scripts/ci-local.sh scripts to reproduce this locally. See CONTRIBUTING.md#testing."
+          echo "Run ./scripts/ci-local.sh fix, then ./scripts/ci-local.sh scripts to reproduce this locally. See CONTRIBUTING.md#testing." >> "$GITHUB_STEP_SUMMARY"
 
   e2e:
-    needs: [supply-chain-audit, frontend]
+    needs: [supply-chain-audit, frontend, changes]
+    if: github.event_name == 'push' || needs.changes.outputs.shared == 'true' || needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
-    # Run e2e on push and on pull requests that touch frontend; the previous
-    # `contains(github.event.pull_request.changed_files, 'frontend/')` used a
-    # non-existent field and caused the job to be skipped on PRs (see review feedback).
-    # Until a proper paths-filter is added, run on all pull requests.
-    if: github.event_name == 'push' || github.event_name == 'pull_request'
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -413,6 +487,11 @@ jobs:
           name: playwright-report
           path: frontend/playwright-report/
           retention-days: 7
+      - name: How to fix
+        if: failure()
+        run: |
+          echo "::error::Run ./scripts/ci-local.sh fix, then ./scripts/ci-local.sh e2e to reproduce this locally. See CONTRIBUTING.md#testing."
+          echo "Run ./scripts/ci-local.sh fix, then ./scripts/ci-local.sh e2e to reproduce this locally. See CONTRIBUTING.md#testing." >> "$GITHUB_STEP_SUMMARY"
 
   env-docs-check:
     runs-on: ubuntu-latest
@@ -432,6 +511,11 @@ jobs:
       - name: Check existing migrations are unchanged
         if: github.event_name == 'pull_request'
         run: node scripts/check-migrations-immutable.mjs origin/${{ github.base_ref }}
+      - name: How to fix
+        if: failure()
+        run: |
+          echo "::error::Run ./scripts/ci-local.sh fix, then ./scripts/ci-local.sh guards to reproduce this locally. See CONTRIBUTING.md#testing."
+          echo "Run ./scripts/ci-local.sh fix, then ./scripts/ci-local.sh guards to reproduce this locally. See CONTRIBUTING.md#testing." >> "$GITHUB_STEP_SUMMARY"
 
   error-code-mapping-check:
     runs-on: ubuntu-latest
@@ -449,9 +533,15 @@ jobs:
         run: node scripts/check-i18n-keys.mjs
       - name: Check public asset sizes
         run: node scripts/check-asset-sizes.mjs
+      - name: How to fix
+        if: failure()
+        run: |
+          echo "::error::Run ./scripts/ci-local.sh fix, then ./scripts/ci-local.sh guards to reproduce this locally. See CONTRIBUTING.md#testing."
+          echo "Run ./scripts/ci-local.sh fix, then ./scripts/ci-local.sh guards to reproduce this locally. See CONTRIBUTING.md#testing." >> "$GITHUB_STEP_SUMMARY"
 
   contracts:
-    needs: money-policy
+    needs: [money-policy, changes]
+    if: github.event_name == 'push' || needs.changes.outputs.shared == 'true' || needs.changes.outputs.contracts == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     permissions:
@@ -542,12 +632,22 @@ jobs:
           name: contracts-coverage
           path: contracts/cobertura.xml
           retention-days: 7
-      - name: Check fuzz targets compile
-        run: cargo check
-        working-directory: contracts/fuzz
+      - name: Build fuzz targets
+        run: cargo build --manifest-path contracts/fuzz/Cargo.toml
+        env:
+          RUSTFLAGS: -D warnings
+          # Running from the repo root bypasses contracts/rust-toolchain.toml;
+          # pin the same toolchain the contracts checks use.
+          RUSTUP_TOOLCHAIN: 1.85.0
+      - name: How to fix
+        if: failure()
+        run: |
+          echo "::error::Run ./scripts/ci-local.sh fix, then ./scripts/ci-local.sh contracts to reproduce this locally. See CONTRIBUTING.md#testing."
+          echo "Run ./scripts/ci-local.sh fix, then ./scripts/ci-local.sh contracts to reproduce this locally. See CONTRIBUTING.md#testing." >> "$GITHUB_STEP_SUMMARY"
 
   indexer:
-    needs: supply-chain-audit
+    needs: [supply-chain-audit, changes]
+    if: github.event_name == 'push' || needs.changes.outputs.shared == 'true' || needs.changes.outputs.indexer == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -568,6 +668,11 @@ jobs:
       - name: Test
         run: cargo test
         working-directory: indexer
+      - name: How to fix
+        if: failure()
+        run: |
+          echo "::error::Run ./scripts/ci-local.sh fix, then ./scripts/ci-local.sh indexer to reproduce this locally. See CONTRIBUTING.md#testing."
+          echo "Run ./scripts/ci-local.sh fix, then ./scripts/ci-local.sh indexer to reproduce this locally. See CONTRIBUTING.md#testing." >> "$GITHUB_STEP_SUMMARY"
 
   image-digest-check:
     needs: supply-chain-audit
@@ -596,9 +701,15 @@ jobs:
             exit 1
           fi
           echo "All Kubernetes images are pinned to SHA256 digests."
+      - name: How to fix
+        if: failure()
+        run: |
+          echo "::error::Run ./scripts/ci-local.sh fix, then ./scripts/ci-local.sh images to reproduce this locally. See CONTRIBUTING.md#testing."
+          echo "Run ./scripts/ci-local.sh fix, then ./scripts/ci-local.sh images to reproduce this locally. See CONTRIBUTING.md#testing." >> "$GITHUB_STEP_SUMMARY"
 
   sdk:
-    needs: supply-chain-audit
+    needs: [supply-chain-audit, changes]
+    if: github.event_name == 'push' || needs.changes.outputs.shared == 'true' || needs.changes.outputs.sdk == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -624,3 +735,8 @@ jobs:
       - name: Build
         run: npm run build
         working-directory: sdk
+      - name: How to fix
+        if: failure()
+        run: |
+          echo "::error::Run ./scripts/ci-local.sh fix, then ./scripts/ci-local.sh sdk to reproduce this locally. See CONTRIBUTING.md#testing."
+          echo "Run ./scripts/ci-local.sh fix, then ./scripts/ci-local.sh sdk to reproduce this locally. See CONTRIBUTING.md#testing." >> "$GITHUB_STEP_SUMMARY"
