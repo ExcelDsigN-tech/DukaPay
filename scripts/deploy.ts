@@ -21,7 +21,7 @@ const CONFIG_PATH = path.join(__dirname, 'deploy-config.json');
 const REGISTRY_PATH = path.join(__dirname, 'contract-registry.json');
 const POLL_INTERVAL_MS = 2000;
 
-// Compute the SHA-256 hash of WASM bytes — this is the on-chain upload key.
+// Compute the SHA-256 hash of WASM bytes; this is the on-chain upload key.
 function computeWasmHash(wasm: Buffer): Buffer {
     return createHash('sha256').update(wasm).digest();
 }
@@ -464,7 +464,7 @@ async function main() {
     console.log('\n[4/4] Writing contract addresses to .env files and registry…');
 
     // Variable names each app reads (docs/ENVIRONMENT.md).
-    const header = `\n# DukaPay contracts — ${network} — ${new Date().toISOString()}`;
+    const header = `\n# DukaPay contracts (${network}, ${new Date().toISOString()})`;
     const frontendEnv = [
         header,
         `NEXT_PUBLIC_NFT_CONTRACT_ID=${nftContractId}`,
