@@ -44,8 +44,9 @@ import { startLoanDueCheckCron, stopLoanDueCheckCron } from './cron/loanCheckCro
 import { startScoreDecayScheduler } from './cron/scoreDecayJob.js';
 import { initializePauseState, startPauseStateRefresh } from './middleware/pauseGuard.js';
 import { startAuditAnchorJob, stopAuditAnchorJob } from './cron/auditAnchorJob.js';
+import { env } from './config/env.js';
 
-const port = process.env.PORT || 3001;
+const port = env.PORT;
 
 // Maintain a mutable handle to invoke clean scheduler closures on process stops
 let scoreDecaySchedulerHandle: { stop: () => void } | null = null;
@@ -77,7 +78,7 @@ try {
   process.exit(1);
 }
 // Keep re-reading it so a database outage is noticed and alerted on promptly.
-startPauseStateRefresh(Number.parseInt(process.env.PAUSE_STATE_REFRESH_MS ?? '30000', 10));
+startPauseStateRefresh(env.PAUSE_STATE_REFRESH_MS);
 
 const server = app.listen(port, () => {
   logger.info(`Server is running on port ${port}`);

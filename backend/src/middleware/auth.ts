@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import type { Request, Response, NextFunction } from 'express';
 import { AppError } from '../errors/AppError.js';
 import logger from '../utils/logger.js';
+import { env } from '../config/env.js';
 
 /**
  * Admin API key scopes.
@@ -22,7 +23,7 @@ interface ParsedKey {
 }
 
 function parseConfiguredKeys(): ParsedKey[] {
-  const raw = process.env.INTERNAL_API_KEY;
+  const raw = env.INTERNAL_API_KEY;
   if (!raw) return [];
 
   return raw

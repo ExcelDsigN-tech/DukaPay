@@ -13,6 +13,7 @@ import { AppError } from '../errors/AppError.js';
 import logger from '../utils/logger.js';
 import { complianceService } from './complianceService.js';
 import { toRemittance } from './remittanceMapper.js';
+import { env } from '../config/env.js';
 
 export interface CreateRemittancePayload {
   recipientAddress: string;
@@ -59,9 +60,9 @@ const getCurrencyAsset = (currency: string): Asset => {
   }
 
   const tokenIssuers: Record<string, string | undefined> = {
-    USDC: process.env.STELLAR_USDC_ISSUER,
-    EURC: process.env.STELLAR_EURC_ISSUER,
-    PHP: process.env.STELLAR_PHP_ISSUER,
+    USDC: env.STELLAR_USDC_ISSUER,
+    EURC: env.STELLAR_EURC_ISSUER,
+    PHP: env.STELLAR_PHP_ISSUER,
   };
 
   const issuer = tokenIssuers[normalized];

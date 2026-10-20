@@ -16,6 +16,7 @@ import {
   getStellarNetworkPassphrase,
   getStellarRpcUrl,
 } from '../config/stellar.js';
+import { env } from '../config/env.js';
 
 /**
  * Service for building and submitting Soroban contract transactions.
@@ -128,7 +129,7 @@ class SorobanService {
   }
 
   private getLoanManagerContractId(): string {
-    const contractId = process.env.LOAN_MANAGER_CONTRACT_ID;
+    const contractId = env.LOAN_MANAGER_CONTRACT_ID;
     if (!contractId) {
       throw AppError.internal('LOAN_MANAGER_CONTRACT_ID is not configured');
     }
@@ -136,7 +137,7 @@ class SorobanService {
   }
 
   private getLendingPoolContractId(): string {
-    const contractId = process.env.LENDING_POOL_CONTRACT_ID;
+    const contractId = env.LENDING_POOL_CONTRACT_ID;
     if (!contractId) {
       throw AppError.internal('LENDING_POOL_CONTRACT_ID is not configured');
     }
@@ -144,7 +145,7 @@ class SorobanService {
   }
 
   private getPoolTokenAddress(): string {
-    const address = process.env.POOL_TOKEN_ADDRESS;
+    const address = env.POOL_TOKEN_ADDRESS;
     if (!address) {
       throw AppError.internal('POOL_TOKEN_ADDRESS is not configured');
     }
@@ -152,7 +153,7 @@ class SorobanService {
   }
 
   private getRemittanceNftContractId(): string {
-    const contractId = process.env.REMITTANCE_NFT_CONTRACT_ID;
+    const contractId = env.REMITTANCE_NFT_CONTRACT_ID;
     if (!contractId) {
       throw AppError.internal('REMITTANCE_NFT_CONTRACT_ID is not configured');
     }
@@ -160,7 +161,7 @@ class SorobanService {
   }
 
   private getAgentVaultContractId(): string {
-    const contractId = process.env.AGENT_VAULT_CONTRACT_ID;
+    const contractId = env.AGENT_VAULT_CONTRACT_ID;
     if (!contractId) {
       throw AppError.internal('AGENT_VAULT_CONTRACT_ID is not configured');
     }
@@ -168,8 +169,7 @@ class SorobanService {
   }
 
   private getScoreReadSourceKeypair(): Keypair {
-    const secret =
-      process.env.SCORE_RECONCILIATION_SOURCE_SECRET ?? process.env.LOAN_MANAGER_ADMIN_SECRET;
+    const secret = env.SCORE_RECONCILIATION_SOURCE_SECRET ?? env.LOAN_MANAGER_ADMIN_SECRET;
 
     if (!secret) {
       throw AppError.internal('A source secret is required for score reconciliation reads');
@@ -183,10 +183,7 @@ class SorobanService {
   }
 
   private getDefaultCreditScore(): number {
-    const configured = Number.parseInt(
-      process.env.DEFAULT_CREDIT_SCORE ?? String(SorobanService.FALLBACK_CREDIT_SCORE),
-      10,
-    );
+    const configured = env.DEFAULT_CREDIT_SCORE ?? SorobanService.FALLBACK_CREDIT_SCORE;
 
     if (!Number.isFinite(configured)) {
       return SorobanService.FALLBACK_CREDIT_SCORE;
@@ -805,11 +802,11 @@ class SorobanService {
    */
   async validateConfig(): Promise<void> {
     const contractChecks: Array<[string, string]> = [
-      ['LOAN_MANAGER_CONTRACT_ID', process.env.LOAN_MANAGER_CONTRACT_ID ?? ''],
-      ['LENDING_POOL_CONTRACT_ID', process.env.LENDING_POOL_CONTRACT_ID ?? ''],
-      ['REMITTANCE_NFT_CONTRACT_ID', process.env.REMITTANCE_NFT_CONTRACT_ID ?? ''],
-      ['MULTISIG_GOVERNANCE_CONTRACT_ID', process.env.MULTISIG_GOVERNANCE_CONTRACT_ID ?? ''],
-      ['POOL_TOKEN_ADDRESS', process.env.POOL_TOKEN_ADDRESS ?? ''],
+      ['LOAN_MANAGER_CONTRACT_ID', env.LOAN_MANAGER_CONTRACT_ID ?? ''],
+      ['LENDING_POOL_CONTRACT_ID', env.LENDING_POOL_CONTRACT_ID ?? ''],
+      ['REMITTANCE_NFT_CONTRACT_ID', env.REMITTANCE_NFT_CONTRACT_ID ?? ''],
+      ['MULTISIG_GOVERNANCE_CONTRACT_ID', env.MULTISIG_GOVERNANCE_CONTRACT_ID ?? ''],
+      ['POOL_TOKEN_ADDRESS', env.POOL_TOKEN_ADDRESS ?? ''],
     ];
 
     for (const [name, value] of contractChecks) {
@@ -839,8 +836,8 @@ class SorobanService {
     }
 
     logger.withContext().info('Soroban configuration validated', {
-      loanManagerContractId: process.env.LOAN_MANAGER_CONTRACT_ID,
-      lendingPoolContractId: process.env.LENDING_POOL_CONTRACT_ID,
+      loanManagerContractId: env.LOAN_MANAGER_CONTRACT_ID,
+      lendingPoolContractId: env.LENDING_POOL_CONTRACT_ID,
       rpcUrl,
     });
   }
@@ -1337,9 +1334,9 @@ class SorobanService {
     defaultPenalty: number;
     latePenalty: number;
   } {
-    const repaymentDelta = Number.parseInt(process.env.SCORE_DELTA_REPAY ?? '15', 10);
-    const defaultPenalty = Number.parseInt(process.env.SCORE_DELTA_DEFAULT ?? '50', 10);
-    const latePenalty = Number.parseInt(process.env.SCORE_DELTA_LATE ?? '5', 10);
+    const repaymentDelta = env.SCORE_DELTA_REPAY;
+    const defaultPenalty = env.SCORE_DELTA_DEFAULT;
+    const latePenalty = env.SCORE_DELTA_LATE;
     return { repaymentDelta, defaultPenalty, latePenalty };
   }
 
@@ -1352,17 +1349,17 @@ class SorobanService {
     const configs = [
       {
         name: 'SCORE_DELTA_REPAY',
-        value: process.env.SCORE_DELTA_REPAY ?? '15',
+        value: String(env.SCORE_DELTA_REPAY),
         mustBePositive: true,
       },
       {
         name: 'SCORE_DELTA_DEFAULT',
-        value: process.env.SCORE_DELTA_DEFAULT ?? '50',
+        value: String(env.SCORE_DELTA_DEFAULT),
         mustBePositive: true,
       },
       {
         name: 'SCORE_DELTA_LATE',
-        value: process.env.SCORE_DELTA_LATE ?? '5',
+        value: String(env.SCORE_DELTA_LATE),
         mustBePositive: true,
       },
     ];
@@ -1378,9 +1375,9 @@ class SorobanService {
     }
 
     logger.withContext().info('Score delta configuration validated', {
-      repaymentDelta: process.env.SCORE_DELTA_REPAY ?? '15',
-      defaultPenalty: process.env.SCORE_DELTA_DEFAULT ?? '50',
-      latePenalty: process.env.SCORE_DELTA_LATE ?? '5',
+      repaymentDelta: String(env.SCORE_DELTA_REPAY),
+      defaultPenalty: String(env.SCORE_DELTA_DEFAULT),
+      latePenalty: String(env.SCORE_DELTA_LATE),
     });
   }
 }

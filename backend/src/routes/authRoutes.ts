@@ -18,11 +18,12 @@ import {
 import { getCsrfTokenController } from '../middleware/csrf.js';
 import { requireJwtAuth } from '../middleware/jwtAuth.js';
 import { validateBody } from '../middleware/validation.js';
+import { env } from '../config/env.js';
 
 const router = Router();
 
 // TEST/DEV ONLY: Register a test user
-if (process.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'development') {
+if (env.NODE_ENV === 'test' || env.NODE_ENV === 'development') {
   router.post('/register', registerTestUser);
 }
 

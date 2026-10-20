@@ -4,8 +4,9 @@ import { AppError } from '../errors/AppError.js';
 import { ErrorCode } from '../errors/errorCodes.js';
 import logger from '../utils/logger.js';
 import { Sentry } from '../config/sentry.js';
+import { env } from '../config/env.js';
 
-const isProduction = process.env.NODE_ENV === 'production';
+const isProduction = env.NODE_ENV === 'production';
 
 /**
  * Sanitize an error message for client consumption (issue #409).
@@ -149,7 +150,7 @@ export const errorHandler = (
     extra: { requestId, path: req.path, method: req.method },
   });
 
-  const shouldExposeDetails = !isProduction && process.env.EXPOSE_STACK_TRACES === 'true';
+  const shouldExposeDetails = !isProduction && env.EXPOSE_STACK_TRACES;
 
   res.status(500).json({
     success: false,

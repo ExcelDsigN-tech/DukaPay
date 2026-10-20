@@ -13,6 +13,7 @@ import {
 import logger from '../utils/logger.js';
 import { amountToStroops, stroopsToAmount } from '../money/decimal.js';
 import { invalidateOnDeposit, invalidateOnWithdraw } from '../utils/cacheKeys.js';
+import { env } from '../config/env.js';
 
 /**
  * The on-chain share price is scaled by SHARE_PRICE_SCALE (1,000,000 = 1.0).
@@ -79,7 +80,7 @@ export const getPoolStats = asyncHandler(async (_req: Request, res: Response) =>
       utilizationRate: parseFloat(utilizationRate.toFixed(4)),
       apy: ANNUAL_APY,
       activeLoansCount,
-      poolTokenAddress: process.env.POOL_TOKEN_ADDRESS,
+      poolTokenAddress: env.POOL_TOKEN_ADDRESS,
       withdrawalCooldownLedgers,
     },
   });
@@ -155,7 +156,7 @@ export const getDepositorYieldHistory = asyncHandler(async (req: Request, res: R
   const token =
     typeof req.query.token === 'string' && req.query.token.length > 0
       ? req.query.token
-      : process.env.POOL_TOKEN_ADDRESS;
+      : env.POOL_TOKEN_ADDRESS;
 
   if (!token) {
     throw AppError.internal('POOL_TOKEN_ADDRESS is not configured');

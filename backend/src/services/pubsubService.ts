@@ -1,7 +1,8 @@
 import { createClient, type RedisClientType } from 'redis';
 import logger from '../utils/logger.js';
+import { env } from '../config/env.js';
 
-const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
+const REDIS_URL = env.REDIS_URL;
 const CHANNEL = 'sse:events';
 
 class PubSubService {

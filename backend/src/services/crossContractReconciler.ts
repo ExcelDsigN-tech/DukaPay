@@ -3,6 +3,7 @@ import { setAbsoluteUserScoresBulk } from './scoresService.js';
 import { sorobanService } from './sorobanService.js';
 import { jobMetricsService } from './jobMetricsService.js';
 import logger from '../utils/logger.js';
+import { env } from '../config/env.js';
 
 /**
  * Cross-contract reconciliation with Saga pattern (issues #1377, #420).
@@ -50,19 +51,6 @@ export interface CrossContractReconciliationResult {
   compensatedCount: number;
   alertedPartialCount: number;
   autoCorrectEnabled: boolean;
-}
-
-function parsePositiveInt(value: string | undefined, fallback: number): number {
-  const parsed = Number.parseInt(value ?? '', 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
-
-function parseBoolean(value: string | undefined, fallback: boolean): boolean {
-  if (value == null) return fallback;
-  const normalized = value.trim().toLowerCase();
-  if (['1', 'true', 'yes', 'on'].includes(normalized)) return true;
-  if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
-  return fallback;
 }
 
 // On-chain event types that represent a credit-score mutation landing.
@@ -194,19 +182,19 @@ function toLegacyState(state: SettlementState): string {
 
 class CrossContractReconciler {
   private getMaxRowsPerRun(): number {
-    return parsePositiveInt(process.env.CROSS_RECONCILE_MAX_ROWS_PER_RUN, 500);
+    return env.CROSS_RECONCILE_MAX_ROWS_PER_RUN;
   }
 
   private getStaleAttempts(): number {
-    return parsePositiveInt(process.env.CROSS_RECONCILE_STALE_ATTEMPTS, 3);
+    return env.CROSS_RECONCILE_STALE_ATTEMPTS;
   }
 
   private isAutoCorrectEnabled(): boolean {
-    return parseBoolean(process.env.CROSS_RECONCILE_AUTOCORRECT_ENABLED, false);
+    return env.CROSS_RECONCILE_AUTOCORRECT_ENABLED;
   }
 
   private getPartialAlertThresholdMs(): number {
-    return parsePositiveInt(process.env.CROSS_RECONCILE_PARTIAL_ALERT_MS, 60 * 60 * 1000);
+    return env.CROSS_RECONCILE_PARTIAL_ALERT_MS;
   }
 
   private async backfillPendingRows(): Promise<number> {
@@ -517,16 +505,16 @@ let inFlight = false;
 
 export function startCrossContractReconciler(): void {
   if (interval) return;
-  if (process.env.NODE_ENV === 'test') return;
+  if (env.NODE_ENV === 'test') return;
 
-  if (!process.env.REMITTANCE_NFT_CONTRACT_ID) {
+  if (!env.REMITTANCE_NFT_CONTRACT_ID) {
     logger
       .withContext()
       .warn('Cross-contract reconciler disabled (set REMITTANCE_NFT_CONTRACT_ID)');
     return;
   }
 
-  const intervalMs = parsePositiveInt(process.env.CROSS_RECONCILE_INTERVAL_MS, 5 * 60 * 1000);
+  const intervalMs = env.CROSS_RECONCILE_INTERVAL_MS;
 
   const runOnce = async () => {
     if (inFlight) {
