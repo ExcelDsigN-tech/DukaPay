@@ -1322,47 +1322,6 @@ impl LendingPool {
         );
         Ok(())
     }
-
-    /// Enter a cross-contract call, enforcing the reentrancy lock and a max call depth of 3.
-    pub fn enter_cross_contract_call(env: Env) -> Result<(), PoolError> {
-        let current_depth: u32 = env
-            .storage()
-            .instance()
-            .get(&DataKey::CallDepth)
-            .unwrap_or(0);
-        if current_depth >= 3 {
-            return Err(PoolError::CallDepthExceeded);
-        }
-        env.storage()
-            .instance()
-            .set(&DataKey::ReentrancyLock, &true);
-        env.storage()
-            .instance()
-            .set(&DataKey::CallDepth, &(current_depth + 1));
-        Ok(())
-    }
-
-    /// Exit a cross-contract call, decrementing the call depth counter.
-    pub fn exit_cross_contract_call(env: Env) {
-        let current_depth: u32 = env
-            .storage()
-            .instance()
-            .get(&DataKey::CallDepth)
-            .unwrap_or(1);
-        let next_depth = if current_depth > 0 {
-            current_depth - 1
-        } else {
-            0
-        };
-        env.storage()
-            .instance()
-            .set(&DataKey::CallDepth, &next_depth);
-        if next_depth == 0 {
-            env.storage()
-                .instance()
-                .set(&DataKey::ReentrancyLock, &false);
-        }
-    }
 }
 
 #[cfg(test)]

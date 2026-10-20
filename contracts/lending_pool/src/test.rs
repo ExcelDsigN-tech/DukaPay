@@ -2111,25 +2111,19 @@ fn test_mev_reveal_without_delay_panics() {
 }
 
 #[test]
-fn test_cross_contract_call_depth_limit() {
+fn test_reentrancy_lock_controls_are_not_public() {
+    // Anyone could set the lock through these and freeze the pool (#683).
     let env = Env::default();
     let admin = Address::generate(&env);
     let pool_id = env.register(LendingPool, (&admin,));
-    let pool_client = LendingPoolClient::new(&env, &pool_id);
-
-    // Calling enter_cross_contract_call 3 times succeeds
-    assert!(pool_client.try_enter_cross_contract_call().unwrap().is_ok());
-    assert!(pool_client.try_enter_cross_contract_call().unwrap().is_ok());
-    assert!(pool_client.try_enter_cross_contract_call().unwrap().is_ok());
-
-    // 4th nested call must fail with CallDepthExceeded error
-    assert!(pool_client.try_enter_cross_contract_call().is_err());
-
-    // Exiting returns capacity
-    pool_client.exit_cross_contract_call();
-    pool_client.exit_cross_contract_call();
-    pool_client.exit_cross_contract_call();
-    assert!(pool_client.try_enter_cross_contract_call().unwrap().is_ok());
+    for name in ["enter_cross_contract_call", "exit_cross_contract_call"] {
+        let result = env.try_invoke_contract::<Val, Val>(
+            &pool_id,
+            &Symbol::new(&env, name),
+            Vec::<Val>::new(&env),
+        );
+        assert!(result.is_err(), "{name} is still callable");
+    }
 }
 
 // ── Reentrancy Guard & Fuzz Tests ──────────────────────────────────────────
