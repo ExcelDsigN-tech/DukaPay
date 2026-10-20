@@ -12,16 +12,34 @@ export interface OracleSource {
     address: string;
 }
 
+const ADMIN_FALLBACK_PLACEHOLDER = 'YOUR_ADMIN_PUBLIC_KEY';
+
 function isPublicKey(value: unknown): value is string {
     return typeof value === 'string' && StrKey.isValidEd25519PublicKey(value);
 }
 
-// Check the circuit breaker and oracle settings for one network before
-// anything is uploaded. Returns one message per problem, each naming the
+function isContractAddress(value: unknown): value is string {
+    return typeof value === 'string' && StrKey.isValidContract(value);
+}
+
+// Check the admin, token, circuit breaker, and oracle settings for one network
+// before anything is uploaded. Returns one message per problem, each naming the
 // config field to fix; an empty list means the config is usable.
 export function checkDeployConfig(config: any, network: string): string[] {
     const errors: string[] = [];
     const at = (field: string) => `${network}.contracts.${field}`;
+
+    const admin = config?.admin;
+    if (admin !== ADMIN_FALLBACK_PLACEHOLDER && !isPublicKey(admin)) {
+        errors.push(`${network}.admin is not a valid G... public key: ${JSON.stringify(admin)}`);
+    }
+
+    const token = config?.token;
+    if (!isContractAddress(token)) {
+        errors.push(
+            `${network}.token is not a valid C... contract address: ${JSON.stringify(token)}`,
+        );
+    }
 
     const breaker = config?.contracts?.circuit_breaker;
     if (!breaker) {
