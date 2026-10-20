@@ -272,7 +272,7 @@ export class AgentFloatService {
     // approval_count or role set (#791). `approval_count` is incremented
     // atomically in the same statement that re-reads it, rather than
     // computed from the pre-lock snapshot.
-    const { transfer, role, newCount } = await withTransaction(async (client) => {
+    const { transfer, role, newCount, claimedExecution } = await withTransaction(async (client) => {
       const transferRes = await client.query(
         `SELECT * FROM agent_float_transfers WHERE id = $1 FOR UPDATE`,
         [transferId],
@@ -338,7 +338,25 @@ export class AgentFloatService {
       );
       const newCount = (countRes.rows[0] as { approval_count: number }).approval_count;
 
-      return { transfer, role, newCount };
+      // Claim the right to execute on-chain atomically, still holding the
+      // row lock: only the approval that reaches the threshold flips status
+      // away from PENDING_APPROVAL, with a WHERE guard so a second approval
+      // racing to the same threshold (e.g. a third approver, or a retried
+      // request arriving before the post-lock status update below lands)
+      // cannot also claim it and double-execute the transfer (#791).
+      let claimedExecution = false;
+      if (newCount >= transfer.required_approvals) {
+        const claim = await client.query(
+          `UPDATE agent_float_transfers
+           SET status = 'COMPLETED'
+           WHERE id = $1 AND status = 'PENDING_APPROVAL'
+           RETURNING id`,
+          [transferId],
+        );
+        claimedExecution = claim.rows.length > 0;
+      }
+
+      return { transfer, role, newCount, claimedExecution };
     });
 
     // Log approval audit entry
@@ -354,9 +372,12 @@ export class AgentFloatService {
     let unsignedTxXdr: string | undefined;
     let executedOnChain = false;
 
-    // Threshold check (2-of-3)
-    if (newCount >= transfer.required_approvals) {
-      // Execute the float transfer on Soroban contract if configured
+    if (claimedExecution) {
+      // We atomically claimed the execution right inside the locked
+      // transaction above (status is already COMPLETED there), so no
+      // concurrent approval can also reach this branch for the same
+      // transfer (#791). Execute on-chain and correct status to FAILED if
+      // it errors; approval_count was already incremented atomically above.
       let onChainError: string | null = null;
       try {
         if (process.env.AGENT_VAULT_CONTRACT_ID) {
@@ -380,15 +401,12 @@ export class AgentFloatService {
         });
       }
 
-      // Mark as FAILED if on-chain execution failed, COMPLETED otherwise.
-      // approval_count was already incremented atomically above.
-      const transferStatus = onChainError ? 'FAILED' : 'COMPLETED';
       const updateRes = await query(
         `UPDATE agent_float_transfers
-         SET status = $2, updated_at = NOW(), error_message = $3
+         SET status = COALESCE($2, status), updated_at = NOW(), error_message = $3
          WHERE id = $1
          RETURNING *`,
-        [transferId, transferStatus, onChainError],
+        [transferId, onChainError ? 'FAILED' : null, onChainError],
       );
       updatedTransfer = updateRes.rows[0] as AgentFloatTransferRow;
 
@@ -405,6 +423,12 @@ export class AgentFloatService {
         },
         status: 200,
       });
+    } else if (newCount >= transfer.required_approvals) {
+      // Reached the threshold but lost the atomic claim to a concurrent
+      // approval on the same transfer — read back the authoritative state
+      // rather than executing a second time.
+      const res = await query(`SELECT * FROM agent_float_transfers WHERE id = $1`, [transferId]);
+      updatedTransfer = res.rows[0] as AgentFloatTransferRow;
     } else {
       // approval_count was already incremented atomically above.
       const updateRes = await query(
