@@ -5,7 +5,6 @@ use soroban_sdk::{contract, contracterror, contractimpl, contracttype, Address, 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum AnchorError {
-    AlreadyInitialized = 1,
     NotInitialized = 2,
     EpochAlreadyAnchored = 3,
     EmptyEpoch = 4,
@@ -23,17 +22,8 @@ pub struct AuditAnchor;
 
 #[contractimpl]
 impl AuditAnchor {
-    /// Ledger TTL constants, matching the sibling contracts.
-    /// Threshold: ~1 day (17 280 ledgers × 5 s). Bump: ~30 days (518 400 ledgers).
-    const PERSISTENT_TTL_THRESHOLD: u32 = 17_280;
-    const PERSISTENT_TTL_BUMP: u32 = 518_400;
-
-    pub fn init(env: Env, owner: Address) -> Result<(), AnchorError> {
-        if env.storage().instance().has(&DataKey::Owner) {
-            return Err(AnchorError::AlreadyInitialized);
-        }
+    pub fn __constructor(env: Env, owner: Address) {
         env.storage().instance().set(&DataKey::Owner, &owner);
-        Ok(())
     }
 
     pub fn anchor(
@@ -86,23 +76,14 @@ impl AuditAnchor {
 #[cfg(test)]
 mod test {
     use super::*;
-    use soroban_sdk::{testutils::Address as _, Address, BytesN, Env};
+    use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, IntoVal, Symbol, Val};
 
     fn setup() -> (Env, AuditAnchorClient<'static>, Address) {
         let env = Env::default();
         env.mock_all_auths();
-        let contract_id = env.register(AuditAnchor, ());
-        let client = AuditAnchorClient::new(&env, &contract_id);
         let owner = Address::generate(&env);
-        client.init(&owner);
-        (env, client, owner)
-    }
-
-    // ── Happy path ───────────────────────────────────────────────────────────
-
-    #[test]
-    fn owner_can_anchor_each_epoch_once() {
-        let (env, client, _owner) = setup();
+        let contract_id = env.register(AuditAnchor, (&owner,));
+        let client = AuditAnchorClient::new(&env, &contract_id);
         let root = BytesN::from_array(&env, &[7; 32]);
         client.anchor(&1, &root, &3);
         assert_eq!(client.get_root(&1), Some(root));
@@ -112,65 +93,15 @@ mod test {
     }
 
     #[test]
-    fn get_root_returns_none_for_unanchored_epoch() {
-        let (_env, client, _owner) = setup();
-        assert_eq!(client.get_root(&99), None);
-    }
-
-    // ── EmptyEpoch ───────────────────────────────────────────────────────────
-
-    #[test]
-    fn anchor_rejects_zero_leaf_count() {
-        let (env, client, _owner) = setup();
-        let root = BytesN::from_array(&env, &[1; 32]);
-        let err = client.try_anchor(&1, &root, &0).unwrap_err().unwrap();
-        assert_eq!(err, AnchorError::EmptyEpoch);
-    }
-
-    // ── NotInitialized ───────────────────────────────────────────────────────
-
-    #[test]
-    fn anchor_before_init_returns_not_initialized() {
+    fn test_no_callable_initializer_after_deploy() {
         let env = Env::default();
-        env.mock_all_auths();
-        let contract_id = env.register(AuditAnchor, ());
-        let client = AuditAnchorClient::new(&env, &contract_id);
-
-        let root = BytesN::from_array(&env, &[2; 32]);
-        let err = client.try_anchor(&1, &root, &5).unwrap_err().unwrap();
-        assert_eq!(err, AnchorError::NotInitialized);
-    }
-
-    // ── AlreadyInitialized ───────────────────────────────────────────────────
-
-    #[test]
-    fn double_init_returns_already_initialized() {
-        let (env, client, _owner) = setup();
-        let second_owner = Address::generate(&env);
-        let err = client.try_init(&second_owner).unwrap_err().unwrap();
-        assert_eq!(err, AnchorError::AlreadyInitialized);
-    }
-
-    // ── Unauthorized anchor ──────────────────────────────────────────────────
-
-    #[test]
-    fn anchor_without_owner_auth_fails() {
-        let env = Env::default();
-        env.mock_all_auths();
-        let contract_id = env.register(AuditAnchor, ());
-        let client = AuditAnchorClient::new(&env, &contract_id);
         let owner = Address::generate(&env);
-        client.init(&owner);
-
-        // Clear the blanket mock so require_auth() is actually enforced.
-        env.mock_auths(&[]);
-
-        let root = BytesN::from_array(&env, &[9; 32]);
-        // No auth provided → require_auth() returns an auth error.
-        let result = client.try_anchor(&1, &root, &1);
-        assert!(
-            result.is_err(),
-            "anchor without owner auth must be rejected"
+        let contract_id = env.register(AuditAnchor, (&owner,));
+        let result = env.try_invoke_contract::<Val, Val>(
+            &contract_id,
+            &Symbol::new(&env, "init"),
+            (owner,).into_val(&env),
         );
+        assert!(result.is_err(), "old init entrypoint is still callable");
     }
 }

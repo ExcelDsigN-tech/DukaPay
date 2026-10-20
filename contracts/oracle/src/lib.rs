@@ -105,13 +105,8 @@ pub struct Oracle;
 
 #[contractimpl]
 impl Oracle {
-    /// Initialize the oracle. Only `admin` may configure sources and the
-    /// `sources` list gates who is allowed to submit prices.
-    pub fn initialize(env: Env, admin: Address, sources: Vec<SourceConfig>) {
-        if env.storage().instance().has(&DataKey::Admin) {
-            panic!("already initialized");
-        }
-        admin.require_auth();
+    /// Constructor. `sources` list gates who is allowed to submit prices.
+    pub fn __constructor(env: Env, admin: Address, sources: Vec<SourceConfig>) {
         env.storage().instance().set(&DataKey::Admin, &admin);
 
         let mut source_names = Vec::new(&env);
@@ -635,7 +630,7 @@ fn sort_in_place(arr: &mut Vec<i128>) {
 mod test {
     use super::*;
     use soroban_sdk::testutils::{Address as _, Ledger, LedgerInfo};
-    use soroban_sdk::{symbol_short, vec, Env, IntoVal};
+    use soroban_sdk::{symbol_short, vec, Env, IntoVal, Val};
 
     fn setup_full() -> (Env, Address, Address, Address, Address, Address, Address) {
         let env = Env::default();
@@ -669,9 +664,7 @@ mod test {
                 address: dex.clone(),
             },
         ];
-        let oracle_id = env.register(Oracle, ());
-        let client = OracleClient::new(&env, &oracle_id);
-        client.initialize(&admin, &sources);
+        let oracle_id = env.register(Oracle, (&admin, sources));
         let asset = Address::generate(&env);
         (env, oracle_id, asset, admin, pyth, chain, dex)
     }
@@ -928,6 +921,26 @@ mod test {
         }
     }
 
+    #[test]
+    fn test_no_callable_initializer_after_deploy() {
+        let (env, oracle_id, _asset, admin, _pyth, _chain, _dex) = setup_full();
+        let sources = vec![
+            &env,
+            symbol_short!("pyth"),
+            symbol_short!("chain"),
+            symbol_short!("dex"),
+        ];
+        let result = env.try_invoke_contract::<Val, Val>(
+            &oracle_id,
+            &Symbol::new(&env, "initialize"),
+            (admin, sources).into_val(&env),
+        );
+        assert!(
+            result.is_err(),
+            "old initialize entrypoint is still callable"
+        );
+    }
+
     fn accept_admin(env: &Env, oracle_id: &Address) -> Result<(), OracleError> {
         env.as_contract(oracle_id, || Oracle::accept_admin(env.clone()))
     }
@@ -1128,11 +1141,6 @@ mod test {
         let dex = Address::generate(&env);
         let asset = Address::generate(&env);
 
-        let oracle_id = env.register(Oracle, ());
-        let client = OracleClient::new(&env, &oracle_id);
-
-        // Initialize with admin auth mocked
-        env.mock_all_auths();
         let sources = vec![
             &env,
             SourceConfig {
@@ -1148,7 +1156,8 @@ mod test {
                 address: dex.clone(),
             },
         ];
-        client.initialize(&admin, &sources);
+        let oracle_id = env.register(Oracle, (&admin, sources));
+        let client = OracleClient::new(&env, &oracle_id);
 
         // Now clear all mocked auths: require_auth() is strictly enforced!
         env.mock_auths(&[]);

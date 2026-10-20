@@ -1,16 +1,15 @@
 use crate::{AgentRegistry, AgentRegistryClient, AgentStatus, RegistryError};
 use proptest::prelude::*;
 use soroban_sdk::testutils::{Address as _, Events as _};
-use soroban_sdk::{Address, BytesN, Env, FromVal, IntoVal, Symbol};
+use soroban_sdk::{Address, BytesN, Env, FromVal, IntoVal, Symbol, Val};
 
 fn setup() -> (Env, AgentRegistryClient<'static>, Address, Address) {
     let env = Env::default();
     env.mock_all_auths();
     let owner = Address::generate(&env);
     let operator = Address::generate(&env);
-    let id = env.register(AgentRegistry, ());
+    let id = env.register(AgentRegistry, (&owner, &operator));
     let client = AgentRegistryClient::new(&env, &id);
-    client.init(&owner, &operator);
     (env, client, owner, operator)
 }
 
@@ -153,6 +152,17 @@ fn test_bond_updated_event() {
     assert_eq!(last_event_topic0(&env), Symbol::new(&env, "BondUpdated"));
 }
 
+#[test]
+fn test_no_callable_initializer_after_deploy() {
+    let (env, client, owner, operator) = setup();
+    let result = env.try_invoke_contract::<Val, Val>(
+        &client.address,
+        &Symbol::new(&env, "init"),
+        (owner, operator).into_val(&env),
+    );
+    assert!(result.is_err(), "old init entrypoint is still callable");
+}
+
 proptest! {
     #[test]
     fn proptest_valid_bond_always_accepted(
@@ -196,10 +206,8 @@ fn test_upgrade_rejects_unauthorized_signer() {
     let operator = Address::generate(&env);
     let outsider = Address::generate(&env);
 
-    let id = env.register(AgentRegistry, ());
+    let id = env.register(AgentRegistry, (&owner, &operator));
     let client = AgentRegistryClient::new(&env, &id);
-    env.mock_all_auths();
-    client.init(&owner, &operator);
 
     let hash = create_upgrade_hash(&env);
     // Only the outsider is authorized; the owner never authorized this call,

@@ -1,20 +1,29 @@
 import type { HttpClient } from './http.js';
 import type {
+  AgentAssignmentsResponse,
+  AgentDashboard,
+  AgentPairLimitsResponse,
+  ApproveFloatTransferResponse,
+  AssignBorrowerResponse,
   BorrowerLoanStatus,
   BorrowerLoans,
   Challenge,
   DepositorPortfolio,
+  InitiateFloatTransferResponse,
   Loan,
   LoanConfig,
   PoolAnalyticsResponse,
   PoolStats,
+  RejectFloatTransferResponse,
   RemittanceCreated,
   RemittanceEnvelope,
   RemittanceList,
   RemittanceSubmitResult,
+  RemoveBorrowerResponse,
   RepayTransaction,
   Score,
   Session,
+  SetAgentPairLimitsResponse,
   UnsignedTransaction,
   YieldHistoryPoint,
 } from './types.js';
@@ -25,6 +34,15 @@ import {
   validatePositiveInt,
   validateTokenAmount,
 } from './validation.js';
+
+/** Matches the backend's float transfer ID format, so the ID is safe to put in a path. */
+function validateTransferId(value: unknown, fieldName: string): asserts value is string {
+  if (typeof value !== 'string' || !/^[A-Za-z0-9_-]{3,128}$/.test(value)) {
+    throw new ValidationError(
+      `Invalid ${fieldName}: must be 3-128 letters, digits, underscores or hyphens`,
+    );
+  }
+}
 
 export class AuthResource {
   constructor(private http: HttpClient) {}
@@ -236,3 +254,123 @@ export class RemittanceResource {
     return this.http.post(`/remittances/${id}/submit`, { signedXdr });
   }
 }
+
+export class AgentsResource {
+  constructor(private http: HttpClient) {}
+
+  /** Lists borrower wallets assigned to the authenticated agent (`GET /agents/my-assignments`). */
+  myAssignments(): Promise<AgentAssignmentsResponse> {
+    return this.http.get('/agents/my-assignments');
+  }
+
+  /** Assigns a borrower wallet to an agent (`POST /agents/{agentPublicKey}/assignees`, admin only). */
+  assignBorrower(params: {
+    agentPublicKey: string;
+    borrowerPublicKey: string;
+  }): Promise<AssignBorrowerResponse> {
+    validateStellarAddress(params.agentPublicKey, 'agentPublicKey');
+    validateStellarAddress(params.borrowerPublicKey, 'borrowerPublicKey');
+    if (params.agentPublicKey === params.borrowerPublicKey) {
+      throw new ValidationError('agentPublicKey and borrowerPublicKey must be different');
+    }
+    return this.http.post(`/agents/${params.agentPublicKey}/assignees`, {
+      borrowerPublicKey: params.borrowerPublicKey,
+    });
+  }
+
+  /** Revokes a borrower assignment from an agent (`DELETE /agents/{agentPublicKey}/assignees/{borrowerPublicKey}`, admin only). */
+  removeBorrower(params: {
+    agentPublicKey: string;
+    borrowerPublicKey: string;
+  }): Promise<RemoveBorrowerResponse> {
+    validateStellarAddress(params.agentPublicKey, 'agentPublicKey');
+    validateStellarAddress(params.borrowerPublicKey, 'borrowerPublicKey');
+    return this.http.delete(
+      `/agents/${params.agentPublicKey}/assignees/${params.borrowerPublicKey}`,
+    );
+  }
+
+  /** Fetches agent dashboard metrics (`GET /agents/dashboard`). */
+  dashboard(): Promise<AgentDashboard> {
+    return this.http.get('/agents/dashboard');
+  }
+
+  /** Clears the cached agent dashboard snapshot (`DELETE /agents/dashboard/cache`). */
+  clearDashboardCache(): Promise<{ success: boolean; message: string }> {
+    return this.http.delete('/agents/dashboard/cache');
+  }
+
+  /** Initiates an agent-to-agent float transfer (`POST /agents/float-transfer`). */
+  initiateFloatTransfer(params: {
+    fromAgent: string;
+    toAgent: string;
+    /** Whole tokens (e.g. 250.5 USDC), up to 7 decimal places. */
+    amount: number;
+    reason?: string;
+  }): Promise<InitiateFloatTransferResponse> {
+    validateStellarAddress(params.fromAgent, 'fromAgent');
+    validateStellarAddress(params.toAgent, 'toAgent');
+    if (params.fromAgent === params.toAgent) {
+      throw new ValidationError('fromAgent and toAgent must be different');
+    }
+    validateTokenAmount(params.amount, 'amount');
+    return this.http.post('/agents/float-transfer', {
+      fromAgent: params.fromAgent,
+      toAgent: params.toAgent,
+      amount: params.amount,
+      ...(params.reason !== undefined ? { reason: params.reason } : {}),
+    });
+  }
+
+  /** Approves a pending agent float transfer (`POST /agents/float-transfer/{id}/approve`). */
+  approveFloatTransfer(transferId: string): Promise<ApproveFloatTransferResponse> {
+    validateTransferId(transferId, 'transferId');
+    return this.http.post(`/agents/float-transfer/${transferId}/approve`);
+  }
+
+  /** Rejects a pending agent float transfer (`POST /agents/float-transfer/{id}/reject`). */
+  rejectFloatTransfer(transferId: string): Promise<RejectFloatTransferResponse> {
+    validateTransferId(transferId, 'transferId');
+    return this.http.post(`/agents/float-transfer/${transferId}/reject`);
+  }
+
+  /** Retrieves daily and weekly float transfer limits for an agent pair (`GET /agents/float-transfer/limits`). */
+  getPairLimits(params: {
+    fromAgent: string;
+    toAgent: string;
+  }): Promise<AgentPairLimitsResponse> {
+    validateStellarAddress(params.fromAgent, 'fromAgent');
+    validateStellarAddress(params.toAgent, 'toAgent');
+    return this.http.get('/agents/float-transfer/limits', {
+      query: {
+        fromAgent: params.fromAgent,
+        toAgent: params.toAgent,
+      },
+    });
+  }
+
+  /** Updates daily and weekly float transfer limits for an agent pair (`PUT /agents/float-transfer/limits`, admin only). */
+  setPairLimits(params: {
+    fromAgent: string;
+    toAgent: string;
+    /** Whole tokens (e.g. 250.5 USDC), up to 7 decimal places. */
+    dailyLimit: number;
+    /** Whole tokens (e.g. 250.5 USDC), up to 7 decimal places. */
+    weeklyLimit: number;
+  }): Promise<SetAgentPairLimitsResponse> {
+    validateStellarAddress(params.fromAgent, 'fromAgent');
+    validateStellarAddress(params.toAgent, 'toAgent');
+    if (params.fromAgent === params.toAgent) {
+      throw new ValidationError('fromAgent and toAgent must be different');
+    }
+    validateTokenAmount(params.dailyLimit, 'dailyLimit');
+    validateTokenAmount(params.weeklyLimit, 'weeklyLimit');
+    return this.http.put('/agents/float-transfer/limits', {
+      fromAgent: params.fromAgent,
+      toAgent: params.toAgent,
+      dailyLimit: params.dailyLimit,
+      weeklyLimit: params.weeklyLimit,
+    });
+  }
+}
+

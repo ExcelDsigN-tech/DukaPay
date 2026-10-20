@@ -20,7 +20,6 @@ pub trait BreakerInterface {
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum PoolError {
-    AlreadyInitialized = 1,
     NotInitialized = 2,
     ContractPaused = 3,
     InvalidAmount = 4,
@@ -528,10 +527,7 @@ impl LendingPool {
 
     // ── Admin / lifecycle ─────────────────────────────────────────────────
 
-    pub fn initialize(env: Env, admin: Address) -> Result<(), PoolError> {
-        if env.storage().instance().has(&DataKey::Admin) {
-            return Err(PoolError::AlreadyInitialized);
-        }
+    pub fn __constructor(env: Env, admin: Address) {
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::Paused, &false);
         env.storage()
@@ -545,7 +541,6 @@ impl LendingPool {
             .instance()
             .set(&DataKey::Version, &Self::CURRENT_VERSION);
         Self::bump_instance_ttl(&env);
-        Ok(())
     }
 
     fn require_loan_manager(env: &Env) -> Result<(), PoolError> {

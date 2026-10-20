@@ -7,7 +7,6 @@ use soroban_sdk::{
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum NftError {
-    AlreadyInitialized = 1,
     NotInitialized = 2,
     UnauthorizedMinter = 3,
     NftAlreadyExists = 4,
@@ -344,11 +343,8 @@ impl RemittanceNFT {
             .publish((symbol_short!("NftBurned"), user.clone()), ());
     }
 
-    pub fn initialize(env: Env, admin: Address) -> Result<(), NftError> {
+    pub fn __constructor(env: Env, admin: Address) {
         let admin_key = Self::admin_key();
-        if env.storage().instance().has(&admin_key) {
-            return Err(NftError::AlreadyInitialized);
-        }
         env.storage().instance().set(&admin_key, &admin);
         env.storage()
             .instance()
@@ -366,7 +362,6 @@ impl RemittanceNFT {
         let mut minters = Vec::new(&env);
         minters.push_back(admin);
         Self::write_authorized_minters_list(&env, &minters);
-        Ok(())
     }
 
     fn assert_not_paused(env: &Env) -> Result<(), NftError> {

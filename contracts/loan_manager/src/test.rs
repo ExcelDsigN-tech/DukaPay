@@ -4,7 +4,8 @@ use remittance_nft::{RemittanceNFT, RemittanceNFTClient};
 use soroban_sdk::testutils::{Events, Ledger as _};
 use soroban_sdk::token::{Client as TokenClient, StellarAssetClient};
 use soroban_sdk::{
-    contract, contractimpl, testutils::Address as _, Address, BytesN, Env, FromVal, String,
+    contract, contractimpl, testutils::Address as _, Address, BytesN, Env, FromVal, IntoVal,
+    String, Symbol, Val,
 };
 
 /// Test amounts written in USDC, converted to stroops (the unit the contracts use).
@@ -44,9 +45,8 @@ fn setup_test<'a>(
 ) {
     // 1. Deploy the NFT score contract
     let admin = Address::generate(env);
-    let nft_contract_id = env.register(RemittanceNFT, ());
+    let nft_contract_id = env.register(RemittanceNFT, (&admin,));
     let nft_client = RemittanceNFTClient::new(env, &nft_contract_id);
-    nft_client.initialize(&admin);
 
     // 2. Deploy a test token
     let token_admin = Address::generate(env);
@@ -54,28 +54,27 @@ fn setup_test<'a>(
     let token_id = token_contract.address();
 
     // 3. Deploy a real LendingPool contract for cross-contract pause checks
-    let pool_contract_id = env.register(LendingPool, ());
+    let pool_contract_id = env.register(LendingPool, (&admin,));
     let pool_client = LendingPoolClient::new(env, &pool_contract_id);
-    pool_client.initialize(&admin);
 
     // 4. Deploy the LoanManager contract
-    let loan_manager_id = env.register(LoanManager, ());
+    let governance = Address::generate(env);
+    let loan_manager_id = env.register(
+        LoanManager,
+        (
+            &nft_contract_id,
+            &pool_contract_id,
+            &token_id,
+            &admin,
+            &governance,
+        ),
+    );
     let loan_manager_client = LoanManagerClient::new(env, &loan_manager_id);
     pool_client.set_loan_manager(&loan_manager_id);
 
-    // Authorize LoanManager on NFT and pool contract before initialization
+    // Authorize LoanManager on NFT and pool contract
     nft_client.authorize_minter(&loan_manager_id);
     pool_client.set_loan_manager(&loan_manager_id);
-
-    // 5. Initialize the Loan Manager with the NFT contract, lending pool, token, admin, and governance
-    let governance = Address::generate(env);
-    loan_manager_client.initialize(
-        &nft_contract_id,
-        &pool_contract_id,
-        &token_id,
-        &admin,
-        &governance,
-    );
 
     // Disable dust spam protection for the loan manager tests
     nft_client.set_min_repayment_amount(&0);
@@ -3957,5 +3956,47 @@ fn test_set_rate_oracle_emits_rate_oracle_updated_event() {
     assert!(
         has_oracle_event,
         "RateOracleUpdated event should be emitted"
+    );
+}
+
+#[test]
+fn test_no_callable_initializer_after_deploy() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (manager, nft_client, pool, token, admin) = setup_test(&env);
+    let result = env.try_invoke_contract::<Val, Val>(
+        &manager.address,
+        &Symbol::new(&env, "initialize"),
+        (nft_client.address, pool, token, admin).into_val(&env),
+    );
+    assert!(
+        result.is_err(),
+        "old initialize entrypoint is still callable"
+    );
+}
+
+#[soroban_sdk::contract]
+struct MockBreaker;
+
+#[soroban_sdk::contractimpl]
+impl MockBreaker {
+    pub fn is_blocked(_env: Env, _contract: Address, _function: soroban_sdk::Symbol) -> bool {
+        true
+    }
+}
+
+#[test]
+fn test_circuit_breaker_tripped_blocks_request_loan() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (manager, _nft_client, _pool_client, _token_id, _admin) = setup_test(&env);
+
+    let breaker_id = env.register(MockBreaker, ());
+    manager.set_circuit_breaker(&Some(breaker_id));
+
+    let borrower = Address::generate(&env);
+    assert_eq!(
+        manager.try_request_loan(&borrower, &1000, &30),
+        Err(Ok(LoanError::CircuitBreakerTripped))
     );
 }

@@ -29,7 +29,7 @@ enum VaultAction {
     SetHaircut { agent: u8, bps: u32 },
 }
 
-fn agent_of(env: &Env, agents: &[Address], idx: u8) -> Address {
+fn agent_of(agents: &[Address], idx: u8) -> Address {
     agents[(idx as usize) % N_AGENTS].clone()
 }
 
@@ -37,7 +37,8 @@ fn agent_of(env: &Env, agents: &[Address], idx: u8) -> Address {
 fn assert_solvency(client: &AgentVaultClient, agent: &Address) {
     let v = client.get_vault(agent);
     // INV-6: the solvency bound itself must not overflow.
-    let bound = (v.collateral as i128)
+    let bound = v
+        .collateral
         .checked_mul(v.haircut_bps as i128)
         .and_then(|x| x.checked_div(10_000));
     let bound = match bound {
@@ -63,43 +64,42 @@ fuzz_target!(|actions: Vec<VaultAction>| {
 
     let agents: Vec<Address> = (0..N_AGENTS).map(|_| Address::generate(&env)).collect();
     for a in &agents {
-        stellar.mint(&a, &1_000_000_000_000);
+        stellar.mint(a, &1_000_000_000_000);
     }
 
-    let id = env.register(AgentVault, ());
+    let id = env.register(AgentVault, (&owner, &operator, &token, &MAX_HAIRCUT, &MIN_COLLATERAL));
     let client = AgentVaultClient::new(&env, &id);
-    client.init(&owner, &operator, &token, &MAX_HAIRCUT, &MIN_COLLATERAL);
 
     for action in actions {
         match action {
             VaultAction::Deposit { agent, amount } => {
-                let a = agent_of(&env, &agents, agent);
+                let a = agent_of(&agents, agent);
                 let amt = amount.clamp(0, 1_000_000_000_000);
                 let _ = client.try_deposit_collateral(&a, &amt);
             }
             VaultAction::Mint { agent, amount } => {
-                let a = agent_of(&env, &agents, agent);
+                let a = agent_of(&agents, agent);
                 let amt = amount.clamp(0, 1_000_000_000_000);
                 let _ = client.try_mint_float(&a, &amt);
             }
             VaultAction::Burn { agent, amount } => {
-                let a = agent_of(&env, &agents, agent);
+                let a = agent_of(&agents, agent);
                 let amt = amount.clamp(0, 1_000_000_000_000);
                 let _ = client.try_burn_float(&a, &amt);
             }
             VaultAction::Withdraw { agent, amount } => {
-                let a = agent_of(&env, &agents, agent);
+                let a = agent_of(&agents, agent);
                 let amt = amount.clamp(0, 1_000_000_000_000);
                 let _ = client.try_withdraw_collateral(&a, &amt);
             }
             VaultAction::Transfer { from, to, amount } => {
-                let f = agent_of(&env, &agents, from);
-                let t = agent_of(&env, &agents, to);
+                let f = agent_of(&agents, from);
+                let t = agent_of(&agents, to);
                 let amt = amount.clamp(0, 1_000_000_000_000);
                 let _ = client.try_transfer_float(&f, &t, &amt);
             }
             VaultAction::SetHaircut { agent, bps } => {
-                let a = agent_of(&env, &agents, agent);
+                let a = agent_of(&agents, agent);
                 let b = bps % (MAX_HAIRCUT + 1);
                 let _ = client.try_set_haircut(&a, &b);
             }

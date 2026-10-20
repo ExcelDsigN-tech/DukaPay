@@ -90,7 +90,7 @@ Dispute:   any party raises dispute within window
 ## 6. Off-chain services
 
 - **backend/ (Express 5, TS)**: auth (JWT), onboarding + KYC adapter, transaction API (cash-in/out), settlement service, rate limiting, zod validation at the boundary. Postgres via `node-pg-migrate`; Redis cache; Sentry; prom-client metrics.
-- **indexer/ (Rust → Postgres)**: consumes contract events, materializes audit queries and live dashboards. *(P2)*
+- **indexer/ (experimental Rust → Postgres)**: an opt-in alternative for consuming contract events and materializing audit queries. The backend's in-process indexer remains canonical. *(P2)*
 - **frontend/ (Next.js 16)**: agent dashboard (float, collateral, status), admin console, find-an-agent map.
 
 ## 7. Security model

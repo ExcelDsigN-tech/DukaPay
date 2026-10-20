@@ -56,9 +56,9 @@ fn setup<'a>(
         .address();
     let stellar_asset_client = StellarAssetClient::new(env, &token_id);
 
-    let pool_id = env.register(LendingPool, ());
+    let pool_admin = Address::generate(env);
+    let pool_id = env.register(LendingPool, (&pool_admin,));
     let pool_client = LendingPoolClient::new(env, &pool_id);
-    pool_client.initialize(&token_admin);
     pool_client.set_withdrawal_cooldown(&0);
 
     let signer = Address::generate(env);
@@ -66,9 +66,8 @@ fn setup<'a>(
     signers.push_back(signer.clone());
     signers.push_back(Address::generate(env));
     signers.push_back(Address::generate(env));
-    let breaker_id = env.register(CircuitBreaker, ());
+    let breaker_id = env.register(CircuitBreaker, (&token_admin, signers.clone(), 1u32, 3_600u64));
     let breaker_client = CircuitBreakerClient::new(env, &breaker_id);
-    breaker_client.initialize(&token_admin, &signers, &1, &3_600);
     pool_client.set_circuit_breaker(&Some(breaker_id));
 
     let provider = Address::generate(env);

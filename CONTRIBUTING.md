@@ -52,11 +52,23 @@ component as scope: `fix(contracts): ...`, `feat(frontend): ...`.
 
 ## Testing
 
-Run the checks for every area you touched before opening a PR:
+Install the git hooks once. They fix formatting in the files you stage on
+every commit:
 
 ```bash
+./scripts/setup-hooks.sh
+```
+
+Before you push, apply every auto-fixer (formatting, lint fixes, the OpenAPI
+spec and money-policy generated files), then run the checks for every area you
+touched:
+
+```bash
+./scripts/ci-local.sh fix
 ./scripts/ci-local.sh <area>   # e.g. backend, frontend, contracts, sdk
 ```
+
+If a CI job fails, its summary names the area to run locally.
 
 `.github/workflows/` is the source of truth. If the script and CI disagree,
 CI wins.
