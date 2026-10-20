@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { closePool, query } from '../db/connection.js';
+import { query } from '../db/connection.js';
 import logger from '../utils/logger.js';
 import { toStroops } from '../money/decimal.js';
 
@@ -427,13 +427,6 @@ const notificationSeeds: NotificationSeed[] = [
   },
 ];
 
-const parseArgs = () => {
-  const args = new Set(process.argv.slice(2));
-  return {
-    reset: args.has('--reset'),
-  };
-};
-
 const seedUserProfiles = async () => {
   logger.info('Seeding user_profiles...');
 
@@ -748,9 +741,11 @@ const logSummary = () => {
   });
 };
 
-export const runSeed = async () => {
-  const { reset } = parseArgs();
-
+/**
+ * Seeds the development database in one transaction. Rolls back and rethrows
+ * on failure; the caller owns the pool and the process (see `cli.ts`).
+ */
+export const runSeed = async ({ reset = false }: { reset?: boolean } = {}) => {
   logger.info('Starting development database seeding...');
   logger.info('='.repeat(50));
 
@@ -781,19 +776,8 @@ export const runSeed = async () => {
       message: error instanceof Error ? error.message : String(error),
       ...(error instanceof Error && error.stack && { stack: error.stack }),
     });
-    if (process.env.JEST_WORKER_ID === undefined) {
-      process.exit(1);
-    }
     throw error;
-  } finally {
-    if (process.env.JEST_WORKER_ID === undefined) {
-      await closePool();
-    }
   }
 };
 
 export { devUsers, CONTRACT_ID, DEV_LENDER };
-
-if (process.env.JEST_WORKER_ID === undefined) {
-  runSeed();
-}

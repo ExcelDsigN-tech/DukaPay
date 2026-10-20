@@ -7,7 +7,7 @@ import { useUserStore } from "../stores/useUserStore";
 import { useGamificationStore } from "../stores/useGamificationStore";
 import { useQueryClient } from "@tanstack/react-query";
 import { CSRF_HEADER_NAME, getCsrfToken } from "./useApi";
-import { API_URL } from "../lib/apiConfig";
+import { NEXT_PUBLIC_API_URL } from "../lib/apiConfig";
 
 /**
  * useLogout
@@ -42,7 +42,7 @@ export function useLogout() {
             headers[CSRF_HEADER_NAME] = csrfToken;
           }
 
-          await fetch(`${API_URL}/api/auth/logout`, {
+          await fetch(`${NEXT_PUBLIC_API_URL}/api/auth/logout`, {
             method: "POST",
             credentials: "include",
             headers,

@@ -2,28 +2,17 @@ import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import { query, getClient } from '../db/connection.js';
 import { runner as migrate } from 'node-pg-migrate';
 import type { PoolClient } from 'pg';
-import pg from 'pg';
 
 let databaseAvailable = false;
-if (process.env.DATABASE_TESTS === 'false') {
-  databaseAvailable = false;
-} else if (process.env.DATABASE_TESTS === 'true') {
-  databaseAvailable = true;
-} else {
-  const probePool = new pg.Pool({
-    connectionString:
-      process.env.DATABASE_URL ?? 'postgresql://postgres:postgres@localhost:5432/dukapay',
-    connectionTimeoutMillis: 1000,
-  });
+
+beforeAll(async () => {
   try {
-    const res = await probePool.query('SELECT 1');
-    databaseAvailable = (res.rowCount ?? 0) > 0;
+    await query('SELECT 1');
+    databaseAvailable = true;
   } catch {
     databaseAvailable = false;
-  } finally {
-    await probePool.end().catch(() => {});
   }
-}
+});
 
 const describeIf = (name: string, fn: () => void) => {
   if (databaseAvailable) {
@@ -50,7 +39,6 @@ describeIf('Migrations', () => {
     await migrate({
       dbClient: client,
       dir: './migrations',
-      ignorePattern: '.*\\.md$',
       direction,
       count: Infinity,
     });
