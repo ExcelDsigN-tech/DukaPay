@@ -17,6 +17,8 @@ const mockBuildTransferToAgentTx = jest.fn();
 jest.unstable_mockModule('../db/connection.js', () => ({
   default: { query: mockQuery },
   query: mockQuery,
+  withTransaction: (fn: (client: { query: typeof mockQuery }) => unknown) =>
+    fn({ query: mockQuery }),
 }));
 
 jest.unstable_mockModule('../services/sorobanService.js', () => ({
@@ -143,6 +145,7 @@ describe('AgentFloatService', () => {
 
   describe('initiateTransfer & Limit Enforcement', () => {
     it('initiates a float transfer when limits are respected', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [] }); // advisory lock
       // getPairLimits lookup -> default limits
       mockQuery.mockResolvedValueOnce({ rows: [] });
       // daily sum check -> 10000
@@ -209,6 +212,7 @@ describe('AgentFloatService', () => {
     });
 
     it('assigns role admin when createdBy is a third party admin', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [] }); // advisory lock
       mockQuery.mockResolvedValueOnce({ rows: [] }); // limits lookup
       mockQuery.mockResolvedValueOnce({ rows: [{ total: '0' }] }); // daily
       mockQuery.mockResolvedValueOnce({ rows: [{ total: '0' }] }); // weekly
@@ -265,6 +269,7 @@ describe('AgentFloatService', () => {
     });
 
     it('throws AppError when daily limit is exceeded', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [] }); // advisory lock
       // Pair limits lookup (default 100000 daily)
       mockQuery.mockResolvedValueOnce({ rows: [] });
       // Daily sum check returning 95000
@@ -281,6 +286,7 @@ describe('AgentFloatService', () => {
     });
 
     it('throws AppError when weekly limit is exceeded', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [] }); // advisory lock
       // Pair limits lookup (default 500000 weekly)
       mockQuery.mockResolvedValueOnce({ rows: [] });
       // Daily sum check returning 10000
@@ -323,6 +329,8 @@ describe('AgentFloatService', () => {
       mockQuery.mockResolvedValueOnce({ rows: [] });
       // INSERT approval
       mockQuery.mockResolvedValueOnce({ rows: [] });
+      mockQuery.mockResolvedValueOnce({ rows: [{ approval_count: 2 }] }); // UPDATE approval_count
+      mockQuery.mockResolvedValueOnce({ rows: [{ id: 'ft_123' }] }); // claim execution
       // INSERT audit_log for approval
       mockQuery.mockResolvedValueOnce({ rows: [] });
       // UPDATE transfer to COMPLETED
@@ -382,6 +390,8 @@ describe('AgentFloatService', () => {
       });
       mockQuery.mockResolvedValueOnce({ rows: [] }); // check existing
       mockQuery.mockResolvedValueOnce({ rows: [] }); // insert approval
+      mockQuery.mockResolvedValueOnce({ rows: [{ approval_count: 2 }] }); // UPDATE approval_count
+      mockQuery.mockResolvedValueOnce({ rows: [{ id: 'ft_124' }] }); // claim execution
       mockQuery.mockResolvedValueOnce({ rows: [] }); // audit approval
       mockQuery.mockResolvedValueOnce({
         rows: [{ id: 'ft_124', status: 'COMPLETED', approval_count: 2 }],
@@ -418,10 +428,11 @@ describe('AgentFloatService', () => {
       });
       mockQuery.mockResolvedValueOnce({ rows: [] }); // check existing
       mockQuery.mockResolvedValueOnce({ rows: [] }); // insert approval
+      mockQuery.mockResolvedValueOnce({ rows: [{ approval_count: 2 }] }); // UPDATE approval_count
       mockQuery.mockResolvedValueOnce({ rows: [] }); // audit approval
       mockQuery.mockResolvedValueOnce({
         rows: [{ id: 'ft_125', status: 'PENDING_APPROVAL', approval_count: 2 }],
-      }); // UPDATE approval_count to 2
+      }); // touch updated_at
       mockQuery.mockResolvedValueOnce({ rows: [] }); // fetch approvals
 
       const result = await service.approveTransfer({
@@ -448,9 +459,12 @@ describe('AgentFloatService', () => {
           },
         ],
       });
-      mockQuery.mockResolvedValueOnce({ rows: [] });
-      mockQuery.mockResolvedValueOnce({ rows: [] });
-      mockQuery.mockResolvedValueOnce({ rows: [] });
+      mockQuery.mockResolvedValueOnce({ rows: [] }); // check existing
+      mockQuery.mockResolvedValueOnce({ rows: [] }); // no prior admin approval
+      mockQuery.mockResolvedValueOnce({ rows: [] }); // insert approval
+      mockQuery.mockResolvedValueOnce({ rows: [{ approval_count: 2 }] }); // UPDATE approval_count
+      mockQuery.mockResolvedValueOnce({ rows: [{ id: 'ft_126' }] }); // claim execution
+      mockQuery.mockResolvedValueOnce({ rows: [] }); // audit approval
       mockQuery.mockResolvedValueOnce({
         rows: [{ id: 'ft_126', status: 'COMPLETED', approval_count: 2 }],
       });
@@ -475,6 +489,31 @@ describe('AgentFloatService', () => {
           approver: AGENT_B,
         }),
       ).rejects.toThrow("Float transfer request 'non_existent_id' not found.");
+    });
+
+    it('rejects a second admin approval on the same transfer', async () => {
+      mockQuery.mockResolvedValueOnce({
+        rows: [
+          {
+            id: 'ft_130',
+            from_agent: AGENT_A,
+            to_agent: AGENT_B,
+            status: 'PENDING_APPROVAL',
+            required_approvals: 2,
+            approval_count: 1,
+          },
+        ],
+      });
+      mockQuery.mockResolvedValueOnce({ rows: [] }); // check existing
+      mockQuery.mockResolvedValueOnce({ rows: [{ '?column?': 1 }] }); // prior admin approval
+
+      await expect(
+        service.approveTransfer({
+          transferId: 'ft_130',
+          approver: THIRD_PARTY,
+          userRole: 'admin',
+        }),
+      ).rejects.toThrow('Only one admin approval is allowed per transfer.');
     });
 
     it('throws badRequest when transfer is not in PENDING_APPROVAL status', async () => {

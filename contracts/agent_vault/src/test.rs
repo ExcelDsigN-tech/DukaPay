@@ -564,10 +564,7 @@ impl MockRegistry {
             .set(&Symbol::new(&env, "status"), &status);
     }
 
-    pub fn get_agent(
-        env: Env,
-        _agent: Address,
-    ) -> Result<crate::AgentInfo, crate::RegistryError> {
+    pub fn get_agent(env: Env, _agent: Address) -> Result<crate::AgentInfo, crate::RegistryError> {
         let status: Option<crate::AgentStatus> = env
             .storage()
             .instance()

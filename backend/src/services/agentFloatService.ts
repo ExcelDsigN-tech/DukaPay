@@ -423,12 +423,6 @@ export class AgentFloatService {
         },
         status: 200,
       });
-    } else if (newCount >= transfer.required_approvals) {
-      // Reached the threshold but lost the atomic claim to a concurrent
-      // approval on the same transfer — read back the authoritative state
-      // rather than executing a second time.
-      const res = await query(`SELECT * FROM agent_float_transfers WHERE id = $1`, [transferId]);
-      updatedTransfer = res.rows[0] as AgentFloatTransferRow;
     } else {
       // approval_count was already incremented atomically above.
       const updateRes = await query(

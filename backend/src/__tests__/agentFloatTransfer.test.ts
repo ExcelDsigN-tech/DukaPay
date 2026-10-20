@@ -23,7 +23,8 @@ jest.unstable_mockModule('../db/connection.js', () => ({
   query: mockQuery,
   getClient: jest.fn(),
   closePool: jest.fn(),
-  withTransaction: jest.fn(),
+  withTransaction: (fn: (client: { query: typeof mockQuery }) => unknown) =>
+    fn({ query: mockQuery }),
 }));
 
 await import('../db/connection.js');
@@ -61,6 +62,8 @@ describe('Agent Float Transfer API (/api/agents/float-transfer)', () => {
     });
 
     it('successfully initiates a float transfer request with 1st approval', async () => {
+      // Per-pair advisory lock
+      mockQuery.mockResolvedValueOnce({ rows: [] });
       // Pair limits lookup
       mockQuery.mockResolvedValueOnce({ rows: [] });
       // Daily sum check
@@ -132,6 +135,8 @@ describe('Agent Float Transfer API (/api/agents/float-transfer)', () => {
     });
 
     it('rejects transfer exceeding pair daily limit', async () => {
+      // Per-pair advisory lock
+      mockQuery.mockResolvedValueOnce({ rows: [] });
       // Pair limits lookup (default 100000 daily)
       mockQuery.mockResolvedValueOnce({ rows: [] });
       // Daily sum check returning 95000
@@ -172,6 +177,10 @@ describe('Agent Float Transfer API (/api/agents/float-transfer)', () => {
       mockQuery.mockResolvedValueOnce({ rows: [] });
       // INSERT approval
       mockQuery.mockResolvedValueOnce({ rows: [] });
+      // UPDATE approval_count
+      mockQuery.mockResolvedValueOnce({ rows: [{ approval_count: 2 }] });
+      // Claim execution
+      mockQuery.mockResolvedValueOnce({ rows: [{ id: 'ft_12345' }] });
       // INSERT audit_log for approval
       mockQuery.mockResolvedValueOnce({ rows: [] });
       // UPDATE transfer to COMPLETED

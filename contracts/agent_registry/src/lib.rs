@@ -170,10 +170,7 @@ impl AgentRegistry {
 
     /// Checks shared by `activate` and `reinstate`: no active agent without
     /// a bond, a kyc_ref, and a license that has not already lapsed (#789).
-    fn validate_eligible_for_active(
-        env: &Env,
-        info: &AgentInfo,
-    ) -> Result<(), RegistryError> {
+    fn validate_eligible_for_active(env: &Env, info: &AgentInfo) -> Result<(), RegistryError> {
         if info.kyc_ref == Symbol::new(env, "") {
             return Err(RegistryError::MissingKyc);
         }

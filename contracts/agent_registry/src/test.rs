@@ -199,7 +199,10 @@ fn test_activate_rejects_expired_license() {
     let a = agent(&env);
     client.register(&a, &kycs(&env), &region(&env), &100, &100);
     env.ledger().set_timestamp(101);
-    assert_eq!(client.try_activate(&a), Err(Ok(RegistryError::LicenseExpired)));
+    assert_eq!(
+        client.try_activate(&a),
+        Err(Ok(RegistryError::LicenseExpired))
+    );
 }
 
 #[test]
