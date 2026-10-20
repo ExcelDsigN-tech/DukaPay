@@ -1,12 +1,9 @@
 import { z } from 'zod';
+import { stellarAddressSchema } from './stellarSchemas.js';
 
 export const streamEventsQuerySchema = z
   .object({
-    borrower: z
-      .string()
-      .trim()
-      .regex(/^G[A-Z0-9]{10,60}$/, 'Invalid borrower Stellar address')
-      .optional(),
+    borrower: stellarAddressSchema.optional(),
   })
   .strict();
 

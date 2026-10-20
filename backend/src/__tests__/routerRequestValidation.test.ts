@@ -224,6 +224,19 @@ describe('Request validation across the seven routers (Issue #802)', () => {
       expect(res.body.error.code).toBe('VALIDATION_ERROR');
     });
 
+    it('rejects a well-formed but invalid Stellar key as borrower on GET /api/events/stream with 400', async () => {
+      // Matches the old /^G[A-Z0-9]{10,60}$/ pattern but is not a real key:
+      // wrong length, digits outside base32, no checksum.
+      for (const borrower of ['G0000000000', `G${'A'.repeat(55)}`]) {
+        const res = await request(app)
+          .get(`/api/events/stream?borrower=${borrower}`)
+          .set(bearer(BORROWER_WALLET));
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe('VALIDATION_ERROR');
+      }
+    });
+
     it('rejects unexpected query parameter on GET /api/events/status with 400', async () => {
       const res = await request(app).get('/api/events/status?unexpected=true').set(apiKeyHeader);
 
