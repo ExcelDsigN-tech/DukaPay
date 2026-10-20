@@ -1,55 +1,12 @@
-import { createClient, type RedisClientType } from 'redis';
 import logger from '../utils/logger.js';
-
-const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
+import {
+  closeRedisClient,
+  ensureRedisConnected,
+  isRedisConnected,
+  redisClient,
+} from './redisClient.js';
 
 class CacheService {
-  private client: RedisClientType | undefined;
-  private isConnected: boolean = false;
-
-  constructor() {
-    this.client = createClient({
-      url: REDIS_URL,
-    });
-
-    this.client.on('error', (err) => {
-      // In tests, we don't want to spam the console with ECONNREFUSED if Redis isn't running
-      if (process.env.NODE_ENV !== 'test' || err.code !== 'ECONNREFUSED') {
-        logger.withContext().error('Redis Client Error', err);
-      }
-      this.isConnected = false;
-    });
-
-    this.client.on('connect', () => {
-      logger.withContext().info('Redis Client Connected');
-      this.isConnected = true;
-    });
-
-    this.client.on('reconnecting', () => {
-      // Only log reconnecting in non-test environments to keep test output clean
-      if (process.env.NODE_ENV !== 'test') {
-        logger.withContext().info('Redis Client Reconnecting');
-      }
-    });
-
-    // Connection is now lazy-loaded on first request to avoid side effects on import.
-  }
-
-  private async ensureConnected() {
-    if (!this.isConnected) {
-      try {
-        await this.client!.connect();
-        this.isConnected = true;
-      } catch (err) {
-        // Silently fail in tests if connection fails, but log in production
-        if (process.env.NODE_ENV !== 'test') {
-          logger.withContext().error('Failed to connect to Redis', err);
-        }
-        throw err;
-      }
-    }
-  }
-
   /**
    * Set a value in the cache with an optional Time-To-Live (TTL).
    * @param key The cache key
@@ -58,9 +15,9 @@ class CacheService {
    */
   async set(key: string, value: unknown, ttlSeconds: number = 300): Promise<void> {
     try {
-      await this.ensureConnected();
+      await ensureRedisConnected();
       const stringValue = JSON.stringify(value);
-      await this.client!.setEx(key, ttlSeconds, stringValue);
+      await redisClient.setEx(key, ttlSeconds, stringValue);
     } catch (error) {
       if (process.env.NODE_ENV !== 'test') {
         logger.withContext().error(`Error setting cache for key ${key}`, { error });
@@ -71,8 +28,8 @@ class CacheService {
   /** Store a value or throw, for workflows that must not continue as if a
    * durable idempotency response had been saved when Redis rejected the write. */
   async setRequired(key: string, value: unknown, ttlSeconds: number): Promise<void> {
-    await this.ensureConnected();
-    await this.client!.setEx(key, ttlSeconds, JSON.stringify(value));
+    await ensureRedisConnected();
+    await redisClient.setEx(key, ttlSeconds, JSON.stringify(value));
   }
 
   /**
@@ -82,8 +39,8 @@ class CacheService {
    */
   async get<T>(key: string): Promise<T | null> {
     try {
-      await this.ensureConnected();
-      const value = await this.client!.get(key);
+      await ensureRedisConnected();
+      const value = await redisClient.get(key);
       if (!value) return null;
 
       return JSON.parse(value) as T;
@@ -105,12 +62,12 @@ class CacheService {
    */
   async setNotExists(key: string, value: unknown, ttlSeconds: number): Promise<boolean> {
     try {
-      await this.ensureConnected();
-      if (!this.isConnected) return false;
+      await ensureRedisConnected();
+      if (!isRedisConnected()) return false;
 
       const stringValue = JSON.stringify(value);
       // SET key value NX EX ttlSeconds
-      const result = await this.client!.set(key, stringValue, {
+      const result = await redisClient.set(key, stringValue, {
         NX: true,
         EX: ttlSeconds,
       });
@@ -127,8 +84,8 @@ class CacheService {
    * a non-idempotent operation without its lock.
    */
   async reserve(key: string, value: unknown, ttlSeconds: number): Promise<boolean> {
-    await this.ensureConnected();
-    const result = await this.client!.set(key, JSON.stringify(value), {
+    await ensureRedisConnected();
+    const result = await redisClient.set(key, JSON.stringify(value), {
       NX: true,
       EX: ttlSeconds,
     });
@@ -141,8 +98,8 @@ class CacheService {
    */
   async delete(key: string): Promise<void> {
     try {
-      await this.ensureConnected();
-      await this.client!.del(key);
+      await ensureRedisConnected();
+      await redisClient.del(key);
     } catch (error) {
       if (process.env.NODE_ENV !== 'test') {
         logger.withContext().error(`Error deleting cache for key ${key}`, { error });
@@ -176,8 +133,8 @@ return 0
    */
   async deleteIfMatch(key: string, expectedValue: unknown): Promise<boolean> {
     try {
-      await this.ensureConnected();
-      const result = await this.client!.eval(CacheService.COMPARE_AND_DELETE_SCRIPT, {
+      await ensureRedisConnected();
+      const result = await redisClient.eval(CacheService.COMPARE_AND_DELETE_SCRIPT, {
         keys: [key],
         arguments: [JSON.stringify(expectedValue)],
       });
@@ -196,10 +153,10 @@ return 0
    */
   async invalidatePattern(pattern: string): Promise<void> {
     try {
-      await this.ensureConnected();
-      const keys = await this.client!.keys(pattern);
+      await ensureRedisConnected();
+      const keys = await redisClient.keys(pattern);
       if (keys.length > 0) {
-        await this.client!.del(keys);
+        await redisClient.del(keys);
       }
     } catch (error) {
       if (process.env.NODE_ENV !== 'test') {
@@ -214,8 +171,8 @@ return 0
    */
   async ping(): Promise<'ok' | 'error'> {
     try {
-      await this.ensureConnected();
-      const reply = await this.client!.ping();
+      await ensureRedisConnected();
+      const reply = await redisClient.ping();
       return reply === 'PONG' ? 'ok' : 'error';
     } catch {
       return 'error';
@@ -223,15 +180,7 @@ return 0
   }
 
   async close(): Promise<void> {
-    if (!this.client?.isOpen) return;
-    // A client that never reached Redis is still open and retrying; quit()
-    // would wait for it, so destroy() stops the reconnect loop instead.
-    if (this.client.isReady) {
-      await this.client.quit();
-    } else {
-      this.client.destroy();
-    }
-    this.isConnected = false;
+    await closeRedisClient();
   }
 }
 

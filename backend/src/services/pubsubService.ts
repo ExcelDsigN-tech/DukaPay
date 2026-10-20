@@ -1,23 +1,16 @@
-import { createClient, type RedisClientType } from 'redis';
+import type { RedisClientType } from 'redis';
 import logger from '../utils/logger.js';
+import { ensureRedisConnected, redisClient } from './redisClient.js';
 
-const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
 const CHANNEL = 'sse:events';
 
 class PubSubService {
-  private pubClient: RedisClientType | null = null;
   private subClient: RedisClientType | null = null;
 
   async publish(event: unknown) {
     try {
-      if (!this.pubClient) {
-        this.pubClient = createClient({ url: REDIS_URL });
-        this.pubClient.on('error', (err) =>
-          logger.withContext().error('Redis pub client error', err),
-        );
-        await this.pubClient.connect();
-      }
-      await this.pubClient.publish(CHANNEL, JSON.stringify(event));
+      const client = await ensureRedisConnected();
+      await client.publish(CHANNEL, JSON.stringify(event));
     } catch (err) {
       logger.withContext().error('Failed to publish SSE event to Redis', { err });
     }
@@ -26,7 +19,7 @@ class PubSubService {
   async initSubscriber(onMessage: (payload: unknown) => void) {
     try {
       if (!this.subClient) {
-        this.subClient = createClient({ url: REDIS_URL });
+        this.subClient = redisClient.duplicate();
         this.subClient.on('error', (err) =>
           logger.withContext().error('Redis sub client error', err),
         );

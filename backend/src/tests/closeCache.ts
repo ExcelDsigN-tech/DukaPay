@@ -5,4 +5,6 @@ import { afterAll } from '@jest/globals';
 afterAll(async () => {
   const { cacheService } = await import('../services/cacheService.js');
   await cacheService.close?.();
+  const { closeRedisClient } = await import('../services/redisClient.js');
+  await closeRedisClient?.();
 });

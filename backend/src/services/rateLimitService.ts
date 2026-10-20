@@ -1,8 +1,6 @@
-import { createClient, type RedisClientType } from 'redis';
 import crypto from 'node:crypto';
 import logger from '../utils/logger.js';
-
-const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
+import { ensureRedisConnected, redisClient } from './redisClient.js';
 
 export enum RateLimitTier {
   ANONYMOUS = 'anonymous',
@@ -75,29 +73,8 @@ else
 end
 `;
 
-  private client: RedisClientType;
-  private isConnected = false;
   // In-memory sliding window timestamps: Map<key, Array<timestampMs>>
   private inMemoryWindows = new Map<string, number[]>();
-
-  constructor() {
-    this.client = createClient({ url: REDIS_URL });
-    this.client.on('error', (error) => {
-      this.isConnected = false;
-      if (process.env.NODE_ENV !== 'test') {
-        logger.withContext().error('Rate limit Redis client error', { error });
-      }
-    });
-    this.client.on('connect', () => {
-      this.isConnected = true;
-    });
-  }
-
-  private async ensureConnected(): Promise<void> {
-    if (!this.isConnected) {
-      await this.client.connect();
-    }
-  }
 
   /**
    * Resolves the rate limit tier for a request.
@@ -135,9 +112,9 @@ end
     const member = `${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
 
     try {
-      await this.ensureConnected();
+      await ensureRedisConnected();
 
-      const [allowedNum, remaining, currentCount, resetTimeSeconds] = (await this.client.eval(
+      const [allowedNum, remaining, currentCount, resetTimeSeconds] = (await redisClient.eval(
         RateLimitService.SLIDING_WINDOW_SCRIPT,
         {
           keys: [key],
@@ -220,8 +197,8 @@ end
     const key = `rate_limit:${identifier}`;
     this.inMemoryWindows.delete(key);
     try {
-      await this.ensureConnected();
-      await this.client.del(key);
+      await ensureRedisConnected();
+      await redisClient.del(key);
       logger.withContext().info('Rate limit reset', { identifier });
     } catch {
       // ignore
@@ -240,8 +217,8 @@ end
     const windowSeconds = config.windowSeconds;
 
     try {
-      await this.ensureConnected();
-      const currentCount = await this.client.zCard(key);
+      await ensureRedisConnected();
+      const currentCount = await redisClient.zCard(key);
       const remaining = Math.max(0, config.maxRequests - currentCount);
       const resetTime = new Date((nowSeconds + windowSeconds) * 1000);
 
