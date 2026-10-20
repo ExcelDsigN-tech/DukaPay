@@ -221,7 +221,7 @@ export async function getCsrfToken(): Promise<string | null> {
  * - Adds the double-submit CSRF token on mutating requests
  * - Throws a descriptive error on non-2xx responses
  */
-async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
+export async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers = new Headers(options.headers);
   if (!headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
@@ -1547,7 +1547,7 @@ export interface AppNotification {
   createdAt: string;
 }
 
-interface NotificationsResponse {
+export interface NotificationsResponse {
   notifications: AppNotification[];
   unreadCount: number;
 }
@@ -1561,7 +1561,8 @@ export interface NotificationsQueryParams {
 
 /**
  * Fetches the authenticated user's notifications.
- * Polls every 60s as a fallback alongside the SSE stream.
+ * Live updates arrive over SSE (`useNotificationStream`), which falls back to
+ * 60s polling only while the stream is disconnected.
  */
 export function useNotifications(
   params: NotificationsQueryParams = {},
@@ -1581,7 +1582,6 @@ export function useNotifications(
       );
       return res.data;
     },
-    refetchInterval: 60_000,
     ...options,
   });
 }
@@ -1661,6 +1661,18 @@ export function useVerifySession(
   });
 }
 
+export interface PauseState {
+  isPaused: boolean;
+  pausedAt: string | null;
+  reason: string | null;
+  contracts: string[];
+}
+
+export async function fetchPauseState(): Promise<PauseState> {
+  const response = await apiFetch<{ success: boolean; data: PauseState }>("/status/pause");
+  return response.data;
+}
+
 export function useAdminDisputes(
   options?: Omit<UseQueryOptions<AdminDispute[]>, "queryKey" | "queryFn">,
 ) {
@@ -1681,7 +1693,6 @@ export function useAdminDisputes(
 
       return disputes.map(normalizeDispute);
     },
-    refetchInterval: 60_000,
     ...options,
   });
 }

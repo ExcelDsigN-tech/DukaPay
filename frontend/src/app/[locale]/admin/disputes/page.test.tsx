@@ -2,7 +2,8 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import AdminDisputesPage from "./page";
 import { useUserStore } from "../../../stores/useUserStore";
-import { useAdminDisputes, useVerifySession } from "../../../hooks/useApi";
+import { queryKeys, useAdminDisputes, useVerifySession } from "../../../hooks/useApi";
+import { useSSE } from "../../../hooks/useSSE";
 
 const replace = jest.fn();
 
@@ -111,5 +112,39 @@ describe("AdminDisputesPage", () => {
     renderPage();
 
     await waitFor(() => expect(replace).toHaveBeenCalledWith("/"));
+  });
+
+  it("configures useSSE with 60s fallback polling that invalidates adminDisputes", () => {
+    useUserStore.setState({
+      user: {
+        id: "admin",
+        email: "admin@example.com",
+        kycVerified: true,
+        role: "admin",
+      },
+      isAuthenticated: true,
+    });
+
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    const invalidateSpy = jest.spyOn(client, "invalidateQueries");
+
+    render(
+      <QueryClientProvider client={client}>
+        <AdminDisputesPage />
+      </QueryClientProvider>,
+    );
+
+    const sseOptions = jest.mocked(useSSE).mock.calls.at(-1)?.[0];
+    expect(sseOptions).toEqual(
+      expect.objectContaining({
+        pollingInterval: 60_000,
+        onFallbackPoll: expect.any(Function),
+      }),
+    );
+
+    sseOptions?.onFallbackPoll?.();
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.adminDisputes.all() });
   });
 });

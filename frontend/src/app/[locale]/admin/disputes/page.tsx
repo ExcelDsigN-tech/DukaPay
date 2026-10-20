@@ -125,6 +125,10 @@ export default function AdminDisputesPage() {
         queryClient.invalidateQueries({ queryKey: queryKeys.adminDisputes.all() });
       }
     },
+    onFallbackPoll: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.adminDisputes.all() });
+    },
+    pollingInterval: 60_000,
   });
 
   if (isChecking || !isAdmin) {

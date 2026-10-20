@@ -28,6 +28,7 @@ const mockLogger = {
   info: jest.fn(),
   warn: jest.fn(),
   error: jest.fn(),
+  withContext: () => mockLogger,
 };
 jest.unstable_mockModule('../../utils/logger.js', () => ({
   default: mockLogger,
@@ -35,6 +36,7 @@ jest.unstable_mockModule('../../utils/logger.js', () => ({
 
 const { pauseGuard, setPauseState, getCurrentPauseState, PAUSE_STATE_CACHE_KEY } =
   await import('../pauseGuard.js');
+const { eventStreamService } = await import('../../services/eventStreamService.js');
 const { AppError } = await import('../../errors/AppError.js');
 
 describe('pauseGuard middleware (#1521)', () => {
@@ -164,6 +166,33 @@ describe('pauseGuard middleware (#1521)', () => {
         expect.stringContaining('INSERT INTO pause_state'),
         expect.arrayContaining([true, expect.any(Date), 'Upgrade in progress']),
       );
+    });
+
+    it('broadcasts PauseStateChanged over SSE to both borrower and admin streams', async () => {
+      eventStreamService.reset();
+      const borrowerRes = { write: jest.fn() } as unknown as Response;
+      const adminRes = { write: jest.fn() } as unknown as Response;
+
+      const unsubBorrower = eventStreamService.subscribeAddress(
+        'GBORROWER',
+        'GBORROWER',
+        borrowerRes,
+      );
+      const unsubAdmin = eventStreamService.subscribeAll('GADMIN', adminRes);
+
+      await setPauseState(true, ['CONTRACT_X'], 'Upgrade in progress');
+
+      expect(borrowerRes.write).toHaveBeenCalledWith(
+        expect.stringContaining('"eventType":"PauseStateChanged"'),
+      );
+      expect(borrowerRes.write).toHaveBeenCalledWith(expect.stringContaining('"isPaused":true'));
+      expect(adminRes.write).toHaveBeenCalledWith(
+        expect.stringContaining('"eventType":"PauseStateChanged"'),
+      );
+
+      unsubBorrower();
+      unsubAdmin();
+      eventStreamService.reset();
     });
   });
 

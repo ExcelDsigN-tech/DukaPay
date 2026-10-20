@@ -3,6 +3,7 @@ import logger from '../utils/logger.js';
 import { AppError } from '../errors/AppError.js';
 import { query } from '../db/connection.js';
 import { cacheService } from '../services/cacheService.js';
+import { eventStreamService } from '../services/eventStreamService.js';
 import { Sentry } from '../config/sentry.js';
 import { pauseGuardFallbackTotal, pauseGuardSource } from '../metrics/index.js';
 
@@ -370,6 +371,7 @@ export async function setPauseState(
     // Update in-memory state
     applyState({ isPaused, pausedAt: now, reason: reason || null, contracts, source: 'database' });
     await mirrorToCache(globalPauseState);
+    eventStreamService.broadcastPauseState(globalPauseState);
 
     logger.info('Pause state updated', {
       isPaused,
@@ -385,6 +387,7 @@ export async function setPauseState(
       pendingPause = { reason: reason || null, contracts };
       applyState({ isPaused, pausedAt, reason: reason || null, contracts, source: 'memory' });
       await mirrorToCache(globalPauseState);
+      eventStreamService.broadcastPauseState(globalPauseState);
     }
     throw error;
   }

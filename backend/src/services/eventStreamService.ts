@@ -20,6 +20,10 @@ export interface LoanEventPayload {
   ledger: number;
   ledgerClosedAt: string;
   txHash: string;
+  isPaused?: boolean | undefined;
+  pausedAt?: string | null | undefined;
+  reason?: string | null | undefined;
+  contracts?: string[] | undefined;
 }
 
 type SseClient = Response;
@@ -233,13 +237,68 @@ class EventStreamService {
   }
 
   /**
+   * Broadcasts a pause-state change to all connected SSE clients (both
+   * borrower and admin streams) so UI banners react without polling.
+   */
+  broadcastPauseState(state: {
+    isPaused: boolean;
+    pausedAt: Date | string | null;
+    reason: string | null;
+    contracts: string[];
+  }): void {
+    const nowIso = new Date().toISOString();
+    const pausedAtIso =
+      state.pausedAt instanceof Date ? state.pausedAt.toISOString() : (state.pausedAt ?? null);
+
+    this.broadcast({
+      eventId: `pause-${Date.now()}`,
+      eventType: 'PauseStateChanged',
+      ledger: 0,
+      ledgerClosedAt: nowIso,
+      txHash: '',
+      isPaused: state.isPaused,
+      pausedAt: pausedAtIso,
+      reason: state.reason,
+      contracts: state.contracts,
+    });
+  }
+
+  /**
    * Broadcasts a loan event to relevant SSE clients:
-   * - Borrower-specific clients for that borrower (with user identity verification)
+   * - Borrower-specific clients for that borrower (with user identity verification),
+   *   or all borrower clients for global system pause events
    * - All admin clients
    */
   broadcast(event: LoanEventPayload): void {
-    // Push to address-specific clients with user identity verification
-    if (event.address) {
+    const isGlobalPauseEvent =
+      event.eventType === 'PauseStateChanged' ||
+      event.eventType === 'PoolPaused' ||
+      event.eventType === 'PoolUnpaused';
+
+    if (isGlobalPauseEvent) {
+      for (const [address, clients] of borrowerClients.entries()) {
+        const clientsToRemove: ClientInfo[] = [];
+        for (const clientInfo of clients) {
+          try {
+            this.sendEvent(clientInfo.res, event);
+          } catch (err) {
+            logger.withContext().error('SSE write error (address)', {
+              address,
+              userKey: clientInfo.userKey,
+              err,
+            });
+            clientsToRemove.push(clientInfo);
+          }
+        }
+        for (const clientInfo of clientsToRemove) {
+          clients.delete(clientInfo);
+        }
+        if (clients.size === 0) {
+          borrowerClients.delete(address);
+        }
+      }
+    } else if (event.address) {
+      // Push to address-specific clients with user identity verification
       const clients = borrowerClients.get(event.address);
       if (clients?.size) {
         const clientsToRemove: ClientInfo[] = [];

@@ -1,23 +1,27 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, RefreshCw } from "lucide-react";
+import { fetchPauseState, type PauseState } from "../../hooks/useApi";
+import { useSSE } from "../../hooks/useSSE";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
-interface PauseState {
-  isPaused: boolean;
-  pausedAt: string | null;
-  reason: string | null;
-  contracts: string[];
+interface PauseStreamEvent {
+  eventType?: string;
+  type?: string;
+  isPaused?: boolean;
+  pausedAt?: string | null;
+  reason?: string | null;
+  contracts?: string[];
 }
 
 /**
  * Global pause banner component
  *
  * Displays when smart contracts are paused due to emergency or maintenance.
- * Fetches pause state from backend API and polls periodically to detect when
- * pause is lifted. Related to Issue #1381: Cross-Layer Emergency Pause Propagation.
+ * Subscribes to SSE pause-state events and falls back to 30s polling only
+ * when the event stream is disconnected.
  */
 export function PauseBanner() {
   const [pauseState, setPauseState] = useState<PauseState>({
@@ -29,34 +33,52 @@ export function PauseBanner() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchPauseState = async () => {
+  const loadPauseState = useCallback(async () => {
     try {
       setIsLoading(true);
       setError(null);
-      const response = await fetch(`${API_URL}/api/status/pause`);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch pause state: ${response.statusText}`);
-      }
-      const data = await response.json();
-      setPauseState(data.data);
+      const data = await fetchPauseState();
+      setPauseState(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
-      // On error, continue polling; fail open
+      // On error, continue listening/polling; fail open
     } finally {
       setIsLoading(false);
     }
-  };
-
-  // Fetch pause state on mount
-  useEffect(() => {
-    fetchPauseState();
   }, []);
 
-  // Poll for pause state changes every 30 seconds
+  // Fetch initial pause state on mount
   useEffect(() => {
-    const interval = setInterval(fetchPauseState, 30 * 1000);
-    return () => clearInterval(interval);
-  }, []);
+    void loadPauseState();
+  }, [loadPauseState]);
+
+  // Listen for pause-state changes over SSE; poll every 30s only when stream is down
+  useSSE<PauseStreamEvent>({
+    url: `${API_URL}/api/events/stream`,
+    onMessage: (event) => {
+      const eventType = event.eventType ?? event.type ?? "";
+      if (eventType === "PauseStateChanged" && typeof event.isPaused === "boolean") {
+        setError(null);
+        setPauseState({
+          isPaused: event.isPaused,
+          pausedAt: event.pausedAt ?? null,
+          reason: event.reason ?? null,
+          contracts: Array.isArray(event.contracts) ? event.contracts : [],
+        });
+        return;
+      }
+
+      if (
+        eventType === "PauseStateChanged" ||
+        eventType === "PoolPaused" ||
+        eventType === "PoolUnpaused"
+      ) {
+        void loadPauseState();
+      }
+    },
+    onFallbackPoll: loadPauseState,
+    pollingInterval: 30_000,
+  });
 
   if (!pauseState.isPaused) {
     return null;
@@ -92,7 +114,9 @@ export function PauseBanner() {
         </div>
         <button
           type="button"
-          onClick={fetchPauseState}
+          onClick={() => {
+            void loadPauseState();
+          }}
           disabled={isLoading}
           className="flex shrink-0 items-center gap-2 rounded-lg bg-red-900 px-4 py-2 text-sm font-semibold text-red-50 transition hover:bg-red-800 disabled:opacity-50 dark:bg-red-200 dark:text-red-950 dark:hover:bg-red-100"
         >
