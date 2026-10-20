@@ -560,7 +560,7 @@ export class EventIndexer {
 
   /**
    * Re-derives one agent's agent_vaults row from whatever contract_events
-   * rows survive a rollback, rather than undoing a delta — consistent with
+   * rows survive a rollback, rather than undoing a delta, consistent with
    * forward indexing using resulting balances, not running sums (Issue
    * #774). If no AgentRegistered event survives, the agent never existed
    * before the rollback point, so its projection row is deleted outright.
@@ -638,7 +638,7 @@ export class EventIndexer {
         bondAmount ?? '0',
         region ?? null,
         // No required event carries license_expiry; nothing to recompute it
-        // from, so it's intentionally reset rather than preserved — a stale
+        // from, so it's intentionally reset rather than preserved: a stale
         // post-rollback license_expiry would be worse than a missing one.
         null,
         floatBalance ?? '0',
@@ -1050,7 +1050,7 @@ export class EventIndexer {
 
           // Project agent_registry / agent_vault events into agent_vaults
           // (Issue #774). Applied inline, per event, using the event's own
-          // resulting balance fields (not deltas) — so this is safe to run
+          // resulting balance fields (not deltas), so this is safe to run
           // once per event rather than aggregated like the score updates
           // below. COALESCE(param, existing) means a field this specific
           // event doesn't carry is left untouched rather than overwritten.
@@ -1396,7 +1396,7 @@ export class EventIndexer {
       // agent_vault's CollateralDeposited: (type, agent), (amount, new_collateral).
       // Shares its event name with the lending pool's own CollateralDeposited
       // (handled in the branch below), which has a different topic/value
-      // shape — disambiguated by contractId.
+      // shape, disambiguated by contractId.
       if (!event.topic[1]) return null;
       address = this.decodeAddress(event.topic[1]);
       amount = this.decodeTupleFirstNumericValue(event.value);
@@ -1683,16 +1683,12 @@ export class EventIndexer {
 
   /**
    * Decodes a Soroban `#[contracttype]` unit enum value (e.g. `AgentStatus`)
-   * to its variant name. The JS SDK represents such enums natively as
-   * either a plain string or an object carrying a `tag` field, depending on
-   * encoding path; this accepts either so a future SDK version doesn't
-   * silently break agent status decoding.
+   * to its variant name. On chain a unit variant is `ScVec([ScSymbol(name)])`,
+   * which `scValToNative` returns as `[name]`.
    */
   private decodeEnumTag(native: unknown): string | undefined {
-    if (typeof native === 'string') return native;
-    if (native && typeof native === 'object' && 'tag' in native) {
-      const tag = (native as { tag: unknown }).tag;
-      return typeof tag === 'string' ? tag : undefined;
+    if (Array.isArray(native) && native.length === 1 && typeof native[0] === 'string') {
+      return native[0];
     }
     return undefined;
   }

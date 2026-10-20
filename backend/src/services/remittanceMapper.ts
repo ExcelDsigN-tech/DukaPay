@@ -27,7 +27,8 @@ export function toRemittance(r: RemittanceRow): Remittance {
     senderId: r.sender_id,
     recipientAddress: r.recipient_address,
     // r.amount is a decimal token string (not stroops); round-trip through
-    // exact bigint stroops instead of parseFloat so precision survives.
+    // exact bigint stroops instead of parseFloat. The result is still a
+    // Number, so very large amounts can still lose precision.
     amount: Number(fromStroops(toStroops(String(r.amount)))),
     fromCurrency: r.from_currency,
     toCurrency: r.to_currency,

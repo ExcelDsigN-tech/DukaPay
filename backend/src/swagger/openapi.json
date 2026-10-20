@@ -6174,10 +6174,12 @@
                           "type": "string"
                         },
                         "floatBalance": {
-                          "type": "number"
+                          "type": "number",
+                          "description": "Whole-token units (not stroops), matching the convention of getPoolStats."
                         },
                         "collateralBalance": {
-                          "type": "number"
+                          "type": "number",
+                          "description": "Whole-token units (not stroops), matching the convention of getPoolStats."
                         },
                         "isActive": {
                           "type": "boolean"

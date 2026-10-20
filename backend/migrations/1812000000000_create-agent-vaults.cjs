@@ -11,7 +11,7 @@
  * Earlier migrations (1807000000000_perf-indexes.cjs,
  * 1808000000000_enable-rls.cjs) already anticipate this table behind
  * `to_regclass(...) IS NOT NULL` guards, but on a fresh database those
- * migrations run BEFORE this one and so skip it — this migration creates
+ * migrations run BEFORE this one and so skip it, so this migration creates
  * its own indexes and RLS policies rather than relying on them to pick it
  * up retroactively.
  */

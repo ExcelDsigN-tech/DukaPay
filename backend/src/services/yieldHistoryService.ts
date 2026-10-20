@@ -28,7 +28,7 @@ interface PoolEventRow {
  * Parses a raw stroop amount from the DB/chain without going through
  * parseFloat's naive string-to-float coercion. Keeps this module's existing
  * stroop-denominated unit convention unchanged (unlike `stroopsToAmount`,
- * which converts to whole tokens) — only the parsing mechanism changes.
+ * which converts to whole tokens); only the parsing mechanism changes.
  */
 function parseNumeric(value: unknown): number {
   if (value === null || value === undefined) return 0;

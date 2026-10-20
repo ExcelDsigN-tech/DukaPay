@@ -140,7 +140,7 @@ export const getDepositorPortfolio = asyncHandler(async (req: Request, res: Resp
       sharePercent: parseFloat(sharePercent.toFixed(6)),
       // estimatedYield is a derived display estimate (not a stored money
       // column), so a plain Number() round-trip is fine here; see
-      // src/money/AGENTS.md — the parseFloat ban targets chain/DB-sourced
+      // src/money/AGENTS.md: the parseFloat ban targets chain/DB-sourced
       // stroop values, which this isn't.
       estimatedYield: Number(estimatedYield.toFixed(7)),
       apy: ANNUAL_APY,

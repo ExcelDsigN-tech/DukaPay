@@ -8,7 +8,7 @@
  * the agent_vaults projection rather than undoing a delta.
  */
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
-import { Address, Keypair, nativeToScVal } from '@stellar/stellar-sdk';
+import { Address, Keypair, nativeToScVal, xdr } from '@stellar/stellar-sdk';
 
 jest.setTimeout(30000);
 
@@ -205,9 +205,10 @@ describe('EventIndexer: agent registry / agent vault events', () => {
         type: 'AgentStatusChanged',
         contractId: AGENT_REGISTRY_CONTRACT,
         topic: [scSymbol('AgentStatusChanged'), scAddress(agent)],
-        value: nativeToScVal([
-          nativeToScVal({ tag: 'Pending', values: undefined }),
-          nativeToScVal({ tag: 'Active', values: undefined }),
+        // Unit enum variants encode on chain as ScVec([ScSymbol(name)]).
+        value: xdr.ScVal.scvVec([
+          xdr.ScVal.scvVec([xdr.ScVal.scvSymbol('Pending')]),
+          xdr.ScVal.scvVec([xdr.ScVal.scvSymbol('Active')]),
         ]),
       }),
     ]);
