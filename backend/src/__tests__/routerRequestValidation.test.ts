@@ -6,8 +6,8 @@ type MockQueryResult = { rows: unknown[]; rowCount?: number };
 
 const VALID_API_KEY = 'test-internal-key';
 const ADMIN_WALLET = 'GADMINAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
-const AGENT_A = 'GAGENTA123456789000000000000000000000000000000000001';
-const AGENT_B = 'GAGENTB123456789000000000000000000000000000000000002';
+const AGENT_A = Keypair.random().publicKey();
+const AGENT_B = Keypair.random().publicKey();
 const BORROWER_WALLET = Keypair.random().publicKey();
 
 process.env.NODE_ENV = 'test';
@@ -54,51 +54,31 @@ afterAll(() => {
 
 describe('Request validation across the seven routers (Issue #802)', () => {
   describe('1. agentFloatRoutes (/api/agents/float-transfer*)', () => {
-    it('rejects float/decimal money amounts on POST /api/agents/float-transfer with 400', async () => {
-      const res = await request(app).post('/api/agents/float-transfer').set(bearer(AGENT_A)).send({
-        fromAgent: AGENT_A,
-        toAgent: AGENT_B,
-        amount: '125.50',
-      });
+    it('rejects string and over-precise money amounts on POST /api/agents/float-transfer with 400', async () => {
+      for (const amount of ['125.50', 1.12345678, 1e15]) {
+        const res = await request(app)
+          .post('/api/agents/float-transfer')
+          .set(bearer(AGENT_A))
+          .send({ fromAgent: AGENT_A, toAgent: AGENT_B, amount });
 
-      expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe('VALIDATION_ERROR');
+      }
       expect(mockQuery).not.toHaveBeenCalled();
     });
 
-    it('rejects unsafe JS numbers (> MAX_SAFE_INTEGER) on POST /api/agents/float-transfer with 400', async () => {
-      const res = await request(app)
-        .post('/api/agents/float-transfer')
-        .set(bearer(AGENT_A))
-        .send({
-          fromAgent: AGENT_A,
-          toAgent: AGENT_B,
-          amount: Number.MAX_SAFE_INTEGER + 2,
-        });
-
-      expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe('VALIDATION_ERROR');
-      expect(mockQuery).not.toHaveBeenCalled();
-    });
-
-    it('accepts high-precision stroop strings above MAX_SAFE_INTEGER without Number() precision loss', async () => {
-      const largeStroopAmount = '9007199254740993123';
-      const largeDailyLimit = '99999999999999999999';
-      const largeWeeklyLimit = '999999999999999999999';
-
+    it('accepts fractional whole-token amounts and stores them unchanged', async () => {
       mockQuery
-        .mockResolvedValueOnce({
-          rows: [{ daily_limit: largeDailyLimit, weekly_limit: largeWeeklyLimit }],
-        })
+        .mockResolvedValueOnce({ rows: [] })
         .mockResolvedValueOnce({ rows: [{ total: '0' }] })
         .mockResolvedValueOnce({ rows: [{ total: '0' }] })
         .mockResolvedValueOnce({
           rows: [
             {
-              id: 'ft_big_1',
+              id: 'ft_1',
               from_agent: AGENT_A,
               to_agent: AGENT_B,
-              amount: largeStroopAmount,
+              amount: '250.5',
               status: 'PENDING_APPROVAL',
               required_approvals: 2,
               approval_count: 1,
@@ -107,21 +87,32 @@ describe('Request validation across the seven routers (Issue #802)', () => {
           ],
         })
         .mockResolvedValueOnce({
-          rows: [{ id: 1, transfer_id: 'ft_big_1', approver: AGENT_A, role: 'initiator' }],
+          rows: [{ id: 1, transfer_id: 'ft_1', approver: AGENT_A, role: 'initiator' }],
         })
         .mockResolvedValueOnce({ rows: [] });
 
       const res = await request(app).post('/api/agents/float-transfer').set(bearer(AGENT_A)).send({
         fromAgent: AGENT_A,
         toAgent: AGENT_B,
-        amount: largeStroopAmount,
+        amount: 250.5,
       });
 
       expect(res.status).toBe(201);
       const insertTransferCall = mockQuery.mock.calls.find(([sql]) =>
         sql.includes('INSERT INTO agent_float_transfers'),
       );
-      expect(insertTransferCall?.[1]?.[3]).toBe(largeStroopAmount);
+      expect(insertTransferCall?.[1]?.[3]).toBe(250.5);
+    });
+
+    it('rejects agent keys that are not valid Stellar public keys with 400', async () => {
+      const res = await request(app)
+        .post('/api/agents/float-transfer')
+        .set(bearer(AGENT_A))
+        .send({ fromAgent: 'G0000000000', toAgent: AGENT_B, amount: 10 });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+      expect(mockQuery).not.toHaveBeenCalled();
     });
 
     it('rejects invalid transfer ID params on approve and reject routes with 400', async () => {
@@ -140,7 +131,7 @@ describe('Request validation across the seven routers (Issue #802)', () => {
       expect(rejectRes.body.error.code).toBe('VALIDATION_ERROR');
     });
 
-    it('rejects invalid query on GET /api/agents/float-transfer/limits and invalid stroops on PUT limits', async () => {
+    it('rejects invalid query on GET /api/agents/float-transfer/limits and invalid limits on PUT limits', async () => {
       const getRes = await request(app)
         .get('/api/agents/float-transfer/limits?fromAgent=not-a-stellar-key')
         .set(bearer(AGENT_A));

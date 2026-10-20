@@ -12,7 +12,6 @@ import {
   pairLimitsQuerySchema,
   setPairLimitsBodySchema,
 } from '../schemas/agentSchemas.js';
-import { toWholeStroops } from '../money/decimal.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { AppError } from '../errors/AppError.js';
 
@@ -28,20 +27,14 @@ router.post(
   validateQuery(emptyAgentQuerySchema),
   validateBody(initiateFloatTransferBodySchema),
   asyncHandler(async (req: Request, res: Response) => {
-    const { fromAgent, toAgent, amount, reason } = req.body as {
-      fromAgent: string;
-      toAgent: string;
-      amount: string | number;
-      reason?: string;
-    };
+    const { fromAgent, toAgent, amount, reason } = req.body;
     const publicKey = (req as { user?: { publicKey?: string } }).user?.publicKey;
     const role = (req as { user?: { role?: string } }).user?.role;
-    const amountStroops = toWholeStroops(String(amount)).toString();
 
     const result = await agentFloatService.initiateTransfer({
       fromAgent,
       toAgent,
-      amount: amountStroops,
+      amount,
       reason,
       createdBy: publicKey!,
       userRole: role,
@@ -135,19 +128,14 @@ router.put(
   validateQuery(emptyAgentQuerySchema),
   validateBody(setPairLimitsBodySchema),
   asyncHandler(async (req: Request, res: Response) => {
-    const { fromAgent, toAgent, dailyLimit, weeklyLimit } = req.body as {
-      fromAgent: string;
-      toAgent: string;
-      dailyLimit: string | number;
-      weeklyLimit: string | number;
-    };
+    const { fromAgent, toAgent, dailyLimit, weeklyLimit } = req.body;
     const publicKey = (req as { user?: { publicKey?: string } }).user?.publicKey;
 
     const result = await agentFloatService.setPairLimits({
       fromAgent,
       toAgent,
-      dailyLimit: toWholeStroops(String(dailyLimit)).toString(),
-      weeklyLimit: toWholeStroops(String(weeklyLimit)).toString(),
+      dailyLimit,
+      weeklyLimit,
       updatedBy: publicKey!,
     });
 

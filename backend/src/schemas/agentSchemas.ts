@@ -1,42 +1,6 @@
 import { z } from 'zod';
-import { toWholeStroops } from '../money/decimal.js';
-
-const STROOP_INTEGER_STRING = /^[1-9]\d*$/;
-
-/**
- * Validates a money input as a positive integer stroop string (preferred) or a
- * positive safe integer in stroops, routing conversion through `toWholeStroops`
- * without `Number()` precision loss.
- */
-export const stroopAmountSchema = z
-  .union([
-    z
-      .string()
-      .trim()
-      .regex(STROOP_INTEGER_STRING, 'Amount must be a positive integer stroop string'),
-    z
-      .number()
-      .int('Amount must be a whole integer in stroops')
-      .positive('Amount must be greater than zero')
-      .refine((val) => Number.isSafeInteger(val), {
-        message: 'Numeric amount exceeds MAX_SAFE_INTEGER; pass a stroop string instead',
-      }),
-  ])
-  .refine(
-    (val) => {
-      try {
-        return toWholeStroops(String(val)) > 0n;
-      } catch {
-        return false;
-      }
-    },
-    { message: 'Amount must be a valid positive stroop value' },
-  );
-
-export const agentAddressSchema = z
-  .string()
-  .trim()
-  .regex(/^G[A-Z0-9]{10,60}$/, 'Invalid Stellar agent public key');
+import { positiveAmountSchema } from './loanSchemas.js';
+import { stellarAddressSchema } from './stellarSchemas.js';
 
 export const stellarWalletParamSchema = z
   .string()
@@ -45,9 +9,9 @@ export const stellarWalletParamSchema = z
 
 export const initiateFloatTransferBodySchema = z
   .object({
-    fromAgent: agentAddressSchema,
-    toAgent: agentAddressSchema,
-    amount: stroopAmountSchema,
+    fromAgent: stellarAddressSchema,
+    toAgent: stellarAddressSchema,
+    amount: positiveAmountSchema,
     reason: z.string().trim().max(500, 'Reason cannot exceed 500 characters').optional(),
   })
   .strict();
@@ -63,17 +27,17 @@ export const floatTransferIdParamsSchema = z
 
 export const pairLimitsQuerySchema = z
   .object({
-    fromAgent: agentAddressSchema,
-    toAgent: agentAddressSchema,
+    fromAgent: stellarAddressSchema,
+    toAgent: stellarAddressSchema,
   })
   .strict();
 
 export const setPairLimitsBodySchema = z
   .object({
-    fromAgent: agentAddressSchema,
-    toAgent: agentAddressSchema,
-    dailyLimit: stroopAmountSchema,
-    weeklyLimit: stroopAmountSchema,
+    fromAgent: stellarAddressSchema,
+    toAgent: stellarAddressSchema,
+    dailyLimit: positiveAmountSchema,
+    weeklyLimit: positiveAmountSchema,
   })
   .strict();
 

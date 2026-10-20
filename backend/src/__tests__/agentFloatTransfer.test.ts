@@ -1,13 +1,14 @@
 import request from 'supertest';
 import { jest } from '@jest/globals';
+import { Keypair } from '@stellar/stellar-sdk';
 import { generateJwtToken } from '../services/authService.js';
 
 type MockQueryResult = { rows: unknown[]; rowCount?: number };
 
 const VALID_API_KEY = 'test-internal-key';
 const ADMIN_WALLET = 'GADMIN123456789AGENT';
-const AGENT_A = 'GAGENTA123456789000000000000000000000000000000000001';
-const AGENT_B = 'GAGENTB123456789000000000000000000000000000000000002';
+const AGENT_A = Keypair.random().publicKey();
+const AGENT_B = Keypair.random().publicKey();
 
 process.env.JWT_SECRET = 'test-jwt-secret-min-32-chars-long!!';
 process.env.INTERNAL_API_KEY = VALID_API_KEY;
