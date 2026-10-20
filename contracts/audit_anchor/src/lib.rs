@@ -81,7 +81,8 @@ impl AuditAnchor {
 #[cfg(test)]
 mod test {
     use super::*;
-    use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, IntoVal, Symbol, Val};
+    use soroban_sdk::testutils::{Address as _, MockAuth, MockAuthInvoke};
+    use soroban_sdk::{Address, BytesN, Env, IntoVal, InvokeError, Symbol, Val};
 
     fn setup() -> (Env, AuditAnchorClient<'static>, Address) {
         let env = Env::default();
@@ -140,17 +141,44 @@ mod test {
 
     #[test]
     fn anchor_without_owner_auth_fails() {
-        let (env, client, _owner) = setup();
+        let (env, client, owner) = setup();
 
         // Clear the blanket mock so require_auth() is actually enforced.
         env.mock_auths(&[]);
 
         let root = BytesN::from_array(&env, &[9; 32]);
-        // No auth provided → require_auth() returns an auth error.
+        // Valid inputs (fresh epoch, non-zero leaf count) so auth is the only
+        // failing check; contract errors return Err(Ok(AnchorError)).
         let result = client.try_anchor(&1, &root, &1);
-        assert!(
-            result.is_err(),
-            "anchor without owner auth must be rejected"
-        );
+        assert_eq!(result, Err(Err(InvokeError::Abort)));
+        assert_eq!(client.get_root(&1), None);
+
+        // A non-owner signature must also be rejected with a host auth abort.
+        let stranger = Address::generate(&env);
+        env.mock_auths(&[MockAuth {
+            address: &stranger,
+            invoke: &MockAuthInvoke {
+                contract: &client.address,
+                fn_name: "anchor",
+                args: (1u64, root.clone(), 1u32).into_val(&env),
+                sub_invokes: &[],
+            },
+        }]);
+        let result = client.try_anchor(&1, &root, &1);
+        assert_eq!(result, Err(Err(InvokeError::Abort)));
+        assert_eq!(client.get_root(&1), None);
+
+        // Authorizing as the owner succeeds for the same inputs.
+        env.mock_auths(&[MockAuth {
+            address: &owner,
+            invoke: &MockAuthInvoke {
+                contract: &client.address,
+                fn_name: "anchor",
+                args: (1u64, root.clone(), 1u32).into_val(&env),
+                sub_invokes: &[],
+            },
+        }]);
+        client.anchor(&1, &root, &1);
+        assert_eq!(client.get_root(&1), Some(root));
     }
 }
