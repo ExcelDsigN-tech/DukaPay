@@ -249,3 +249,165 @@ export interface RemittanceSubmitResult {
   message: string;
 }
 
+// ── Agents ────────────────────────────────────────────────────────────────────
+
+/** A borrower wallet assigned to an agent under tenant isolation. */
+export interface AgentAssignment {
+  borrowerPublicKey: Address;
+  createdAt: string;
+}
+
+/** Response envelope for `GET /agents/my-assignments`. */
+export interface AgentAssignmentsResponse {
+  success: boolean;
+  data: {
+    agentPublicKey: Address;
+    assignments: AgentAssignment[];
+  };
+}
+
+/** Response envelope for `POST /agents/{agentPublicKey}/assignees`. */
+export interface AssignBorrowerResponse {
+  success: boolean;
+  data: {
+    agentPublicKey: Address;
+    borrowerPublicKey: Address;
+    createdAt: string;
+  };
+}
+
+/** Response envelope for `DELETE /agents/{agentPublicKey}/assignees/{borrowerPublicKey}`. */
+export interface RemoveBorrowerResponse {
+  success: boolean;
+  data: {
+    removed: boolean;
+  };
+}
+
+/** Agent dashboard metrics returned by `GET /agents/dashboard`. */
+export interface AgentDashboard {
+  agentPublicKey: Address;
+  floatUtilization: {
+    totalFloat: number;
+    allocated: number;
+    utilizationPct: number;
+  };
+  earnings: {
+    daily: number;
+    weekly: number;
+    monthly: number;
+    total: number;
+  };
+  borrowerPortfolio: {
+    totalLoans: number;
+    activeLoans: number;
+    defaultedLoans: number;
+    totalOutstanding: number;
+    byStatus: Record<string, number>;
+  };
+  pendingSettlements: {
+    count: number;
+    totalValue: number;
+  };
+  collateralRatio: {
+    totalCollateral: number;
+    totalDebt: number;
+    ratio: number;
+  };
+  recentTransactions: Array<{
+    type: string;
+    amount: number;
+    loanId: string | null;
+    timestamp: string;
+  }>;
+}
+
+export type AgentFloatTransferStatus =
+  | 'PENDING_APPROVAL'
+  | 'AWAITING_SIGNATURE'
+  | 'COMPLETED'
+  | 'REJECTED'
+  | 'CANCELLED'
+  | 'FAILED';
+
+export interface AgentFloatTransfer {
+  id: string;
+  from_agent: Address;
+  to_agent: Address;
+  amount: string;
+  reason: string | null;
+  status: AgentFloatTransferStatus;
+  required_approvals: number;
+  approval_count: number;
+  created_by: Address;
+  tx_hash: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AgentFloatTransferApproval {
+  id: number;
+  transfer_id: string;
+  approver: Address;
+  role: string;
+  approved_at: string;
+}
+
+/** Response envelope for `POST /agents/float-transfer`. */
+export interface InitiateFloatTransferResponse {
+  success: boolean;
+  data: {
+    transfer: AgentFloatTransfer;
+    approvals: AgentFloatTransferApproval[];
+  };
+}
+
+/** Response envelope for `POST /agents/float-transfer/{id}/approve`. */
+export interface ApproveFloatTransferResponse {
+  success: boolean;
+  data: {
+    transfer: AgentFloatTransfer;
+    approvals: AgentFloatTransferApproval[];
+    executedOnChain: false;
+    unsignedTxXdr?: string;
+  };
+}
+
+/** Response envelope for `POST /agents/float-transfer/{id}/submit`. */
+export interface SubmitFloatTransferResponse {
+  success: boolean;
+  data: {
+    transfer: AgentFloatTransfer;
+    executedOnChain: true;
+    txHash: string;
+  };
+}
+
+/** Response envelope for `POST /agents/float-transfer/{id}/reject`. */
+export interface RejectFloatTransferResponse {
+  success: boolean;
+  data: {
+    transfer: AgentFloatTransfer;
+  };
+}
+
+export interface AgentPairLimits {
+  dailyLimit: number;
+  weeklyLimit: number;
+}
+
+/** Response envelope for `GET /agents/float-transfer/limits`. */
+export interface AgentPairLimitsResponse {
+  success: boolean;
+  data: AgentPairLimits;
+}
+
+/** Response envelope for `PUT /agents/float-transfer/limits`. */
+export interface SetAgentPairLimitsResponse {
+  success: boolean;
+  data: AgentPairLimits & {
+    fromAgent: Address;
+    toAgent: Address;
+  };
+}
+

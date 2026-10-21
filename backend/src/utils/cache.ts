@@ -1,7 +1,8 @@
 import { createClient } from 'redis';
 import logger from '../utils/logger.js';
+import { env } from '../config/env.js';
 
-const redisUrl = process.env.REDIS_URL ?? 'redis://localhost:6379';
+const redisUrl = env.REDIS_URL;
 
 export const redisClient = createClient({ url: redisUrl });
 

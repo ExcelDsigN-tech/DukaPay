@@ -1,4 +1,8 @@
+import { z } from 'zod';
 import logger from '../utils/logger.js';
+import { env } from './envSchema.js';
+
+export { env, envSchema, type Env } from './envSchema.js';
 
 /**
  * List of environment variables required for the application to function.
@@ -25,6 +29,10 @@ const REQUIRED_ENV_VARS = [
   'PII_KEK_KEY',
 ];
 
+const requiredEnvSchema = z.object(
+  Object.fromEntries(REQUIRED_ENV_VARS.map((key) => [key, z.string().trim().min(1)])),
+);
+
 /**
  * Compliance flags that must be explicitly enabled outside development.
  * KYC defaults to `false` (dev default); staging/production deploys must
@@ -35,9 +43,9 @@ const REQUIRED_ENV_VARS = [
  * mirrored by `scripts/check-prod-flags.mjs` in CI.
  */
 export function validateProductionComplianceFlags(): void {
-  if (process.env.NODE_ENV !== 'production') return;
+  if (env.NODE_ENV !== 'production') return;
 
-  if (process.env.KYC_ENFORCEMENT_ENABLED !== 'true') {
+  if (!env.KYC_ENFORCEMENT_ENABLED) {
     console.error(
       `\n\x1b[1;31mFATAL ERROR: Production compliance flags not enabled\x1b[0m\n` +
         `These must be "true" in production: \x1b[1mKYC_ENFORCEMENT_ENABLED\x1b[0m\n` +
@@ -45,23 +53,23 @@ export function validateProductionComplianceFlags(): void {
     );
     logger.error('Production compliance flags not enabled', {
       off: ['KYC_ENFORCEMENT_ENABLED'],
-      node_env: process.env.NODE_ENV,
+      node_env: env.NODE_ENV,
     });
     process.exit(1);
   }
 
-  if (process.env.AUDIT_ANCHOR_ENABLED !== 'true') {
+  if (!env.AUDIT_ANCHOR_ENABLED) {
     const message =
       'AUDIT_ANCHOR_ENABLED is off in production; audit anchoring disabled (recommended: "true")';
     console.warn(
       `\n\x1b[1;33mWARNING: ${message}\x1b[0m\nSee docs/ENVIRONMENT.md launch posture.\n`,
     );
-    logger.warn(message, { node_env: process.env.NODE_ENV });
+    logger.warn(message, { node_env: env.NODE_ENV });
     return;
   }
 
-  const missing = ['AUDIT_ANCHOR_CONTRACT_ID', 'AUDIT_ANCHOR_SOURCE_SECRET'].filter(
-    (key) => !process.env[key] || process.env[key]!.trim() === '',
+  const missing = (['AUDIT_ANCHOR_CONTRACT_ID', 'AUDIT_ANCHOR_SOURCE_SECRET'] as const).filter(
+    (key) => !env[key],
   );
   if (missing.length > 0) {
     console.error(
@@ -71,7 +79,7 @@ export function validateProductionComplianceFlags(): void {
     );
     logger.error('Audit anchoring misconfigured in production', {
       missing,
-      node_env: process.env.NODE_ENV,
+      node_env: env.NODE_ENV,
     });
     process.exit(1);
   }
@@ -82,10 +90,11 @@ export function validateProductionComplianceFlags(): void {
  * Logs a clear error message and halts the process if any requirements are unmet.
  */
 export function validateEnvVars(): void {
-  // Filter for variables that are either absent OR just whitespace
-  const missing = REQUIRED_ENV_VARS.filter(
-    (key) => !process.env[key] || process.env[key]!.trim() === '',
-  );
+  // Variables that are either absent OR just whitespace fail the parse
+  const result = requiredEnvSchema.safeParse(process.env);
+  const missing = result.success
+    ? []
+    : [...new Set(result.error.issues.map((issue) => String(issue.path[0])))];
 
   if (missing.length > 0) {
     const boldRed = (msg: string) => `\x1b[1;31m${msg}\x1b[0m`;
@@ -101,7 +110,7 @@ export function validateEnvVars(): void {
     // Structured log for persistent logs (e.g., Sentry, CloudWatch, etc.)
     logger.error('Environment validation failure', {
       missing,
-      node_env: process.env.NODE_ENV,
+      node_env: env.NODE_ENV,
     });
 
     // Stop execution immediately

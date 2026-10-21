@@ -38,6 +38,7 @@ import {
 } from '../services/authService.js';
 import logger from '../utils/logger.js';
 import { complianceService } from '../services/complianceService.js';
+import { env } from '../config/env.js';
 
 const logAuthFailure = (req: Request, publicKey: string | undefined, reason: string): void => {
   logger.warn('Auth attempt failed', {
@@ -161,12 +162,12 @@ export const login = asyncHandler(async (req: Request, res: Response): Promise<v
   const fingerprint = generateDeviceFingerprint(req);
   const pair = await generateTokenPair(publicKey, fingerprint);
 
-  const cookieName = process.env.JWT_COOKIE_NAME ?? 'dukapay_jwt';
-  const refreshCookieName = process.env.REFRESH_COOKIE_NAME ?? 'dukapay_refresh';
+  const cookieName = env.JWT_COOKIE_NAME;
+  const refreshCookieName = env.REFRESH_COOKIE_NAME;
 
   res.cookie(cookieName, pair.accessToken, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: env.NODE_ENV === 'production',
     sameSite: 'strict',
     path: '/',
     maxAge: 15 * 60 * 1000, // 15 minutes
@@ -174,7 +175,7 @@ export const login = asyncHandler(async (req: Request, res: Response): Promise<v
 
   res.cookie(refreshCookieName, pair.refreshToken, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: env.NODE_ENV === 'production',
     sameSite: 'strict',
     path: '/api/auth',
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
@@ -200,7 +201,7 @@ export const refresh = asyncHandler(async (req: Request, res: Response): Promise
   const refreshToken =
     reqBody?.refreshToken ??
     rawCookie?.dukapay_refresh ??
-    rawCookie?.[process.env.REFRESH_COOKIE_NAME ?? 'dukapay_refresh'] ??
+    rawCookie?.[env.REFRESH_COOKIE_NAME] ??
     tokenFromHeader;
 
   if (!refreshToken || typeof refreshToken !== 'string') {
@@ -210,12 +211,12 @@ export const refresh = asyncHandler(async (req: Request, res: Response): Promise
   const fingerprint = generateDeviceFingerprint(req);
   const pair = await rotateRefreshToken(refreshToken, fingerprint);
 
-  const cookieName = process.env.JWT_COOKIE_NAME ?? 'dukapay_jwt';
-  const refreshCookieName = process.env.REFRESH_COOKIE_NAME ?? 'dukapay_refresh';
+  const cookieName = env.JWT_COOKIE_NAME;
+  const refreshCookieName = env.REFRESH_COOKIE_NAME;
 
   res.cookie(cookieName, pair.accessToken, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: env.NODE_ENV === 'production',
     sameSite: 'strict',
     path: '/',
     maxAge: 15 * 60 * 1000,
@@ -223,7 +224,7 @@ export const refresh = asyncHandler(async (req: Request, res: Response): Promise
 
   res.cookie(refreshCookieName, pair.refreshToken, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: env.NODE_ENV === 'production',
     sameSite: 'strict',
     path: '/api/auth',
     maxAge: 7 * 24 * 60 * 60 * 1000,
@@ -288,8 +289,8 @@ export const logout = async (req: Request, res: Response): Promise<void> => {
     await revokeTokenFamily(req.user.familyId, 'user_logout');
   }
 
-  const cookieName = process.env.JWT_COOKIE_NAME ?? 'dukapay_jwt';
-  const refreshCookieName = process.env.REFRESH_COOKIE_NAME ?? 'dukapay_refresh';
+  const cookieName = env.JWT_COOKIE_NAME;
+  const refreshCookieName = env.REFRESH_COOKIE_NAME;
   res.clearCookie(cookieName, { path: '/' });
   res.clearCookie(refreshCookieName, { path: '/api/auth' });
 
@@ -306,8 +307,8 @@ export const logoutAllSessions = asyncHandler(async (req: Request, res: Response
 
   await invalidateAllFamilies(req.user.publicKey, 'user_logout_all');
 
-  const cookieName = process.env.JWT_COOKIE_NAME ?? 'dukapay_jwt';
-  const refreshCookieName = process.env.REFRESH_COOKIE_NAME ?? 'dukapay_refresh';
+  const cookieName = env.JWT_COOKIE_NAME;
+  const refreshCookieName = env.REFRESH_COOKIE_NAME;
   res.clearCookie(cookieName, { path: '/' });
   res.clearCookie(refreshCookieName, { path: '/api/auth' });
 

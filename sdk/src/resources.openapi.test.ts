@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import type { HttpClient } from './http.js';
 import {
+  AgentsResource,
   AuthResource,
   LoansResource,
   PoolResource,
@@ -24,6 +25,7 @@ import {
 } from './resources.js';
 
 const ADDRESS = 'GDZST3XVCDTUJ76ZAV2HA72KYRF5KKDTDQH2CBLFGEXU5PZC3T7KRMHQ';
+const ADDRESS_B = 'GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H';
 
 interface Recorded {
   method: string;
@@ -103,6 +105,7 @@ describe('SDK paths against the backend OpenAPI spec', () => {
     const pool = new PoolResource(http);
     const scores = new ScoresResource(http);
     const remittance = new RemittanceResource(http);
+    const agents = new AgentsResource(http);
 
     await auth.challenge(ADDRESS);
     await auth.login({ publicKey: ADDRESS, message: 'msg', signature: 'sig' });
@@ -136,9 +139,31 @@ describe('SDK paths against the backend OpenAPI spec', () => {
     });
     await remittance.submit('remittance-id', 'signed-xdr');
 
+    await agents.myAssignments();
+    await agents.assignBorrower({ agentPublicKey: ADDRESS, borrowerPublicKey: ADDRESS_B });
+    await agents.removeBorrower({ agentPublicKey: ADDRESS, borrowerPublicKey: ADDRESS_B });
+    await agents.dashboard();
+    await agents.clearDashboardCache();
+    await agents.initiateFloatTransfer({
+      fromAgent: ADDRESS,
+      toAgent: ADDRESS_B,
+      amount: 5000,
+      reason: 'rebalance',
+    });
+    await agents.approveFloatTransfer('ft_12345');
+    await agents.submitFloatTransfer('ft_12345', 'c2lnbmVkLXhkcg==');
+    await agents.rejectFloatTransfer('ft_12345');
+    await agents.getPairLimits({ fromAgent: ADDRESS, toAgent: ADDRESS_B });
+    await agents.setPairLimits({
+      fromAgent: ADDRESS,
+      toAgent: ADDRESS_B,
+      dailyLimit: 200000,
+      weeklyLimit: 800000,
+    });
+
     // Sanity check on the fixture itself: a renamed SDK method would otherwise
     // silently stop being exercised.
-    expect(calls.length).toBeGreaterThanOrEqual(22);
+    expect(calls.length).toBeGreaterThanOrEqual(33);
 
     const mismatches = calls
       .map((call) => {

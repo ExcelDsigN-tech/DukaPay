@@ -9,15 +9,14 @@ import {
   isTokenRevoked,
   type JwtPayload,
 } from '../services/authService.js';
-
-const DEFAULT_JWT_COOKIE_NAME = 'dukapay_jwt';
+import { env } from '../config/env.js';
 
 function extractCookieToken(cookieHeader: string | undefined): string | null {
   if (!cookieHeader) {
     return null;
   }
 
-  const cookieName = process.env.JWT_COOKIE_NAME ?? DEFAULT_JWT_COOKIE_NAME;
+  const cookieName = env.JWT_COOKIE_NAME;
   const cookiePairs = cookieHeader.split(';');
 
   for (const pair of cookiePairs) {

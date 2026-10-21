@@ -1,6 +1,7 @@
 import { query } from '../db/connection.js';
 import logger from '../utils/logger.js';
 import type { Response } from 'express';
+import { env } from '../config/env.js';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -53,15 +54,11 @@ const sseClients = new Map<string, Set<SseClient>>();
 
 // Lazy-init Twilio client; dynamic import avoids ESM/CJS interop issues in tests
 async function getTwilioClient() {
-  if (
-    !process.env.TWILIO_ACCOUNT_SID ||
-    !process.env.TWILIO_AUTH_TOKEN ||
-    !process.env.TWILIO_PHONE_NUMBER
-  ) {
+  if (!env.TWILIO_ACCOUNT_SID || !env.TWILIO_AUTH_TOKEN || !env.TWILIO_PHONE_NUMBER) {
     return null;
   }
   const { default: twilio } = await import('twilio');
-  return twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+  return twilio(env.TWILIO_ACCOUNT_SID, env.TWILIO_AUTH_TOKEN);
 }
 
 // Lazy-init SendGrid; called once on first sendEmail
@@ -69,9 +66,9 @@ let _sgInitialized = false;
 async function ensureSendGrid() {
   if (_sgInitialized) return;
   _sgInitialized = true;
-  if (process.env.SENDGRID_API_KEY) {
+  if (env.SENDGRID_API_KEY) {
     const sgMail = await import('@sendgrid/mail');
-    sgMail.default.setApiKey(process.env.SENDGRID_API_KEY);
+    sgMail.default.setApiKey(env.SENDGRID_API_KEY);
   }
 }
 
@@ -110,7 +107,7 @@ function buildEmailTemplate(
 }
 
 async function sendEmail(email: string, message: string, type?: NotificationType): Promise<void> {
-  const fromEmail = process.env.FROM_EMAIL;
+  const fromEmail = env.FROM_EMAIL;
   const maskedEmail = email.replace(/(.{2}).*(@.*)/, '$1***$2');
 
   if (!fromEmail) {
@@ -120,7 +117,7 @@ async function sendEmail(email: string, message: string, type?: NotificationType
 
   await ensureSendGrid();
 
-  if (!process.env.SENDGRID_API_KEY) {
+  if (!env.SENDGRID_API_KEY) {
     logger
       .withContext()
       .info(`[Email] SendGrid not configured. Would send to ${maskedEmail}: ${message}`);
@@ -151,7 +148,7 @@ async function sendEmail(email: string, message: string, type?: NotificationType
 async function sendSMS(phone: string, message: string) {
   const maskedPhone = phone.length > 4 ? '+xx...****' + phone.slice(-2) : '****';
   const twilioClient = await getTwilioClient();
-  if (!twilioClient || !process.env.TWILIO_PHONE_NUMBER) {
+  if (!twilioClient || !env.TWILIO_PHONE_NUMBER) {
     logger
       .withContext()
       .warn(`[SMS] Twilio not configured. Would send to ${maskedPhone}`, { message });
@@ -161,7 +158,7 @@ async function sendSMS(phone: string, message: string) {
   try {
     const result = await twilioClient.messages.create({
       body: message,
-      from: process.env.TWILIO_PHONE_NUMBER,
+      from: env.TWILIO_PHONE_NUMBER,
       to: phone,
     });
     logger.withContext().info(`[SMS] Sent to ${maskedPhone}`, { sid: result.sid });
@@ -453,7 +450,7 @@ class NotificationService {
     const { title, message, loanId } = params;
 
     // 1. Email the configured admin address
-    const adminEmail = process.env.ADMIN_EMAIL;
+    const adminEmail = env.ADMIN_EMAIL;
     if (adminEmail) {
       await sendEmail(adminEmail, message);
     } else {
@@ -465,10 +462,7 @@ class NotificationService {
 
     // 2. Push SSE notification to every admin currently connected
     try {
-      const adminWallets = (process.env.ADMIN_WALLETS ?? '')
-        .split(',')
-        .map((w) => w.trim())
-        .filter((w) => w.length > 0);
+      const adminWallets = env.ADMIN_WALLETS;
 
       for (const adminId of adminWallets) {
         const actionUrl = loanId != null ? `/loans/${loanId}` : null;
@@ -488,7 +482,7 @@ class NotificationService {
     }
 
     // 3. Optional webhook (Slack / Discord / custom)
-    const webhookUrl = process.env.ADMIN_WEBHOOK_URL;
+    const webhookUrl = env.ADMIN_WEBHOOK_URL;
     if (webhookUrl) {
       try {
         await fetch(webhookUrl, {
@@ -633,12 +627,9 @@ let cleanupInterval: ReturnType<typeof setInterval> | undefined;
 export function startNotificationCleanupScheduler(): void {
   if (cleanupInterval) return;
 
-  const retentionDays = parseInt(process.env.NOTIFICATION_RETENTION_DAYS || '90', 10);
-  const readRetentionDays = parseInt(process.env.READ_NOTIFICATION_RETENTION_DAYS || '30', 10);
-  const intervalMs = parseInt(
-    process.env.NOTIFICATION_CLEANUP_INTERVAL_MS || String(24 * 60 * 60 * 1000), // Default: 24h
-    10,
-  );
+  const retentionDays = env.NOTIFICATION_RETENTION_DAYS;
+  const readRetentionDays = env.READ_NOTIFICATION_RETENTION_DAYS;
+  const intervalMs = env.NOTIFICATION_CLEANUP_INTERVAL_MS;
 
   // Run once immediately on start to clear any backlog
   void notificationService.deleteOldNotifications(retentionDays);

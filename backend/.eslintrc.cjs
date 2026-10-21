@@ -25,8 +25,31 @@ module.exports = {
     'no-console': ['warn', { allow: ['warn', 'error'] }],
     '@typescript-eslint/no-explicit-any': 'warn',
     'no-constant-condition': 'off',
+    // Read configuration through the typed `env` from src/config/env.ts.
+    'no-restricted-properties': [
+      'error',
+      {
+        object: 'process',
+        property: 'env',
+        message: 'Use `env` from src/config/env.ts instead of process.env.',
+      },
+    ],
   },
   overrides: [
+    {
+      // src/config owns process.env; tests set it up as fixture input.
+      files: [
+        'src/config/**/*.ts',
+        '**/*.test.ts',
+        '**/*.spec.ts',
+        'src/tests/**/*.ts',
+        'src/**/__tests__/**/*.ts',
+        'scripts/**/*.ts',
+      ],
+      rules: {
+        'no-restricted-properties': 'off',
+      },
+    },
     {
       files: ['**/*.test.ts', '**/*.spec.ts', 'src/tests/**/*.ts', 'src/**/__tests__/**/*.ts'],
       rules: {

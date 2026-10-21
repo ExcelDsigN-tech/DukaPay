@@ -49,9 +49,8 @@ jobs:
 
   gitleaks:
     name: Gitleaks secrets
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    continue-on-error: true
+    continue-on-error: false
     permissions:
       contents: read
       pull-requests: write
@@ -65,6 +64,20 @@ jobs:
       - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Verify the gate rejects a dummy secret
+        shell: bash
+        run: |
+          # Token built at runtime so no token-shaped literal lives in the repo.
+          # Only exit 42 (leak found) passes; errors exit 1 and fail the step.
+          tmp=$(mktemp -d)
+          trap 'rm -rf "$tmp"' EXIT
+          printf 'TOKEN=ghp_%s\n' "$(openssl rand -hex 18)" > "$tmp/fixture.env"
+          rc=0
+          gitleaks dir "$tmp" --config .gitleaks.toml --no-banner --redact --exit-code 42 || rc=$?
+          if [ "$rc" -ne 42 ]; then
+            echo "Gitleaks did not flag the dummy secret (exit $rc)" >&2
+            exit 1
+          fi
 
   trivy:
     name: Trivy filesystem scan

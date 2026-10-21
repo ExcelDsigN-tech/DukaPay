@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { HttpClient } from './http.js';
 import type { RemittanceList } from './types.js';
 import {
+  AgentsResource,
   AuthResource,
   LoansResource,
   PoolResource,
@@ -416,5 +417,275 @@ describe('ScoresResource', () => {
     await resource.get(VALID_ADDRESS);
 
     expect(get).toHaveBeenCalledWith(`/score/${VALID_ADDRESS}`);
+  });
+});
+
+const SECOND_ADDRESS = 'GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H';
+
+describe('AgentsResource', () => {
+  it('fetches my-assignments from GET /agents/my-assignments', async () => {
+    const get = vi.fn().mockResolvedValue({
+      success: true,
+      data: { agentPublicKey: VALID_ADDRESS, assignments: [] },
+    });
+    const resource = new AgentsResource({ get } as unknown as HttpClient);
+
+    await resource.myAssignments();
+
+    expect(get).toHaveBeenCalledWith('/agents/my-assignments');
+  });
+
+  it('assigns a borrower to an agent via POST /agents/:agentPublicKey/assignees', async () => {
+    const post = vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        agentPublicKey: VALID_ADDRESS,
+        borrowerPublicKey: SECOND_ADDRESS,
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+    });
+    const resource = new AgentsResource({ post } as unknown as HttpClient);
+
+    await resource.assignBorrower({
+      agentPublicKey: VALID_ADDRESS,
+      borrowerPublicKey: SECOND_ADDRESS,
+    });
+
+    expect(post).toHaveBeenCalledWith(`/agents/${VALID_ADDRESS}/assignees`, {
+      borrowerPublicKey: SECOND_ADDRESS,
+    });
+  });
+
+  it('throws ValidationError when assignBorrower receives invalid addresses or identical addresses', () => {
+    const resource = new AgentsResource({ post: vi.fn() } as unknown as HttpClient);
+
+    expect(() =>
+      resource.assignBorrower({
+        agentPublicKey: 'bad-address',
+        borrowerPublicKey: SECOND_ADDRESS,
+      }),
+    ).toThrow(ValidationError);
+
+    expect(() =>
+      resource.assignBorrower({
+        agentPublicKey: VALID_ADDRESS,
+        borrowerPublicKey: 'bad-address',
+      }),
+    ).toThrow(ValidationError);
+
+    expect(() =>
+      resource.assignBorrower({
+        agentPublicKey: VALID_ADDRESS,
+        borrowerPublicKey: VALID_ADDRESS,
+      }),
+    ).toThrow(ValidationError);
+  });
+
+  it('removes a borrower assignment via DELETE /agents/:agentPublicKey/assignees/:borrowerPublicKey', async () => {
+    const del = vi.fn().mockResolvedValue({ success: true, data: { removed: true } });
+    const resource = new AgentsResource({ delete: del } as unknown as HttpClient);
+
+    await resource.removeBorrower({
+      agentPublicKey: VALID_ADDRESS,
+      borrowerPublicKey: SECOND_ADDRESS,
+    });
+
+    expect(del).toHaveBeenCalledWith(
+      `/agents/${VALID_ADDRESS}/assignees/${SECOND_ADDRESS}`,
+    );
+  });
+
+  it('throws ValidationError when removeBorrower receives invalid addresses', () => {
+    const resource = new AgentsResource({ delete: vi.fn() } as unknown as HttpClient);
+
+    expect(() =>
+      resource.removeBorrower({
+        agentPublicKey: 'bad-address',
+        borrowerPublicKey: SECOND_ADDRESS,
+      }),
+    ).toThrow(ValidationError);
+
+    expect(() =>
+      resource.removeBorrower({
+        agentPublicKey: VALID_ADDRESS,
+        borrowerPublicKey: 'bad-address',
+      }),
+    ).toThrow(ValidationError);
+  });
+
+  it('fetches agent dashboard metrics and clears dashboard cache', async () => {
+    const get = vi.fn().mockResolvedValue({ agentPublicKey: VALID_ADDRESS });
+    const del = vi.fn().mockResolvedValue({ success: true, message: 'cleared' });
+    const resource = new AgentsResource({ get, delete: del } as unknown as HttpClient);
+
+    await resource.dashboard();
+    expect(get).toHaveBeenCalledWith('/agents/dashboard');
+
+    await resource.clearDashboardCache();
+    expect(del).toHaveBeenCalledWith('/agents/dashboard/cache');
+  });
+
+  it('initiates a float transfer with whole-token amounts and optional reason', async () => {
+    const post = vi.fn().mockResolvedValue({ success: true, data: {} });
+    const resource = new AgentsResource({ post } as unknown as HttpClient);
+
+    await resource.initiateFloatTransfer({
+      fromAgent: VALID_ADDRESS,
+      toAgent: SECOND_ADDRESS,
+      amount: 5000,
+      reason: 'liquidity rebalance',
+    });
+
+    expect(post).toHaveBeenCalledWith('/agents/float-transfer', {
+      fromAgent: VALID_ADDRESS,
+      toAgent: SECOND_ADDRESS,
+      amount: 5000,
+      reason: 'liquidity rebalance',
+    });
+
+    await resource.initiateFloatTransfer({
+      fromAgent: VALID_ADDRESS,
+      toAgent: SECOND_ADDRESS,
+      amount: 250.5,
+    });
+
+    expect(post).toHaveBeenCalledWith('/agents/float-transfer', {
+      fromAgent: VALID_ADDRESS,
+      toAgent: SECOND_ADDRESS,
+      amount: 250.5,
+    });
+  });
+
+  it('throws ValidationError when initiateFloatTransfer parameters are invalid', () => {
+    const resource = new AgentsResource({ post: vi.fn() } as unknown as HttpClient);
+
+    expect(() =>
+      resource.initiateFloatTransfer({
+        fromAgent: 'invalid',
+        toAgent: SECOND_ADDRESS,
+        amount: 100,
+      }),
+    ).toThrow(ValidationError);
+
+    expect(() =>
+      resource.initiateFloatTransfer({
+        fromAgent: VALID_ADDRESS,
+        toAgent: 'invalid',
+        amount: 100,
+      }),
+    ).toThrow(ValidationError);
+
+    expect(() =>
+      resource.initiateFloatTransfer({
+        fromAgent: VALID_ADDRESS,
+        toAgent: VALID_ADDRESS,
+        amount: 100,
+      }),
+    ).toThrow(ValidationError);
+
+    expect(() =>
+      resource.initiateFloatTransfer({
+        fromAgent: VALID_ADDRESS,
+        toAgent: SECOND_ADDRESS,
+        amount: 0,
+      }),
+    ).toThrow(ValidationError);
+
+    expect(() =>
+      resource.initiateFloatTransfer({
+        fromAgent: VALID_ADDRESS,
+        toAgent: SECOND_ADDRESS,
+        amount: 1.123456789,
+      }),
+    ).toThrow(ValidationError);
+
+    expect(() =>
+      resource.initiateFloatTransfer({
+        fromAgent: VALID_ADDRESS,
+        toAgent: SECOND_ADDRESS,
+        amount: '100' as unknown as number,
+      }),
+    ).toThrow(ValidationError);
+  });
+
+  it('approves, submits, and rejects float transfers and validates inputs', async () => {
+    const post = vi.fn().mockResolvedValue({ success: true, data: {} });
+    const resource = new AgentsResource({ post } as unknown as HttpClient);
+
+    await resource.approveFloatTransfer('ft_123');
+    expect(post).toHaveBeenCalledWith('/agents/float-transfer/ft_123/approve');
+
+    await resource.submitFloatTransfer('ft_123', 'c2lnbmVkLXhkcg==');
+    expect(post).toHaveBeenCalledWith('/agents/float-transfer/ft_123/submit', {
+      signedTxXdr: 'c2lnbmVkLXhkcg==',
+    });
+
+    await resource.rejectFloatTransfer('ft_123');
+    expect(post).toHaveBeenCalledWith('/agents/float-transfer/ft_123/reject');
+
+    expect(() => resource.approveFloatTransfer('')).toThrow(ValidationError);
+    expect(() => resource.submitFloatTransfer('ft_123', '')).toThrow(ValidationError);
+    expect(() => resource.submitFloatTransfer('bad/id', 'c2lnbmVkLXhkcg==')).toThrow(
+      ValidationError,
+    );
+    expect(() => resource.rejectFloatTransfer('   ')).toThrow(ValidationError);
+    expect(() => resource.approveFloatTransfer('ft/../../loans')).toThrow(ValidationError);
+  });
+
+  it('gets and sets pair limits with validation', async () => {
+    const get = vi.fn().mockResolvedValue({
+      success: true,
+      data: { dailyLimit: 100000, weeklyLimit: 500000 },
+    });
+    const put = vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        fromAgent: VALID_ADDRESS,
+        toAgent: SECOND_ADDRESS,
+        dailyLimit: 200000,
+        weeklyLimit: 800000,
+      },
+    });
+    const resource = new AgentsResource({ get, put } as unknown as HttpClient);
+
+    await resource.getPairLimits({ fromAgent: VALID_ADDRESS, toAgent: SECOND_ADDRESS });
+    expect(get).toHaveBeenCalledWith('/agents/float-transfer/limits', {
+      query: { fromAgent: VALID_ADDRESS, toAgent: SECOND_ADDRESS },
+    });
+
+    await resource.setPairLimits({
+      fromAgent: VALID_ADDRESS,
+      toAgent: SECOND_ADDRESS,
+      dailyLimit: 200000,
+      weeklyLimit: 800000,
+    });
+    expect(put).toHaveBeenCalledWith('/agents/float-transfer/limits', {
+      fromAgent: VALID_ADDRESS,
+      toAgent: SECOND_ADDRESS,
+      dailyLimit: 200000,
+      weeklyLimit: 800000,
+    });
+
+    expect(() =>
+      resource.getPairLimits({ fromAgent: 'invalid', toAgent: SECOND_ADDRESS }),
+    ).toThrow(ValidationError);
+
+    expect(() =>
+      resource.setPairLimits({
+        fromAgent: VALID_ADDRESS,
+        toAgent: VALID_ADDRESS,
+        dailyLimit: 200000,
+        weeklyLimit: 800000,
+      }),
+    ).toThrow(ValidationError);
+
+    expect(() =>
+      resource.setPairLimits({
+        fromAgent: VALID_ADDRESS,
+        toAgent: SECOND_ADDRESS,
+        dailyLimit: 0,
+        weeklyLimit: 800000,
+      }),
+    ).toThrow(ValidationError);
   });
 });

@@ -3,6 +3,7 @@ import { cacheService } from './cacheService.js';
 import { query } from '../db/connection.js';
 import logger from '../utils/logger.js';
 import { stroopsToAmount } from '../money/decimal.js';
+import { env } from '../config/env.js';
 
 const AGENT_DASHBOARD_PUBLISH_INTERVAL_MS = 10_000;
 
@@ -153,7 +154,7 @@ let interval: ReturnType<typeof setInterval> | undefined;
 
 export function startAgentDashboardPublisher(): void {
   if (interval) return;
-  if (process.env.NODE_ENV === 'test') return;
+  if (env.NODE_ENV === 'test') return;
 
   void publishAgentDashboardUpdates();
   interval = setInterval(

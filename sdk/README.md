@@ -3,7 +3,7 @@
 TypeScript SDK for the [DukaPay](https://github.com/ExcelDsigN-tech/dukapay)
 lending & remittance protocol.
 
-- **`DukaPayClient`**: typed client for every API resource (loans, pool, scores, remittance, auth)
+- **`DukaPayClient`**: typed client for every API resource (loans, pool, scores, remittance, agents, auth)
 - **Wallet adapters**: `FreighterAdapter`, `AlbedoAdapter`, or your own via the `WalletAdapter` interface
 - **`ContractHelpers`**: stroop/bps conversions, address formatting, network constants
 - **React hooks**: `useWallet`, `useLoans`, `useFloat` (import from `@dukapay/sdk/react`)
@@ -40,6 +40,46 @@ await client.signAndSubmit(
   { xdr: unsigned.unsignedTxXdr },
   (xdr) => client.loans.submit(loans[0].loanId, xdr),
 );
+```
+
+## Agent banking (`client.agents`)
+
+```ts
+// Agent dashboard & borrower assignments
+const dashboard = await client.agents.dashboard();
+const { data: assigned } = await client.agents.myAssignments();
+await client.agents.clearDashboardCache();
+
+// Admin borrower-to-agent assignment management
+await client.agents.assignBorrower({
+  agentPublicKey: agentAddress,
+  borrowerPublicKey: borrowerAddress,
+});
+await client.agents.removeBorrower({
+  agentPublicKey: agentAddress,
+  borrowerPublicKey: borrowerAddress,
+});
+
+// Agent-to-agent float transfers (2-of-3 multisig) & pair limits
+const initiated = await client.agents.initiateFloatTransfer({
+  fromAgent: agentAddress,
+  toAgent: peerAgentAddress,
+  amount: 5000,
+  reason: 'Corridor rebalance',
+});
+await client.agents.approveFloatTransfer(initiated.data.transfer.id);
+await client.agents.rejectFloatTransfer(initiated.data.transfer.id);
+
+const limits = await client.agents.getPairLimits({
+  fromAgent: agentAddress,
+  toAgent: peerAgentAddress,
+});
+await client.agents.setPairLimits({
+  fromAgent: agentAddress,
+  toAgent: peerAgentAddress,
+  dailyLimit: 200000,
+  weeklyLimit: 800000,
+});
 ```
 
 ## React

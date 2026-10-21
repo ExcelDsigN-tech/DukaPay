@@ -14,10 +14,12 @@ import { createHash } from 'crypto';
 import * as fs from 'fs-extra';
 import * as path from 'path';
 import * as dotenv from 'dotenv';
+import { checkDeployConfig, OracleSource } from './deploy-config-check';
 
 dotenv.config();
 
 const CONFIG_PATH = path.join(__dirname, 'deploy-config.json');
+const REGISTRY_PATH = path.join(__dirname, 'contract-registry.json');
 const POLL_INTERVAL_MS = 2000;
 
 // Compute the SHA-256 hash of WASM bytes; this is the on-chain upload key.
@@ -32,7 +34,11 @@ function contractSalt(name: string): Buffer {
 
 // The address a contract gets when `deployer` creates it with `salt`. It is
 // fixed by those inputs, so a re-run can find a contract an earlier run made.
-function expectedContractId(deployer: string, salt: Buffer, networkPassphrase: string): string {
+function expectedContractId(
+    deployer: string,
+    salt: Buffer,
+    networkPassphrase: string,
+): string {
     const preimage = xdr.HashIdPreimage.envelopeTypeContractId(
         new xdr.HashIdPreimageContractId({
             networkId: hash(Buffer.from(networkPassphrase)),
@@ -109,14 +115,52 @@ async function uploadWasm(
     return wasmHash;
 }
 
-// Instantiate a contract from an uploaded WASM hash. Returns the contract ID.
-// If an earlier run already created it, reuse it instead of failing.
+// Convert an argument to ScVal. Public-key / contract-address strings
+// (G…/C… keys) become Address ScVals so contract functions taking `Address`
+// parameters decode correctly; everything else goes through nativeToScVal,
+// which also understands { type, value } hints (u32, i128, …).
+function toContractScVal(arg: unknown): xdr.ScVal {
+    if (arg instanceof xdr.ScVal) {
+        return arg;
+    }
+    if (
+        typeof arg === 'string' &&
+        (StrKey.isValidEd25519PublicKey(arg) || StrKey.isValidContract(arg))
+    ) {
+        return Address.fromString(arg).toScVal();
+    }
+    if (Array.isArray(arg)) {
+        return xdr.ScVal.scvVec(arg.map(toContractScVal));
+    }
+    if (typeof arg === 'object' && arg !== null && 'source' in arg && 'address' in arg) {
+        const source = arg as { source: string; address: string };
+        return xdr.ScVal.scvMap([
+            new xdr.ScMapEntry({
+                key: xdr.ScVal.scvSymbol('address'),
+                val: Address.fromString(source.address).toScVal(),
+            }),
+            new xdr.ScMapEntry({
+                key: xdr.ScVal.scvSymbol('source'),
+                val: xdr.ScVal.scvSymbol(source.source),
+            }),
+        ]);
+    }
+    if (typeof arg === 'object' && arg !== null && 'type' in arg && 'value' in arg) {
+        const hint = arg as { type: string; value: unknown };
+        return nativeToScVal(hint.value, { type: hint.type as any });
+    }
+    return nativeToScVal(arg);
+}
+
+// Instantiate a contract from an uploaded WASM hash with constructor args.
+// Returns the new contract ID. If an earlier run already created it, reuse it.
 async function createInstance(
     server: Rpc.Server,
     wasmHash: Buffer,
     salt: Buffer,
     account: Keypair,
     networkPassphrase: string,
+    constructorArgs: unknown[] = [],
 ): Promise<string> {
     const contractId = expectedContractId(account.publicKey(), salt, networkPassphrase);
     if (await contractExists(server, contractId)) {
@@ -131,6 +175,7 @@ async function createInstance(
                 address: Address.fromString(account.publicKey()),
                 wasmHash,
                 salt,
+                constructorArgs: constructorArgs.map(toContractScVal),
             }),
         )
         .setTimeout(30)
@@ -143,26 +188,6 @@ async function createInstance(
         throw new Error(`Created contract ${created} but expected ${contractId}`);
     }
     return contractId;
-}
-
-// Convert an argument to ScVal. Public-key / contract-address strings
-// (G…/C… keys) become Address ScVals so contract functions taking `Address`
-// parameters decode correctly; everything else goes through nativeToScVal,
-// which also understands { type, value } hints (u32, i128, …).
-function toContractScVal(arg: unknown): xdr.ScVal {
-    if (
-        typeof arg === 'string' &&
-        (StrKey.isValidEd25519PublicKey(arg) || StrKey.isValidContract(arg))
-    ) {
-        return Address.fromString(arg).toScVal();
-    }
-    // { type, value } is a type hint (u32, i128, ...). nativeToScVal does not
-    // read it from the object itself; passed whole it becomes a map.
-    if (arg !== null && typeof arg === 'object' && 'type' in arg && 'value' in arg) {
-        const { type, value } = arg as { type: string; value: unknown };
-        return nativeToScVal(value, { type });
-    }
-    return nativeToScVal(arg);
 }
 
 // Call a contract function with positional arguments.
@@ -194,26 +219,19 @@ async function invoke(
     await sendTx(server, tx, account);
 }
 
-// Run an initializer, treating the contract's AlreadyInitialized error as done
-// so a deploy that stopped half way can simply be run again.
-async function initOnce(label: string, alreadyInitializedCode: number, run: () => Promise<unknown>) {
-    console.log(`  ${label}`);
-    try {
-        await run();
-    } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        if (message.includes(`Error(Contract, #${alreadyInitializedCode})`)) {
-            console.log('    already initialized by an earlier run, skipping');
-            return;
-        }
-        throw error;
-    }
-}
-
 async function main() {
     const network = process.argv[2] || 'testnet';
     const config = (await fs.readJson(CONFIG_PATH))[network];
     if (!config) throw new Error(`No config for network: ${network}`);
+
+    // Fail on placeholder or malformed keys before uploading anything, so a
+    // bad config never leaves a half-finished deployment behind.
+    const configErrors = checkDeployConfig(config, network);
+    if (configErrors.length > 0) {
+        throw new Error(
+            `Invalid scripts/deploy-config.json:\n${configErrors.map((e) => `  - ${e}`).join('\n')}`,
+        );
+    }
 
     const secretKey = process.env.SECRET_KEY;
     if (!secretKey) throw new Error('SECRET_KEY environment variable is required');
@@ -268,110 +286,182 @@ async function main() {
         account,
         passphrase,
     );
+    const breakerWasmHash = await uploadWasm(
+        server,
+        path.resolve(__dirname, config.contracts.circuit_breaker.wasm),
+        account,
+        passphrase,
+    );
+    const oracleWasmHash = await uploadWasm(
+        server,
+        path.resolve(__dirname, config.contracts.oracle.wasm),
+        account,
+        passphrase,
+    );
+    const anchorWasmHash = await uploadWasm(
+        server,
+        path.resolve(__dirname, config.contracts.audit_anchor.wasm),
+        account,
+        passphrase,
+    );
 
-    // ── 2. Instantiate contracts ────────────────────────────────────────────────
-    console.log('\n[2/4] Creating contract instances…');
+    // ── 2. Instantiate contracts with constructor args (atomic deploy & init) ────
+    console.log('\n[2/4] Creating contract instances with constructors…');
+
+    const breakerConfig = config.contracts.circuit_breaker;
+    const breakerSigners = breakerConfig.signers as string[];
+
+    console.log('  CircuitBreaker');
+    const breakerContractId = await createInstance(
+        server,
+        breakerWasmHash,
+        contractSalt('circuit_breaker'),
+        account,
+        passphrase,
+        [
+            adminAddr,
+            breakerSigners,
+            { type: 'u32', value: breakerConfig.threshold },
+            { type: 'u64', value: BigInt(breakerConfig.override_timelock ?? 86_400) },
+        ],
+    );
+    console.log(`    → ${breakerContractId}`);
+
+    // Each source signs its own price submissions with its own key.
+    const oracleSources = config.contracts.oracle.sources as OracleSource[];
+
+    console.log('  Oracle');
+    const oracleContractId = await createInstance(
+        server,
+        oracleWasmHash,
+        contractSalt('oracle'),
+        account,
+        passphrase,
+        [adminAddr, oracleSources.map(({ source, address }) => ({ source, address }))],
+    );
+    console.log(`    → ${oracleContractId}`);
+
+    console.log('  AuditAnchor');
+    const anchorContractId = await createInstance(
+        server,
+        anchorWasmHash,
+        contractSalt('audit_anchor'),
+        account,
+        passphrase,
+        [adminAddr],
+    );
+    console.log(`    → ${anchorContractId}`);
 
     console.log('  RemittanceNFT');
-    const nftContractId = await createInstance(server, nftWasmHash, contractSalt('nft'), account, passphrase);
+    const nftContractId = await createInstance(
+        server,
+        nftWasmHash,
+        contractSalt('nft'),
+        account,
+        passphrase,
+        [adminAddr],
+    );
     console.log(`    → ${nftContractId}`);
 
     console.log('  LendingPool');
-    const poolContractId = await createInstance(server, poolWasmHash, contractSalt('pool'), account, passphrase);
+    const poolContractId = await createInstance(
+        server,
+        poolWasmHash,
+        contractSalt('pool'),
+        account,
+        passphrase,
+        [adminAddr],
+    );
     console.log(`    → ${poolContractId}`);
 
-    console.log('  LoanManager');
-    const managerContractId = await createInstance(server, managerWasmHash, contractSalt('manager'), account, passphrase);
-    console.log(`    → ${managerContractId}`);
-
-    console.log('  Governance');
-    const govContractId = await createInstance(server, govWasmHash, contractSalt('governance'), account, passphrase);
-    console.log(`    → ${govContractId}`);
-
     console.log('  AgentRegistry');
-    const registryContractId = await createInstance(server, registryWasmHash, contractSalt('agent_registry'), account, passphrase);
+    const registryContractId = await createInstance(
+        server,
+        registryWasmHash,
+        contractSalt('agent_registry'),
+        account,
+        passphrase,
+        [adminAddr, adminAddr],
+    );
     console.log(`    → ${registryContractId}`);
 
     console.log('  AgentVault');
-    const vaultContractId = await createInstance(server, vaultWasmHash, contractSalt('agent_vault'), account, passphrase);
+    const vaultContractId = await createInstance(
+        server,
+        vaultWasmHash,
+        contractSalt('agent_vault'),
+        account,
+        passphrase,
+        [
+            adminAddr,
+            adminAddr,
+            config.token,
+            { type: 'u32', value: config.contracts.agent_vault.max_haircut_bps },
+            { type: 'i128', value: config.contracts.agent_vault.min_collateral },
+        ],
+    );
     console.log(`    → ${vaultContractId}`);
 
-    // ── 3. Initialize in dependency order ──────────────────────────────────────
-    //
-    // Ordering constraints:
-    //   a. NFT must be initialized before authorize_minter can be called.
-    //   b. authorize_minter(LoanManager) must run BEFORE LoanManager.initialize,
-    //      because LoanManager.initialize asserts it is already an authorized minter.
-    //   c. LendingPool has no dependency on NFT or LoanManager at init time.
-    //   d. LoanManager.initialize takes (nft, pool, token, admin) so both NFT and
-    //      Pool addresses must be known first.
-    //   e. Governance.initialize takes (admin, target_contract). We point it at
-    //      LoanManager as the primary governed contract.
-    //
-    console.log('\n[3/4] Initializing contracts…');
-
-    // NFT
-    await initOnce('NFT.initialize', 1, () =>
-        invoke(server, nftContractId, 'initialize', [adminAddr], account, passphrase),
+    // Pre-compute governance address for the LoanManager constructor (circular dep:
+    // governance also needs loan manager's ID).
+    const expectedGovId = expectedContractId(
+        account.publicKey(),
+        contractSalt('governance'),
+        passphrase,
     );
+    console.log('  LoanManager');
+    const managerContractId = await createInstance(
+        server,
+        managerWasmHash,
+        contractSalt('manager'),
+        account,
+        passphrase,
+        [nftContractId, poolContractId, config.token, adminAddr, expectedGovId],
+    );
+    console.log(`    → ${managerContractId}`);
 
-    // Authorize LoanManager as minter BEFORE LoanManager.initialize checks for it.
+    console.log('  Governance');
+    const govContractId = await createInstance(
+        server,
+        govWasmHash,
+        contractSalt('governance'),
+        account,
+        passphrase,
+        [adminAddr, managerContractId],
+    );
+    console.log(`    → ${govContractId}`);
+
+    // ── 3. Configure contract wiring ──────────────────────────────────────────
+    console.log('\n[3/4] Configuring contract wiring…');
+
+    // Authorize LoanManager as minter on RemittanceNFT
     console.log('  NFT.authorize_minter(LoanManager)');
     await invoke(server, nftContractId, 'authorize_minter', [managerContractId], account, passphrase);
-
-    // LendingPool
-    // initialize(admin): the pool takes the token per call, not at setup.
-    await initOnce('LendingPool.initialize', 1, () =>
-        invoke(server, poolContractId, 'initialize', [adminAddr], account, passphrase),
-    );
-
-    // LoanManager: validates minter authorization on-chain during this call.
-    // initialize(nft, pool, token, admin, governance)
-    await initOnce('LoanManager.initialize', 1, () =>
-        invoke(
-            server,
-            managerContractId,
-            'initialize',
-            [nftContractId, poolContractId, config.token, adminAddr, govContractId],
-            account,
-            passphrase,
-        ),
-    );
 
     // Let the pool accept yield/loss accounting updates only from this manager.
     console.log('  LendingPool.set_loan_manager(LoanManager)');
     await invoke(server, poolContractId, 'set_loan_manager', [managerContractId], account, passphrase);
 
-    // Governance: target is LoanManager (the core protocol contract).
-    await initOnce('Governance.initialize(target=LoanManager)', 4001, () =>
-        invoke(server, govContractId, 'initialize', [adminAddr, managerContractId], account, passphrase),
-    );
+    // Wire AgentRegistry into AgentVault so mint_float rejects non-Active agents (#788)
+    console.log('  AgentVault.set_registry');
+    await invoke(server, vaultContractId, 'set_registry', [registryContractId], account, passphrase);
 
-    // AgentRegistry: no cross-contract deps. Deployer acts as operator for now.
-    await initOnce('AgentRegistry.init(owner=admin, operator=admin)', 1, () =>
-        invoke(server, registryContractId, 'init', [adminAddr, adminAddr], account, passphrase),
-    );
+    // Wire CircuitBreaker into AgentVault, LendingPool, and LoanManager
+    console.log('  AgentVault.set_circuit_breaker');
+    await invoke(server, vaultContractId, 'set_circuit_breaker', [breakerContractId], account, passphrase);
 
-    // AgentVault: USDC collateral vault backing agent float.
-    await initOnce('AgentVault.init(owner=admin, operator=admin, token, max_haircut, min_collateral)', 1, () =>
-        invoke(
-            server,
-            vaultContractId,
-            'init',
-            [
-                adminAddr,
-                adminAddr,
-                config.token,
-                { type: 'u32', value: config.contracts.agent_vault.max_haircut_bps },
-                { type: 'i128', value: config.contracts.agent_vault.min_collateral },
-            ],
-            account,
-            passphrase,
-        ),
-    );
+    console.log('  LendingPool.set_circuit_breaker');
+    await invoke(server, poolContractId, 'set_circuit_breaker', [breakerContractId], account, passphrase);
+
+    console.log('  LoanManager.set_circuit_breaker');
+    await invoke(server, managerContractId, 'set_circuit_breaker', [breakerContractId], account, passphrase);
+
+    // Wire Oracle into LoanManager
+    console.log('  LoanManager.set_price_oracle');
+    await invoke(server, managerContractId, 'set_price_oracle', [oracleContractId], account, passphrase);
 
     // ── 4. Persist contract IDs ─────────────────────────────────────────────────
-    console.log('\n[4/4] Writing contract addresses to .env files…');
+    console.log('\n[4/4] Writing contract addresses to .env files and registry…');
 
     // Variable names each app reads (docs/ENVIRONMENT.md).
     const header = `\n# DukaPay contracts (${network}, ${new Date().toISOString()})`;
@@ -390,6 +480,9 @@ async function main() {
         `MULTISIG_GOVERNANCE_CONTRACT_ID=${govContractId}`,
         `AGENT_REGISTRY_CONTRACT_ID=${registryContractId}`,
         `AGENT_VAULT_CONTRACT_ID=${vaultContractId}`,
+        `CIRCUIT_BREAKER_CONTRACT_ID=${breakerContractId}`,
+        `ORACLE_CONTRACT_ID=${oracleContractId}`,
+        `AUDIT_ANCHOR_CONTRACT_ID=${anchorContractId}`,
         `POOL_TOKEN_ADDRESS=${config.token}`,
         '',
     ].join('\n');
@@ -397,13 +490,43 @@ async function main() {
     await fs.appendFile(path.join(__dirname, '../frontend/.env.local'), frontendEnv);
     await fs.appendFile(path.join(__dirname, '../backend/.env'), backendEnv);
 
+    if (await fs.pathExists(REGISTRY_PATH)) {
+        const registry = await fs.readJson(REGISTRY_PATH);
+        if (registry.networks?.[network]?.contracts) {
+            const now = new Date().toISOString().slice(0, 10);
+            const contractMap: Record<string, string> = {
+                remittance_nft: nftContractId,
+                lending_pool: poolContractId,
+                loan_manager: managerContractId,
+                multisig_governance: govContractId,
+                agent_registry: registryContractId,
+                agent_vault: vaultContractId,
+                circuit_breaker: breakerContractId,
+                oracle: oracleContractId,
+                audit_anchor: anchorContractId,
+            };
+            for (const [name, addr] of Object.entries(contractMap)) {
+                if (registry.networks[network].contracts[name]) {
+                    registry.networks[network].contracts[name].address = addr;
+                    registry.networks[network].contracts[name].deployDate = now;
+                    registry.networks[network].contracts[name].deployer = adminAddr;
+                }
+            }
+            await fs.writeJson(REGISTRY_PATH, registry, { spaces: 2 });
+            console.log('  contract-registry.json updated.');
+        }
+    }
+
     console.log('\nDeployment complete.');
-    console.log(`  RemittanceNFT  : ${nftContractId}`);
-    console.log(`  LendingPool    : ${poolContractId}`);
-    console.log(`  LoanManager    : ${managerContractId}`);
-    console.log(`  Governance     : ${govContractId}`);
-    console.log(`  AgentRegistry  : ${registryContractId}`);
-    console.log(`  AgentVault     : ${vaultContractId}`);
+    console.log(`  RemittanceNFT           : ${nftContractId}`);
+    console.log(`  LendingPool             : ${poolContractId}`);
+    console.log(`  LoanManager             : ${managerContractId}`);
+    console.log(`  Governance              : ${govContractId}`);
+    console.log(`  AgentRegistry           : ${registryContractId}`);
+    console.log(`  AgentVault              : ${vaultContractId}`);
+    console.log(`  CircuitBreaker          : ${breakerContractId}`);
+    console.log(`  Oracle                  : ${oracleContractId}`);
+    console.log(`  AuditAnchor             : ${anchorContractId}`);
 }
 
 main().catch(error => {

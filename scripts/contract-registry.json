@@ -16,7 +16,7 @@
           "upgradeAuthority": "not yet recorded",
           "timelock": null,
           "envVar": "LOAN_MANAGER_CONTRACT_ID",
-          "initParams": ["nft_contract", "lending_pool", "token", "admin"]
+          "initParams": ["nft_contract", "lending_pool", "token", "admin", "governance_contract"]
         },
         "lending_pool": {
           "address": "not yet recorded",
@@ -83,6 +83,39 @@
           "timelock": null,
           "envVar": "AGENT_VAULT_CONTRACT_ID",
           "initParams": ["owner", "operator", "token", "max_haircut_bps", "min_collateral"]
+        },
+        "circuit_breaker": {
+          "address": "not yet recorded",
+          "deployDate": null,
+          "deployer": "not yet recorded",
+          "deployTxHash": null,
+          "abiVersion": null,
+          "upgradeAuthority": "not yet recorded",
+          "timelock": null,
+          "envVar": "CIRCUIT_BREAKER_CONTRACT_ID",
+          "initParams": ["admin", "signers", "threshold", "override_timelock"]
+        },
+        "oracle": {
+          "address": "not yet recorded",
+          "deployDate": null,
+          "deployer": "not yet recorded",
+          "deployTxHash": null,
+          "abiVersion": null,
+          "upgradeAuthority": "not yet recorded",
+          "timelock": null,
+          "envVar": "ORACLE_CONTRACT_ID",
+          "initParams": ["admin", "sources"]
+        },
+        "audit_anchor": {
+          "address": "not yet recorded",
+          "deployDate": null,
+          "deployer": "not yet recorded",
+          "deployTxHash": null,
+          "abiVersion": null,
+          "upgradeAuthority": "not yet recorded",
+          "timelock": null,
+          "envVar": "AUDIT_ANCHOR_CONTRACT_ID",
+          "initParams": ["owner"]
         }
       }
     },
@@ -106,7 +139,7 @@
           "upgradeAuthority": "not yet recorded",
           "timelock": null,
           "envVar": "LOAN_MANAGER_CONTRACT_ID",
-          "initParams": ["remittance_nft", "lending_pool", "token", "admin"]
+          "initParams": ["remittance_nft", "lending_pool", "token", "admin", "governance_contract"]
         },
         "lending_pool": {
           "address": "not yet recorded",
@@ -117,7 +150,7 @@
           "upgradeAuthority": "not yet recorded",
           "timelock": null,
           "envVar": "LENDING_POOL_CONTRACT_ID",
-          "initParams": ["token", "admin"]
+          "initParams": ["admin"]
         },
         "remittance_nft": {
           "address": "not yet recorded",
@@ -173,6 +206,39 @@
           "timelock": null,
           "envVar": "AGENT_VAULT_CONTRACT_ID",
           "initParams": ["owner", "operator", "token", "max_haircut_bps", "min_collateral"]
+        },
+        "circuit_breaker": {
+          "address": "not yet recorded",
+          "deployDate": null,
+          "deployer": "not yet recorded",
+          "deployTxHash": null,
+          "abiVersion": null,
+          "upgradeAuthority": "not yet recorded",
+          "timelock": null,
+          "envVar": "CIRCUIT_BREAKER_CONTRACT_ID",
+          "initParams": ["admin", "signers", "threshold", "override_timelock"]
+        },
+        "oracle": {
+          "address": "not yet recorded",
+          "deployDate": null,
+          "deployer": "not yet recorded",
+          "deployTxHash": null,
+          "abiVersion": null,
+          "upgradeAuthority": "not yet recorded",
+          "timelock": null,
+          "envVar": "ORACLE_CONTRACT_ID",
+          "initParams": ["admin", "sources"]
+        },
+        "audit_anchor": {
+          "address": "not yet recorded",
+          "deployDate": null,
+          "deployer": "not yet recorded",
+          "deployTxHash": null,
+          "abiVersion": null,
+          "upgradeAuthority": "not yet recorded",
+          "timelock": null,
+          "envVar": "AUDIT_ANCHOR_CONTRACT_ID",
+          "initParams": ["owner"]
         }
       }
     }

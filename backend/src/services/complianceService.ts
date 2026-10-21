@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { query } from '../db/connection.js';
 import { AppError } from '../errors/AppError.js';
 import logger from '../utils/logger.js';
+import { env } from '../config/env.js';
 
 export interface ApplicantScreeningInput {
   subjectId: string;
@@ -23,12 +24,7 @@ interface ProviderSearchResponse {
 }
 
 const highRiskCountries = (): Set<string> =>
-  new Set(
-    (process.env.AML_HIGH_RISK_COUNTRIES ?? '')
-      .split(',')
-      .map((country) => country.trim().toUpperCase())
-      .filter(Boolean),
-  );
+  new Set(env.AML_HIGH_RISK_COUNTRIES.map((country) => country.toUpperCase()));
 
 async function appendAudit(
   subjectId: string,
@@ -57,11 +53,9 @@ async function providerRequest(
   path: string,
   body: Record<string, unknown>,
 ): Promise<ProviderSearchResponse> {
-  const apiKey = process.env.COMPLYADVANTAGE_API_KEY;
+  const apiKey = env.COMPLYADVANTAGE_API_KEY;
   if (!apiKey) throw AppError.serviceUnavailable('Compliance screening is unavailable');
-  const baseUrl = (
-    process.env.COMPLYADVANTAGE_API_URL ?? 'https://api.complyadvantage.com'
-  ).replace(/\/$/, '');
+  const baseUrl = env.COMPLYADVANTAGE_API_URL.replace(/\/$/, '');
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10_000);
   try {
@@ -88,8 +82,8 @@ export const complianceService = {
     const response = await providerRequest('/searches', {
       search_term: { first_name: input.firstName, last_name: input.lastName },
       client_ref: input.subjectId,
-      ...(process.env.COMPLYADVANTAGE_SEARCH_PROFILE
-        ? { search_profile: process.env.COMPLYADVANTAGE_SEARCH_PROFILE }
+      ...(env.COMPLYADVANTAGE_SEARCH_PROFILE
+        ? { search_profile: env.COMPLYADVANTAGE_SEARCH_PROFILE }
         : {}),
       filters: {
         entity_type: 'person',
@@ -158,8 +152,7 @@ export const complianceService = {
     amount: number;
     transactionReference: string;
   }) {
-    if (process.env.KYC_ENFORCEMENT_ENABLED !== 'true')
-      return { allowed: true, ruleCodes: [] as string[] };
+    if (!env.KYC_ENFORCEMENT_ENABLED) return { allowed: true, ruleCodes: [] as string[] };
     const profileResult = await query(
       'SELECT status, country_code FROM compliance_profiles WHERE subject_id = $1',
       [input.subjectId],
@@ -175,13 +168,12 @@ export const complianceService = {
               COALESCE(SUM(amount), 0)::numeric AS amount_24h,
               COUNT(*) FILTER (WHERE amount >= $2 * 0.8 AND amount < $2)::int AS near_threshold_count
        FROM remittances WHERE sender_id = $1 AND created_at >= NOW() - INTERVAL '24 hours'`,
-      [input.subjectId, Number(process.env.AML_REPORTING_THRESHOLD ?? 10_000)],
+      [input.subjectId, env.AML_REPORTING_THRESHOLD],
     );
     const row = history.rows[0] ?? {};
-    const threshold = Number(process.env.AML_REPORTING_THRESHOLD ?? 10_000);
+    const threshold = env.AML_REPORTING_THRESHOLD;
     const rules: string[] = [];
-    if (Number(row.count_24h ?? 0) >= Number(process.env.AML_DAILY_TX_LIMIT ?? 10))
-      rules.push('VELOCITY_24H');
+    if (Number(row.count_24h ?? 0) >= env.AML_DAILY_TX_LIMIT) rules.push('VELOCITY_24H');
     if (Number(row.amount_24h ?? 0) + input.amount >= threshold) rules.push('AGGREGATE_THRESHOLD');
     if (input.amount >= threshold) rules.push('LARGE_TRANSACTION');
     if (
@@ -224,8 +216,8 @@ export const complianceService = {
   },
 
   async submitSar(sarId: string, report: Record<string, unknown>): Promise<void> {
-    const url = process.env.SAR_FILING_API_URL;
-    const token = process.env.SAR_FILING_API_TOKEN;
+    const url = env.SAR_FILING_API_URL;
+    const token = env.SAR_FILING_API_TOKEN;
     if (!url || !token) return;
     try {
       const response = await fetch(url, {

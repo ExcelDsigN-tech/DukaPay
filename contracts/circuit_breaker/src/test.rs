@@ -2,8 +2,9 @@ use crate::{
     CircuitBreaker, CircuitBreakerClient, CircuitBreakerError, OverrideTarget,
     PAUSE_DURATION_SECONDS,
 };
+use soroban_sdk::testutils::storage::Instance as _;
 use soroban_sdk::testutils::{Address as _, Ledger as _};
-use soroban_sdk::{Address, Env, Symbol, Vec};
+use soroban_sdk::{Address, Env, IntoVal, Symbol, Val, Vec};
 
 fn setup() -> (Env, Address, Address, Vec<Address>) {
     let env = Env::default();
@@ -20,9 +21,7 @@ fn setup() -> (Env, Address, Address, Vec<Address>) {
     signers.push_back(s3);
     signers.push_back(s4);
     signers.push_back(s5);
-    let contract_id = env.register(CircuitBreaker, ());
-    let client = CircuitBreakerClient::new(&env, &contract_id);
-    client.initialize(&admin, &signers, &3, &86_400);
+    let contract_id = env.register(CircuitBreaker, (&admin, signers.clone(), 3u32, 86_400u64));
     (env, contract_id, admin, signers)
 }
 
@@ -37,22 +36,21 @@ fn init_stores_config() {
 }
 
 #[test]
-#[should_panic(expected = "#5001")]
-fn double_init_rejected() {
-    let env = Env::default();
-    env.mock_all_auths();
-    let admin = Address::generate(&env);
-    let s1 = Address::generate(&env);
-    let mut signers = Vec::new(&env);
-    signers.push_back(s1);
-    let contract_id = env.register(CircuitBreaker, ());
-    let client = CircuitBreakerClient::new(&env, &contract_id);
-    client.initialize(&admin, &signers, &1, &3_600);
-    client.initialize(&admin, &signers, &1, &3_600);
+fn test_no_callable_initializer_after_deploy() {
+    let (env, contract_id, admin, signers) = setup();
+    let result = env.try_invoke_contract::<Val, Val>(
+        &contract_id,
+        &Symbol::new(&env, "initialize"),
+        (admin, signers, 3u32, 86_400u64).into_val(&env),
+    );
+    assert!(
+        result.is_err(),
+        "old initialize entrypoint is still callable"
+    );
 }
 
 #[test]
-#[should_panic(expected = "#5008")]
+#[should_panic(expected = "duplicate signer")]
 fn duplicate_signer_rejected() {
     let env = Env::default();
     env.mock_all_auths();
@@ -61,9 +59,7 @@ fn duplicate_signer_rejected() {
     let mut signers = Vec::new(&env);
     signers.push_back(s1.clone());
     signers.push_back(s1);
-    let contract_id = env.register(CircuitBreaker, ());
-    let client = CircuitBreakerClient::new(&env, &contract_id);
-    client.initialize(&admin, &signers, &1, &3_600);
+    env.register(CircuitBreaker, (&admin, signers, 1u32, 3_600u64));
 }
 
 #[test]
@@ -84,7 +80,6 @@ fn global_pause_blocks_then_expires() {
     assert!(client.is_globally_paused());
     let target = Address::generate(&env);
     assert!(client.is_blocked(&target, &Symbol::new(&env, "deposit")));
-
     // Advance past 72h auto-expiry.
     env.ledger().set_timestamp(PAUSE_DURATION_SECONDS + 1);
     assert!(!client.is_globally_paused());
@@ -125,7 +120,6 @@ fn override_lifts_global_pause_after_timelock_and_quorum() {
     let client = CircuitBreakerClient::new(&env, &contract_id);
     client.pause_all(&signers.get(0).unwrap());
     let id = client.propose_override(&signers.get(1).unwrap(), &OverrideTarget::Global);
-
     // Not enough approvals yet.
     client.approve_override(&signers.get(1).unwrap(), &id);
     client.approve_override(&signers.get(2).unwrap(), &id);
@@ -134,14 +128,11 @@ fn override_lifts_global_pause_after_timelock_and_quorum() {
         client.try_execute_override(&Address::generate(&env), &id),
         Err(Ok(CircuitBreakerError::TimelockNotElapsed))
     );
-
     // Advance past the override timelock (24h) but still within pause window.
     env.ledger().set_timestamp(86_400 + 1);
-
     // Third approval reaches the 3-of-5 threshold.
     client.approve_override(&signers.get(3).unwrap(), &id);
     client.execute_override(&Address::generate(&env), &id);
-
     assert!(!client.is_globally_paused());
 }
 
@@ -155,7 +146,6 @@ fn override_requires_quorum() {
         &signers.get(1).unwrap(),
         &OverrideTarget::Contract(target.clone()),
     );
-
     env.ledger().set_timestamp(86_400 + 1);
     client.approve_override(&signers.get(1).unwrap(), &id);
     client.approve_override(&signers.get(2).unwrap(), &id);
@@ -218,7 +208,6 @@ fn function_override_lifts_only_that_function() {
     client.approve_override(&signers.get(2).unwrap(), &id);
     client.approve_override(&signers.get(3).unwrap(), &id);
     client.execute_override(&Address::generate(&env), &id);
-
     assert!(!client.is_function_paused(&target, &dep));
     // The other paused function remains blocked.
     assert!(client.is_function_paused(&target, &wit));
@@ -230,15 +219,33 @@ fn expired_pauses_are_cleaned_up_on_is_blocked() {
     let client = CircuitBreakerClient::new(&env, &contract_id);
     let target = Address::generate(&env);
     let func = Symbol::new(&env, "deposit");
-
     client.pause_function(&signers.get(0).unwrap(), &target, &func.clone());
     assert!(client.is_blocked(&target, &func.clone()));
-
     // Advance past 72h auto-expiry.
     env.ledger().set_timestamp(PAUSE_DURATION_SECONDS + 1);
-
     // is_blocked cleans up the expired entry.
     assert!(!client.is_blocked(&target, &func));
+}
+
+#[test]
+fn test_is_blocked_extends_instance_ttl() {
+    let (env, contract_id, _admin, _signers) = setup();
+    let client = CircuitBreakerClient::new(&env, &contract_id);
+    let target = Address::generate(&env);
+
+    // Advance into the bump threshold's re-extension window (TTL_BUMP -
+    // TTL_THRESHOLD = 518_400 - 17_280 = 501_120), so the instance is close
+    // to expiring, then call is_blocked again. `extend_ttl` only re-extends
+    // once an entry is within its threshold of expiry, so this is the only
+    // way to observe a real bump rather than natural decay.
+    env.ledger()
+        .set_sequence_number(env.ledger().sequence() + 510_000);
+    client.is_blocked(&target, &Symbol::new(&env, "deposit"));
+
+    let ttl_after = env.as_contract(&contract_id, || env.storage().instance().get_ttl());
+    // Without a bump this would be left at roughly 8,400 ledgers remaining
+    // (518,400 - 510,000) — the archived-instance failure described in #790.
+    assert!(ttl_after > 400_000);
 }
 
 #[test]
@@ -248,17 +255,13 @@ fn active_pauses_preserved_during_cleanup() {
     let target = Address::generate(&env);
     let deposit = Symbol::new(&env, "deposit");
     let withdraw = Symbol::new(&env, "withdraw");
-
     // Pause both functions.
     client.pause_function(&signers.get(0).unwrap(), &target, &deposit.clone());
     client.pause_function(&signers.get(0).unwrap(), &target, &withdraw.clone());
-
     assert!(client.is_blocked(&target, &deposit.clone()));
     assert!(client.is_blocked(&target, &withdraw.clone()));
-
     // Advance part way through the pause duration (half of 72h).
     env.ledger().set_timestamp(PAUSE_DURATION_SECONDS / 2);
-
     // Both should still be active.
     assert!(client.is_blocked(&target, &deposit));
     assert!(client.is_blocked(&target, &withdraw));
@@ -269,13 +272,10 @@ fn global_pause_cleanup_on_is_blocked() {
     let (env, contract_id, _admin, signers) = setup();
     let client = CircuitBreakerClient::new(&env, &contract_id);
     let target = Address::generate(&env);
-
     client.pause_all(&signers.get(0).unwrap());
     assert!(client.is_globally_paused());
-
     // Advance past expiry.
     env.ledger().set_timestamp(PAUSE_DURATION_SECONDS + 1);
-
     // Cleanup happens in is_blocked.
     assert!(!client.is_blocked(&target, &Symbol::new(&env, "any_function")));
     assert!(!client.is_globally_paused());

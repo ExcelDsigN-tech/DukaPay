@@ -1,6 +1,7 @@
 import { scValToNative, xdr } from '@stellar/stellar-sdk';
 import { query } from '../db/connection.js';
 import { toWholeStroops } from '../money/decimal.js';
+import { env } from '../config/env.js';
 
 export const SHARE_PRICE_SCALE = 1_000_000;
 export const YIELD_HISTORY_ALLOWED_DAYS = [7, 30, 90] as const;
@@ -152,7 +153,7 @@ export async function buildDepositorYieldHistory(
   const since = new Date();
   since.setUTCDate(since.getUTCDate() - days);
 
-  const poolContractId = process.env.LENDING_POOL_CONTRACT_ID ?? '';
+  const poolContractId = env.LENDING_POOL_CONTRACT_ID ?? '';
 
   const [poolEventsResult, depositorEventsResult] = await Promise.all([
     query(

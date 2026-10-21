@@ -1,5 +1,6 @@
 import { createClient, type RedisClientType } from 'redis';
 import logger from '../utils/logger.js';
+import { env } from './env.js';
 
 export type CircuitState = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
 
@@ -13,7 +14,7 @@ export interface CacheMetrics {
   failureCount: number;
 }
 
-const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
+const REDIS_URL = env.REDIS_URL;
 
 class RedisCircuitBreaker {
   private state: CircuitState = 'CLOSED';
@@ -101,14 +102,14 @@ export const redisClient: RedisClientType = createClient({
 });
 
 redisClient.on('error', (err) => {
-  if (process.env.NODE_ENV !== 'test') {
+  if (env.NODE_ENV !== 'test') {
     logger.withContext().error('Redis Client Error', err);
   }
   redisCircuitBreaker.recordFailure(err);
 });
 
 redisClient.on('connect', () => {
-  if (process.env.NODE_ENV !== 'test') {
+  if (env.NODE_ENV !== 'test') {
     logger.withContext().info('Redis Client Connected with Connection Pool');
   }
 });
@@ -126,7 +127,7 @@ export async function withCache<T>(
 
   if (
     redisCircuitBreaker.getState() === 'OPEN' ||
-    (process.env.NODE_ENV === 'test' && !redisClient.isOpen)
+    (env.NODE_ENV === 'test' && !redisClient.isOpen)
   ) {
     return fallbackFn();
   }

@@ -3,6 +3,7 @@ export { HttpClient, type HttpClientOptions, type RequestOptions } from './http.
 export { DukaPayError, WalletError, ValidationError } from './errors.js';
 export { ContractHelpers, NETWORK_PASSPHRASE, DEFAULT_RPC_URL } from './contract.js';
 export {
+  AgentsResource,
   AuthResource,
   LoansResource,
   PoolResource,

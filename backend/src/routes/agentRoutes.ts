@@ -7,6 +7,15 @@ import {
 import { requireJwtAuth } from '../middleware/jwtAuth.js';
 import { requireRole } from '../middleware/rbac.js';
 import { auditLog } from '../middleware/auditLog.js';
+import { validateBody, validateParams, validateQuery } from '../middleware/validation.js';
+import {
+  agentPublicKeyParamsSchema,
+  assignBorrowerBodySchema,
+  emptyAgentBodySchema,
+  emptyAgentParamsSchema,
+  emptyAgentQuerySchema,
+  removeBorrowerParamsSchema,
+} from '../schemas/agentSchemas.js';
 import {
   getAgentDashboard,
   clearAgentDashboardCache,
@@ -90,6 +99,9 @@ router.get(
   '/my-assignments',
   requireJwtAuth,
   requireRole('agent', 'lender', 'admin'),
+  validateParams(emptyAgentParamsSchema),
+  validateQuery(emptyAgentQuerySchema),
+  validateBody(emptyAgentBodySchema),
   getMyAssignments,
 );
 
@@ -136,6 +148,9 @@ router.post(
   '/:agentPublicKey/assignees',
   requireJwtAuth,
   requireRole('admin'),
+  validateParams(agentPublicKeyParamsSchema),
+  validateQuery(emptyAgentQuerySchema),
+  validateBody(assignBorrowerBodySchema),
   auditLog,
   assignBorrower,
 );
@@ -177,6 +192,9 @@ router.delete(
   '/:agentPublicKey/assignees/:borrowerPublicKey',
   requireJwtAuth,
   requireRole('admin'),
+  validateParams(removeBorrowerParamsSchema),
+  validateQuery(emptyAgentQuerySchema),
+  validateBody(emptyAgentBodySchema),
   auditLog,
   removeBorrower,
 );
@@ -197,7 +215,14 @@ router.delete(
  *             schema:
  *               $ref: '#/components/schemas/AgentDashboard'
  */
-router.get('/dashboard', requireJwtAuth, getAgentDashboard);
+router.get(
+  '/dashboard',
+  requireJwtAuth,
+  validateParams(emptyAgentParamsSchema),
+  validateQuery(emptyAgentQuerySchema),
+  validateBody(emptyAgentBodySchema),
+  getAgentDashboard,
+);
 
 /**
  * @swagger
@@ -211,6 +236,13 @@ router.get('/dashboard', requireJwtAuth, getAgentDashboard);
  *       200:
  *         description: Cache cleared
  */
-router.delete('/dashboard/cache', requireJwtAuth, clearAgentDashboardCache);
+router.delete(
+  '/dashboard/cache',
+  requireJwtAuth,
+  validateParams(emptyAgentParamsSchema),
+  validateQuery(emptyAgentQuerySchema),
+  validateBody(emptyAgentBodySchema),
+  clearAgentDashboardCache,
+);
 
 export default router;
