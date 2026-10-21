@@ -7,7 +7,6 @@ import {
   HandCoins,
   PiggyBank,
   SendHorizontal,
-  Settings,
   X,
   CreditCard,
   Clock,

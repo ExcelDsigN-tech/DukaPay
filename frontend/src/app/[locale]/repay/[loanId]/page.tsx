@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { signTransaction } from "@stellar/freighter-api";
 import { submitLoanTransaction } from "../../../hooks/useApi";
@@ -47,7 +47,7 @@ export default function RepayLoanPage() {
   const [trackerMessage, setTrackerMessage] = useState("");
   const [trackerGuidance, setTrackerGuidance] = useState<string | undefined>(undefined);
   const [trackerTxHash, setTrackerTxHash] = useState<string | null>(null);
-  const [lastError, setLastError] = useState<TransactionErrorDetails | null>(null);
+  const [, setLastError] = useState<TransactionErrorDetails | null>(null);
 
   const amountNumber = useMemo(() => Number(amount || "0"), [amount]);
   const decimals = getAssetDecimals("USDC");

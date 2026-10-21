@@ -304,10 +304,8 @@ function NotificationsSection() {
       phone: data.phone ?? "",
     }));
     // Reset save feedback when fresh server preferences replace the editable form state.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSaveError(null);
     // Reset save confirmation when fresh server preferences replace the editable form state.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSaved(false);
   }, [data]);
 

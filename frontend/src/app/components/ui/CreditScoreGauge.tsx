@@ -169,7 +169,7 @@ export function CreditScoreGauge({
       const bEnd = startAngle + ((Math.min(b.range[1], max) - min) / (max - min)) * totalArc;
       return { ...b, path: describeArc(cx, cy, r, bStart, bEnd) };
     });
-  }, [min, max]);
+  }, [min, max, startAngle, totalArc]);
 
   // Active arc from start to current score
   const activePath = describeArc(cx, cy, r, startAngle, scoreAngle);

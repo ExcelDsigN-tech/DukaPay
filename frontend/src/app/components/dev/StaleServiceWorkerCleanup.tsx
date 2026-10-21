@@ -26,7 +26,6 @@ export function StaleServiceWorkerCleanup() {
           void registration.unregister();
         }
         if (registrations.length > 0) {
-          // eslint-disable-next-line no-console
           console.info(`[dev] Unregistered ${registrations.length} stale service worker(s).`);
         }
       })

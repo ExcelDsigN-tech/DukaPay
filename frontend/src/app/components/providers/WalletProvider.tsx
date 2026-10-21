@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { TokenBalance, WalletNetwork, WalletStatus } from "../../stores/useWalletStore";
 import { useWalletStore } from "../../stores/useWalletStore";
 
@@ -246,7 +246,6 @@ export function WalletProvider({ children }: WalletProviderProps) {
             await Promise.all(regs.map((r) => r.unregister()));
           } catch (swErr) {
             // Non-fatal: log and continue
-            // eslint-disable-next-line no-console
             console.error("Service worker unregister failed:", swErr);
           }
         }
@@ -257,7 +256,6 @@ export function WalletProvider({ children }: WalletProviderProps) {
             const cacheKeys = await caches.keys();
             await Promise.all(cacheKeys.map((k) => caches.delete(k)));
           } catch (cacheErr) {
-            // eslint-disable-next-line no-console
             console.error("Cache clear failed:", cacheErr);
           }
         }
@@ -273,7 +271,6 @@ export function WalletProvider({ children }: WalletProviderProps) {
             }
           }
         } catch (lsErr) {
-          // eslint-disable-next-line no-console
           console.error("localStorage clear failed:", lsErr);
         }
 
@@ -285,7 +282,6 @@ export function WalletProvider({ children }: WalletProviderProps) {
             }
           }
         } catch (ssErr) {
-          // eslint-disable-next-line no-console
           console.error("sessionStorage clear failed:", ssErr);
         }
 
@@ -307,14 +303,12 @@ export function WalletProvider({ children }: WalletProviderProps) {
                     });
                   }
                 } catch (e) {
-                  // eslint-disable-next-line no-console
                   console.error("IndexedDB delete failed for", db.name, e);
                 }
               }),
             );
           }
         } catch (idbErr) {
-          // eslint-disable-next-line no-console
           console.error("IndexedDB cleanup failed:", idbErr);
         }
 
@@ -324,13 +318,11 @@ export function WalletProvider({ children }: WalletProviderProps) {
           window.location.replace(window.location.href);
         } catch (reloadErr) {
           // Fallback to reload
-          // eslint-disable-next-line no-console
           console.error("Force reload failed, falling back to location.reload():", reloadErr);
           window.location.reload();
         }
       } catch (err) {
         // Ensure we always reload to get a clean state
-        // eslint-disable-next-line no-console
         console.error("Disconnect cleanup unexpected error:", err);
         try {
           window.location.reload();
@@ -370,10 +362,13 @@ export function WalletProvider({ children }: WalletProviderProps) {
     throw new Error("Signing failed: No signed transaction returned.");
   }
 
-  async function refreshWallet() {
+  const syncWalletRef = useRef(syncWallet);
+  syncWalletRef.current = syncWallet;
+
+  const refreshWallet = useCallback(async () => {
     if (!shouldAutoReconnect && !address) return;
-    await syncWallet(false);
-  }
+    await syncWalletRef.current(false);
+  }, [shouldAutoReconnect, address]);
 
   // Initial check and Auto-reconnect
   useEffect(() => {
@@ -400,7 +395,7 @@ export function WalletProvider({ children }: WalletProviderProps) {
     return () => {
       cancelled = true;
     };
-  }, [shouldAutoReconnect]);
+  }, [shouldAutoReconnect, refreshWallet]);
 
   // Event Listeners
   useEffect(() => {
@@ -421,7 +416,7 @@ export function WalletProvider({ children }: WalletProviderProps) {
       }
 
       if (typeof api.watchNetwork === "function") {
-        unwatchNetwork = api.watchNetwork((newNetwork: string) => {
+        unwatchNetwork = api.watchNetwork(() => {
           void refreshWallet();
         });
       }
@@ -431,7 +426,7 @@ export function WalletProvider({ children }: WalletProviderProps) {
       if (unwatchAddress) unwatchAddress();
       if (unwatchNetwork) unwatchNetwork();
     };
-  }, [address]);
+  }, [address, disconnect, refreshWallet]);
 
   return (
     <WalletProviderContext.Provider

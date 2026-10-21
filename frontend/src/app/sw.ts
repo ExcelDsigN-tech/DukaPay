@@ -77,12 +77,10 @@ self.addEventListener("sync", (event: any) => {
           });
         } catch (e) {
           // If any item fails, leave it in the store and continue with others
-          // eslint-disable-next-line no-console
           console.error("Failed to submit queued repayment", item, e);
         }
       }
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.error("Background sync processing failed:", err);
     }
   })());

@@ -3,7 +3,6 @@ import { devtools } from "zustand/middleware";
 import {
   THEME_STORAGE_KEY,
   type Theme,
-  getSystemTheme,
   getStoredTheme,
   applyTheme,
   resolveInitialTheme,

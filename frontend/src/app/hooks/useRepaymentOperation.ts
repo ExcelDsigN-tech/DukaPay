@@ -76,7 +76,6 @@ export function useRepaymentOperation(options?: {
             }
           } catch (swErr) {
             // Non-fatal
-            // eslint-disable-next-line no-console
             console.error("Background sync register failed", swErr);
           }
 
@@ -202,7 +201,7 @@ export function useDepositOperation(options?: {
         throw err;
       }
     },
-    [transaction, queryClient, options],
+    [transaction, queryClient, options, buildDeposit, poolStats?.poolTokenAddress, signTransaction],
   );
 
   return {
@@ -294,7 +293,7 @@ export function useWithdrawalOperation(options?: {
         throw err;
       }
     },
-    [transaction, queryClient, options],
+    [transaction, queryClient, options, buildWithdraw, poolStats?.poolTokenAddress, signTransaction],
   );
 
   return {

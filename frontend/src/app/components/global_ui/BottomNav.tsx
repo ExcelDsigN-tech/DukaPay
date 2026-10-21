@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, HandCoins, PiggyBank, SendHorizontal, User, Clock } from "lucide-react";
+import { LayoutDashboard, HandCoins, PiggyBank, User, Clock } from "lucide-react";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { useLocale } from "next-intl";
