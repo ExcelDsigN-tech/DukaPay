@@ -39,6 +39,12 @@ describe("formatCurrency (#536)", () => {
     expect(fallback).toBe(enUS);
   });
 
+  it("rounds half-cent ties half-even, per money-policy.json", () => {
+    expect(formatCurrency(500.125, "en-US")).toBe("$500.12");
+    expect(formatCurrency(500.375, "en-US")).toBe("$500.38");
+    expect(formatCurrency(0.125, "en-US")).toBe("$0.12");
+  });
+
   it("formats zero correctly", () => {
     expect(formatCurrency(0, "en-US")).toContain("0");
   });
