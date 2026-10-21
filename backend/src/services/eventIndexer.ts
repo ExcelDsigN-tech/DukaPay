@@ -20,6 +20,10 @@ import { setPauseState } from '../middleware/pauseGuard.js';
 import { fromStroops } from '../money/decimal.js';
 import { env } from '../config/env.js';
 
+// Score a borrower without a scores row starts from; matches the scores.score
+// column default and the insert path of updateUserScoresBulk.
+const NEW_BORROWER_BASE_SCORE = 500;
+
 const EVENT_TYPE_ALIASES: Record<string, WebhookEventType> = {
   Mint: 'NFTMinted',
   AdmRemint: 'NFTMinted',
@@ -462,33 +466,108 @@ export class EventIndexer {
     };
   }
 
+  /**
+   * Current scores for `borrowers`. With `lock`, the rows stay locked until
+   * the transaction ends so no other writer (decay, admin) can change them
+   * between this read and the score upsert.
+   */
+  private async readScores(
+    client: PoolClient,
+    borrowers: string[],
+    lock: boolean,
+  ): Promise<Map<string, number>> {
+    const result = await client.query(
+      `SELECT borrower, score FROM scores WHERE borrower = ANY($1::text[])${lock ? ' FOR UPDATE' : ''}`,
+      [borrowers],
+    );
+    return new Map((result?.rows ?? []).map((row) => [String(row.borrower), Number(row.score)]));
+  }
+
+  /**
+   * Store on contract_events the score change that actually landed (after
+   * clamping) so rollbackFromLedger can undo exactly that (#770).
+   *
+   * The batch applies one summed, clamped upsert per borrower, so the change
+   * can't be split per event. It is stored on the borrower's last score event
+   * in the batch and 0 on the earlier ones. A reorg orphans every event at or
+   * after a ledger, so the last event is orphaned whenever any of them is and
+   * the batch change is reversed as a whole. If the reorg ledger falls inside
+   * a batch, that also reverses the change of the batch's surviving events.
+   */
+  private async recordAppliedScoreDeltas(
+    client: PoolClient,
+    scoreEventIds: Map<string, string[]>,
+    scoresBefore: Map<string, number>,
+    scoresAfter: Map<string, number>,
+  ): Promise<void> {
+    const eventIds: string[] = [];
+    const deltas: number[] = [];
+    for (const [borrower, ids] of scoreEventIds) {
+      const after = scoresAfter.get(borrower);
+      if (after === undefined) continue;
+      const applied = after - (scoresBefore.get(borrower) ?? NEW_BORROWER_BASE_SCORE);
+      ids.forEach((eventId, index) => {
+        eventIds.push(eventId);
+        deltas.push(index === ids.length - 1 ? applied : 0);
+      });
+    }
+    if (eventIds.length === 0) return;
+    await client.query(
+      `UPDATE contract_events AS ce
+       SET score_delta_applied = v.delta
+       FROM unnest($1::text[], $2::int[]) AS v(event_id, delta)
+       WHERE ce.event_id = v.event_id`,
+      [eventIds, deltas],
+    );
+  }
+
   private async rollbackFromLedger(ledger: number): Promise<void> {
     const contract = this.getContractId();
     await withTransaction(async (client: PoolClient) => {
       const orphanedEvents = await client.query(
-        `SELECT event_type, address
+        `SELECT event_type, address, score_delta_applied
          FROM contract_events
          WHERE contract_id = ANY($1::text[]) AND ledger >= $2`,
         [this.contractIds, ledger],
       );
+      // Reverse the change each event actually applied (after clamping), so a
+      // score that hit 300 or 850 returns to where it was (#770).
       const scoreRollbacks = new Map<string, number>();
       const { repaymentDelta, defaultPenalty } = sorobanService.getScoreConfig();
+      let eventsWithoutAppliedDelta = 0;
       for (const row of orphanedEvents.rows) {
         const address = typeof row.address === 'string' ? row.address : '';
         if (!address) continue;
-        if (row.event_type === 'LoanRepaid') {
-          scoreRollbacks.set(address, (scoreRollbacks.get(address) ?? 0) - repaymentDelta);
-        } else if (
-          row.event_type === 'LoanDefaulted' ||
-          row.event_type === 'CollateralLiquidated'
-        ) {
-          scoreRollbacks.set(address, (scoreRollbacks.get(address) ?? 0) + defaultPenalty);
+        const isRepayment = row.event_type === 'LoanRepaid';
+        const isDefault =
+          row.event_type === 'LoanDefaulted' || row.event_type === 'CollateralLiquidated';
+        if (!isRepayment && !isDefault) continue;
+        let reversal: number;
+        if (row.score_delta_applied !== null && row.score_delta_applied !== undefined) {
+          reversal = -Number(row.score_delta_applied);
+        } else {
+          // Indexed before score_delta_applied existed: fall back to the
+          // configured delta, which is exact only if the change wasn't clamped.
+          eventsWithoutAppliedDelta += 1;
+          reversal = isRepayment ? -repaymentDelta : defaultPenalty;
         }
+        scoreRollbacks.set(address, (scoreRollbacks.get(address) ?? 0) + reversal);
+      }
+      if (eventsWithoutAppliedDelta > 0) {
+        logger
+          .withContext()
+          .warn(
+            'Reorg rollback reversed score events without a recorded applied delta; clamped changes may not be undone exactly',
+            { rollbackLedger: ledger, eventsWithoutAppliedDelta },
+          );
+      }
+      for (const [address, reversal] of scoreRollbacks) {
+        if (reversal === 0) scoreRollbacks.delete(address);
       }
       await client.query(
         `INSERT INTO audit_logs (actor, action, target, payload, ip_address, status)
          SELECT 'SYSTEM', 'REORG_REVERSAL', target,
-                jsonb_build_object('reversedEventId', payload->>'eventId', 'rollbackLedger', $2),
+                jsonb_build_object('reversedEventId', payload->>'eventId', 'rollbackLedger', $2::int),
                 'internal-indexer', 200
          FROM audit_logs
          WHERE payload->>'eventId' IN (
@@ -784,6 +863,8 @@ export class EventIndexer {
     // upsert is atomic with the event inserts. A single bulk upsert at the
     // end avoids N+1 queries and keeps scores within [300, 850].
     const scoreUpdates: Map<string, number> = new Map();
+    // Ids of the events that changed each borrower's score, in batch order.
+    const scoreEventIds: Map<string, string[]> = new Map();
 
     await withTransaction(async (client: PoolClient) => {
       for (const event of parsedEvents) {
@@ -887,6 +968,10 @@ export class EventIndexer {
                 event.address,
                 (scoreUpdates.get(event.address) ?? 0) + repaymentDelta,
               );
+              scoreEventIds.set(event.address, [
+                ...(scoreEventIds.get(event.address) ?? []),
+                event.eventId,
+              ]);
             }
           } else if (
             event.eventType === 'LoanDefaulted' ||
@@ -898,6 +983,10 @@ export class EventIndexer {
                 event.address,
                 (scoreUpdates.get(event.address) ?? 0) - defaultPenalty,
               );
+              scoreEventIds.set(event.address, [
+                ...(scoreEventIds.get(event.address) ?? []),
+                event.eventId,
+              ]);
             }
           }
         }
@@ -907,7 +996,11 @@ export class EventIndexer {
       // the event inserts and the score changes are committed or rolled back
       // together, satisfying the atomicity requirement.
       if (scoreUpdates.size > 0) {
+        const borrowers = [...scoreUpdates.keys()];
+        const scoresBefore = await this.readScores(client, borrowers, true);
         await updateUserScoresBulk(scoreUpdates, client);
+        const scoresAfter = await this.readScores(client, borrowers, false);
+        await this.recordAppliedScoreDeltas(client, scoreEventIds, scoresBefore, scoresAfter);
       }
     });
     // withTransaction commits here; any error triggers automatic ROLLBACK
