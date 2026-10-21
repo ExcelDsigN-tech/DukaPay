@@ -180,7 +180,7 @@ export const getAgentDashboard = asyncHandler(async (req: Request, res: Response
       totalLoans: Number(portfolioRow?.total_loans ?? 0),
       activeLoans: Number(portfolioRow?.active_loans ?? 0),
       defaultedLoans: Number(portfolioRow?.defaulted_loans ?? 0),
-      totalOutstanding: formatNumber(portfolioRow?.total_outstanding as string | number | null),
+      totalOutstanding: stroopsToAmount(portfolioRow?.total_outstanding as string | number | null),
       byStatus: {
         active: Number(portfolioRow?.active_loans ?? 0),
         defaulted: Number(portfolioRow?.defaulted_loans ?? 0),

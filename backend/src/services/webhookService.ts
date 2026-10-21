@@ -176,6 +176,15 @@ export const SUPPORTED_WEBHOOK_EVENT_TYPES = [
   'GovCncl',
   'GovEmerg',
   'GovExp',
+  // Agent registry / agent vault events (Issue #774).
+  'AgentRegistered',
+  'AgentStatusChanged',
+  'BondUpdated',
+  'CollateralWithdrawn',
+  'FloatMinted',
+  'FloatBurned',
+  'FloatTransferred',
+  'VaultSettled',
 ] as const;
 
 export type WebhookEventType = (typeof SUPPORTED_WEBHOOK_EVENT_TYPES)[number];

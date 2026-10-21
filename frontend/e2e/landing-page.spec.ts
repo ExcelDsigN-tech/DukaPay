@@ -16,7 +16,7 @@ test.describe("Landing Page", () => {
     await expect(
       page.getByRole("heading", {
         level: 1,
-        name: "Lend, borrow, and move value across borders on Stellar.",
+        name: "Turn the corner shop into a bank branch, on Stellar.",
       }),
     ).toBeVisible();
     await expect(page.getByRole("button", { name: /Connect Wallet/i }).first()).toBeVisible();
@@ -26,7 +26,7 @@ test.describe("Landing Page", () => {
     await page.goto("/en");
     await expect(
       page.getByText(
-        "Micro-loans backed by remittances. Every transaction is shown to you before you sign.",
+        "Agents cash in and out against on-chain solvency, backing remittances and micro-loans. Every transaction is shown to you before you sign.",
       ),
     ).toBeVisible();
   });

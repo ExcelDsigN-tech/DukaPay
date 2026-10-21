@@ -118,6 +118,7 @@ export const envShape = {
   REMITTANCE_NFT_CONTRACT_ID: optionalString(),
   MULTISIG_GOVERNANCE_CONTRACT_ID: optionalString(),
   SETTLEMENT_NETTER_CONTRACT_ID: optionalString(),
+  AGENT_REGISTRY_CONTRACT_ID: optionalString(),
   AGENT_VAULT_CONTRACT_ID: optionalString(),
   POOL_TOKEN_ADDRESS: optionalString(),
   LOAN_MANAGER_ADMIN_SECRET: optionalString(),

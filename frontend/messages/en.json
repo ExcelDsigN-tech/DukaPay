@@ -1,7 +1,7 @@
 {
   "HomePage": {
     "title": "Welcome, {address}",
-    "description": "Empowering cross-border financial inclusion through micro-loans backed by remittances.",
+    "description": "Agent banking on Stellar: shops cash in and out against on-chain solvency, backing remittances and micro-loans across the network.",
     "getStarted": "Get Started",
     "learnMore": "Learn More",
     "stats": {
@@ -757,8 +757,8 @@
   },
   "Landing": {
     "hero": {
-      "title": "Lend, borrow, and move value across borders on Stellar.",
-      "tagline": "Micro-loans backed by remittances. Every transaction is shown to you before you sign.",
+      "title": "Turn the corner shop into a bank branch, on Stellar.",
+      "tagline": "Agents cash in and out against on-chain solvency, backing remittances and micro-loans. Every transaction is shown to you before you sign.",
       "cta": "Enter the Citadel",
       "howItWorks": "How it works",
       "status": "Live on Stellar testnet",
@@ -813,8 +813,8 @@
       "log7": "Ledger closed. Repayment back in the pool"
     },
     "features": {
-      "title": "Borrow, send, lend, or run an agent shop",
-      "subtitle": "One wallet covers all four. Agents also get a dashboard for the loans they originate.",
+      "title": "Run an agent shop, borrow, send, or lend",
+      "subtitle": "One wallet covers all four. Agents get a dashboard for their float, collateral, and solvency.",
       "previewNote": "Product preview. Sample values.",
       "previewLabel": "Product preview of a loan card with sample values",
       "loanTitle": "Loan #1042",
@@ -835,7 +835,7 @@
       "lendDesc": "Earn passive yield on deposited assets.",
       "lendLink": "Open the lender portal",
       "agentTitle": "Agent Dashboard",
-      "agentDesc": "Monitor your loan origination, earnings, and portfolio performance.",
+      "agentDesc": "Monitor your float, collateral, and on-chain solvency as a cash-in and cash-out point.",
       "agentLink": "Open the agent dashboard"
     },
     "kingdom": {
@@ -879,7 +879,7 @@
       "cta": "Claim Access"
     },
     "footer": {
-      "tagline": "Lend, borrow, and move value across borders on the Stellar Network.",
+      "tagline": "Turn the corner shop into a bank branch, on the Stellar Network.",
       "product": "Product",
       "openSource": "Open source",
       "github": "GitHub",

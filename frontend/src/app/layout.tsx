@@ -37,9 +37,9 @@ const sora = localFont({
 
 export const metadata: Metadata = {
   metadataBase: getSiteUrl(),
-  title: "DukaPay - Borderless P2P Lending & Remittance",
+  title: "DukaPay - On-Chain Agent Banking",
   description:
-    "Global peer-to-peer lending and instant remittances powered by blockchain technology. Send money and grow your wealth across borders.",
+    "Turn the corner shop into a bank branch. DukaPay is an open, auditable agent banking network on Stellar, where agents cash in and out against on-chain solvency, backing cross-border remittances and micro-loans.",
 };
 
 export default async function RootLayout({
