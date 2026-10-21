@@ -18,7 +18,7 @@ import { isRoleAtLeast, type UserRole } from '../auth/rbac.js';
  *   - agent:    own data + data of assigned borrowers (`agents:view-assigned`)
  *   - borrower: own data only
  *   - auditor:  read-only across audit/compliance surfaces
- *   - lender:   legacy alias of `agent` for pool providers
+ *   - lender:   liquidity provider supplying capital to the lending pool
  */
 
 const ADMIN_ROLE: UserRole = 'admin';

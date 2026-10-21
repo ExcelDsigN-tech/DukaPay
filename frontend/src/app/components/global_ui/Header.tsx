@@ -20,6 +20,7 @@ import {
   selectWalletAddress,
   selectWalletNetwork,
 } from "../../stores/useWalletStore";
+import { useUserStore } from "../../stores/useUserStore";
 import { useWallet } from "../providers/WalletProvider";
 import { useBorrowerLoans, useRemittances } from "../../hooks/useApi";
 import { useContractToast } from "../../hooks/useContractToast";
@@ -51,8 +52,11 @@ export function Header({ className }: HeaderProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const role = useUserStore((state) => state.user?.role);
   const { loans } = useBorrowerLoans(isConnected ? (address ?? undefined) : undefined);
-  const { data: remittances = [] } = useRemittances({ enabled: isConnected });
+  const { data: remittances = [] } = useRemittances({
+    enabled: isConnected && role !== "lender",
+  });
 
   const pages = useMemo(
     () => [

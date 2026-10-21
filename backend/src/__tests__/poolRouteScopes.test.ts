@@ -28,6 +28,18 @@ jest.unstable_mockModule('../controllers/poolController.js', () => ({
   getAgentDashboard: mockPoolHandler,
 }));
 
+const mockNotificationHandler = (_req: Request, res: Response) =>
+  res.status(200).json({ success: true, data: { notifications: [], unreadCount: 0 } });
+
+jest.unstable_mockModule('../controllers/notificationController.js', () => ({
+  getNotifications: mockNotificationHandler,
+  getNotificationPreferences: mockNotificationHandler,
+  markRead: mockNotificationHandler,
+  markAllRead: mockNotificationHandler,
+  streamNotifications: mockNotificationHandler,
+  updateNotificationPreferences: mockNotificationHandler,
+}));
+
 // requireJwtAuth re-resolves the role from publicKey, so test wallets must be
 // allow-listed before app.ts imports the RBAC configuration.
 process.env.LENDER_WALLETS = LENDER_KEY;
@@ -56,6 +68,8 @@ const lenderToken = mintToken(LENDER_KEY, 'lender', [
   'read:pool',
   'write:loans',
   'write:pool',
+  'read:notifications',
+  'write:notifications',
 ]);
 const agentToken = mintToken(AGENT_KEY, 'agent', [
   'read:loans',
@@ -190,6 +204,24 @@ describe('Pool write route authorization', () => {
       const res = await request(app)
         .get('/api/pool/stats')
         .set('Authorization', `Bearer ${borrowerToken}`);
+
+      expect(res.status).toBe(403);
+    });
+  });
+
+  describe('lender notification and remittance scope authorization (#769)', () => {
+    it('lender JWT gets 200 on GET /api/notifications', async () => {
+      const res = await request(app)
+        .get('/api/notifications')
+        .set('Authorization', `Bearer ${lenderToken}`);
+
+      expect(res.status).toBe(200);
+    });
+
+    it('lender JWT gets 403 on GET /api/remittances (missing read:remittances)', async () => {
+      const res = await request(app)
+        .get('/api/remittances')
+        .set('Authorization', `Bearer ${lenderToken}`);
 
       expect(res.status).toBe(403);
     });

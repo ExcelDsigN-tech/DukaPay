@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { TokenBalance, WalletNetwork, WalletStatus } from "../../stores/useWalletStore";
 import { useWalletStore } from "../../stores/useWalletStore";
+import { NEXT_PUBLIC_API_URL } from "../../lib/apiConfig";
 
 type FreighterApi = typeof import("@stellar/freighter-api");
 
@@ -58,8 +59,6 @@ interface HorizonBalance {
   asset_type: "native" | "credit_alphanum4" | "credit_alphanum12" | "liquidity_pool_shares";
   asset_code?: string;
 }
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
 const WalletProviderContext = createContext<WalletProviderContextValue | null>(null);
 
@@ -251,7 +250,7 @@ export function WalletProvider({ children }: WalletProviderProps) {
   }
 
   async function postAuth<T>(path: string, body: Record<string, string>): Promise<T> {
-    const response = await fetch(`${API_URL}/api/auth/${path}`, {
+    const response = await fetch(`${NEXT_PUBLIC_API_URL}/api/auth/${path}`, {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },

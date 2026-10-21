@@ -41,8 +41,7 @@ import {
   getAssetDecimals,
 } from "../../utils/amount";
 import { formatCurrency } from "../../utils/formatLocale";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+import { NEXT_PUBLIC_API_URL } from "../../lib/apiConfig";
 
 function formatPercent(value: number) {
   return `${(value * 100).toFixed(2)}%`;
@@ -60,7 +59,7 @@ export function LendPageClient() {
   const withdrawalOp = useWithdrawalOperation();
 
   const invalidatePoolStats = useInvalidatePoolStats();
-  const sseUrl = address ? `${API_URL}/pool/events` : null;
+  const sseUrl = address ? `${NEXT_PUBLIC_API_URL}/pool/events` : null;
   const sseStatus = useSSE<{ type: string }>({
     url: sseUrl,
     onMessage: (data) => {

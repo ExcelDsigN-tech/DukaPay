@@ -1,6 +1,7 @@
 import 'dotenv/config';
-import { closePool, query } from '../db/connection.js';
+import { query } from '../db/connection.js';
 import logger from '../utils/logger.js';
+import { toStroops } from '../money/decimal.js';
 
 type NotificationType =
   | 'loan_approved'
@@ -70,46 +71,48 @@ interface NotificationSeed {
 }
 
 const NOW = new Date('2026-03-26T12:00:00.000Z');
-const CONTRACT_ID = 'CDDUMMYDUKAPAYCONTRACT0000000000000000000000000000000000';
-const DEV_LENDER = 'GDEVLENDERACCOUNT000000000000000000000000000000000000000000';
+// Contract ID and demo user public keys are valid deterministic Stellar StrKeys.
+// Their corresponding secret keys are disposable throwaway developer credentials.
+const CONTRACT_ID = 'CAYXFFWPT5JZBQA7MI6SUFACMDTXKR5OP5X4CSLCPPD7G6BFHU6JIMOR';
+const DEV_LENDER = 'GCSI7ALBIKZNLLJFCDXXFV2SJUGZZ3LY3VEHGB5RHHJF4NAU2ZOVV3R2';
 const ACTIVE_TERM_LEDGERS = 17280;
 
 const devUsers: DevUser[] = [
   {
-    userId: 'GDEVUSERALICE000000000000000000000000000000000000000000001',
-    publicKey: 'GDEVUSERALICE000000000000000000000000000000000000000000001',
+    userId: 'GDXBNZACNM5EEFIG25UUGBZG2XX5K4HNJWKKGKWIRRUW6Y4UXQ7ALVXJ',
+    publicKey: 'GDXBNZACNM5EEFIG25UUGBZG2XX5K4HNJWKKGKWIRRUW6Y4UXQ7ALVXJ',
     displayName: 'Alice Remit',
     email: 'alice@dukapay.dev',
     score: 782,
     metadata: { role: 'borrower', country: 'NG', segment: 'power-user' },
   },
   {
-    userId: 'GDEVUSERBOLA000000000000000000000000000000000000000000002',
-    publicKey: 'GDEVUSERBOLA000000000000000000000000000000000000000000002',
+    userId: 'GC45ZBEJWIEYD3GQOLI6SPPFQAANCIIEWR5LRGNT7OUS6LPR3KNXNGOP',
+    publicKey: 'GC45ZBEJWIEYD3GQOLI6SPPFQAANCIIEWR5LRGNT7OUS6LPR3KNXNGOP',
     displayName: 'Bola Credit',
     email: 'bola@dukapay.dev',
     score: 701,
     metadata: { role: 'borrower', country: 'GH', segment: 'growing' },
   },
   {
-    userId: 'GDEVUSERCHIDI00000000000000000000000000000000000000000003',
-    publicKey: 'GDEVUSERCHIDI00000000000000000000000000000000000000000003',
+    userId: 'GBXREVP6637HHZ53G2AFN62QZZSVZNO77IVUN2URD5CYYQSER3IJKZXK',
+    publicKey: 'GBXREVP6637HHZ53G2AFN62QZZSVZNO77IVUN2URD5CYYQSER3IJKZXK',
     displayName: 'Chidi Default',
     email: 'chidi@dukapay.dev',
     score: 611,
     metadata: { role: 'borrower', country: 'KE', segment: 'high-risk' },
   },
   {
-    userId: 'GDEVUSERDARA000000000000000000000000000000000000000000004',
-    publicKey: 'GDEVUSERDARA000000000000000000000000000000000000000000004',
+    userId: 'GDWAFJLOU3BUPKSRSHHLAAWUB5MV7TCN2XT7M3QS3OHK66SOGHAB6INW',
+    publicKey: 'GDWAFJLOU3BUPKSRSHHLAAWUB5MV7TCN2XT7M3QS3OHK66SOGHAB6INW',
     displayName: 'Dara Pending',
     email: 'dara@dukapay.dev',
     score: 690,
     metadata: { role: 'borrower', country: 'NG', segment: 'new-user' },
   },
   {
-    userId: 'GDEVUSEREFE0000000000000000000000000000000000000000000005',
-    publicKey: 'GDEVUSEREFE0000000000000000000000000000000000000000000005',
+    userId: 'GCNR3OZRF7DCCROX66TH2DHDQVTW6337E4TMIYFZVGHHM3QJWTRA3JDA',
+    publicKey: 'GCNR3OZRF7DCCROX66TH2DHDQVTW6337E4TMIYFZVGHHM3QJWTRA3JDA',
     displayName: 'Efe Lender',
     email: 'efe@dukapay.dev',
     score: 820,
@@ -244,20 +247,20 @@ const loanEventSeeds: LoanEventSeed[] = [
     eventType: 'LoanRequested',
     loanId: 1001,
     address: aliceUser.publicKey,
-    amount: '1200',
+    amount: toStroops('1200').toString(),
     ledger: 240100,
     ledgerClosedAt: new Date('2026-03-20T10:00:00.000Z'),
     txHash: 'seed-tx-1001-requested',
     contractId: CONTRACT_ID,
     topics: ['LoanRequested', aliceUser.publicKey],
-    value: '1200',
+    value: toStroops('1200').toString(),
   },
   {
     eventId: 'seed-loan-1001-approved',
     eventType: 'LoanApproved',
     loanId: 1001,
     address: aliceUser.publicKey,
-    amount: '1200',
+    amount: toStroops('1200').toString(),
     ledger: 240105,
     ledgerClosedAt: new Date('2026-03-20T10:15:00.000Z'),
     txHash: 'seed-tx-1001-approved',
@@ -272,20 +275,20 @@ const loanEventSeeds: LoanEventSeed[] = [
     eventType: 'LoanRequested',
     loanId: 1002,
     address: bolaUser.publicKey,
-    amount: '800',
+    amount: toStroops('800').toString(),
     ledger: 239500,
     ledgerClosedAt: new Date('2026-03-12T09:00:00.000Z'),
     txHash: 'seed-tx-1002-requested',
     contractId: CONTRACT_ID,
     topics: ['LoanRequested', bolaUser.publicKey],
-    value: '800',
+    value: toStroops('800').toString(),
   },
   {
     eventId: 'seed-loan-1002-approved',
     eventType: 'LoanApproved',
     loanId: 1002,
     address: bolaUser.publicKey,
-    amount: '800',
+    amount: toStroops('800').toString(),
     ledger: 239506,
     ledgerClosedAt: new Date('2026-03-12T09:30:00.000Z'),
     txHash: 'seed-tx-1002-approved',
@@ -300,33 +303,33 @@ const loanEventSeeds: LoanEventSeed[] = [
     eventType: 'LoanRepaid',
     loanId: 1002,
     address: bolaUser.publicKey,
-    amount: '824',
+    amount: toStroops('824').toString(),
     ledger: 239900,
     ledgerClosedAt: new Date('2026-03-18T11:00:00.000Z'),
     txHash: 'seed-tx-1002-repaid',
     contractId: CONTRACT_ID,
     topics: ['LoanRepaid', bolaUser.publicKey, '1002'],
-    value: '824',
+    value: toStroops('824').toString(),
   },
   {
     eventId: 'seed-loan-1003-requested',
     eventType: 'LoanRequested',
     loanId: 1003,
     address: chidiUser.publicKey,
-    amount: '650',
+    amount: toStroops('650').toString(),
     ledger: 238200,
     ledgerClosedAt: new Date('2026-03-03T08:00:00.000Z'),
     txHash: 'seed-tx-1003-requested',
     contractId: CONTRACT_ID,
     topics: ['LoanRequested', chidiUser.publicKey],
-    value: '650',
+    value: toStroops('650').toString(),
   },
   {
     eventId: 'seed-loan-1003-approved',
     eventType: 'LoanApproved',
     loanId: 1003,
     address: chidiUser.publicKey,
-    amount: '650',
+    amount: toStroops('650').toString(),
     ledger: 238205,
     ledgerClosedAt: new Date('2026-03-03T08:25:00.000Z'),
     txHash: 'seed-tx-1003-approved',
@@ -341,13 +344,13 @@ const loanEventSeeds: LoanEventSeed[] = [
     eventType: 'LoanRepaid',
     loanId: 1003,
     address: chidiUser.publicKey,
-    amount: '210',
+    amount: toStroops('210').toString(),
     ledger: 238600,
     ledgerClosedAt: new Date('2026-03-08T10:00:00.000Z'),
     txHash: 'seed-tx-1003-repaid-partial',
     contractId: CONTRACT_ID,
     topics: ['LoanRepaid', chidiUser.publicKey, '1003'],
-    value: '210',
+    value: toStroops('210').toString(),
   },
   {
     eventId: 'seed-loan-1003-defaulted',
@@ -366,13 +369,13 @@ const loanEventSeeds: LoanEventSeed[] = [
     eventType: 'LoanRequested',
     loanId: 1004,
     address: daraUser.publicKey,
-    amount: '500',
+    amount: toStroops('500').toString(),
     ledger: 240990,
     ledgerClosedAt: new Date('2026-03-25T16:00:00.000Z'),
     txHash: 'seed-tx-1004-requested',
     contractId: CONTRACT_ID,
     topics: ['LoanRequested', daraUser.publicKey],
-    value: '500',
+    value: toStroops('500').toString(),
   },
 ];
 
@@ -423,13 +426,6 @@ const notificationSeeds: NotificationSeed[] = [
     createdAt: new Date('2026-03-16T14:10:00.000Z'),
   },
 ];
-
-const parseArgs = () => {
-  const args = new Set(process.argv.slice(2));
-  return {
-    reset: args.has('--reset'),
-  };
-};
 
 const seedUserProfiles = async () => {
   logger.info('Seeding user_profiles...');
@@ -702,24 +698,14 @@ const seedIndexerState = async () => {
   logger.info('Updating indexer_state...');
 
   const lastSeededLedger = Math.max(...loanEventSeeds.map((event) => event.ledger));
-  const existing = await query(`SELECT id FROM indexer_state ORDER BY id DESC LIMIT 1`);
-
-  if ((existing.rowCount ?? 0) > 0) {
-    await query(
-      `UPDATE indexer_state
-       SET last_indexed_ledger = $1,
-           last_indexed_cursor = $2,
-           updated_at = CURRENT_TIMESTAMP
-       WHERE id = (SELECT id FROM indexer_state ORDER BY id DESC LIMIT 1)`,
-      [lastSeededLedger, 'seeded-dev-data'],
-    );
-    return;
-  }
-
   await query(
-    `INSERT INTO indexer_state (last_indexed_ledger, last_indexed_cursor, updated_at)
-     VALUES ($1, $2, CURRENT_TIMESTAMP)`,
-    [lastSeededLedger, 'seeded-dev-data'],
+    `INSERT INTO indexer_state (contract, last_ledger, last_finalized_ledger, updated_at)
+     VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+     ON CONFLICT (contract) DO UPDATE
+     SET last_ledger = EXCLUDED.last_ledger,
+         last_finalized_ledger = EXCLUDED.last_finalized_ledger,
+         updated_at = CURRENT_TIMESTAMP`,
+    [CONTRACT_ID, lastSeededLedger, lastSeededLedger],
   );
 };
 
@@ -739,8 +725,8 @@ const resetDevelopmentData = async () => {
 
   await query(
     `UPDATE indexer_state
-     SET last_indexed_ledger = 0,
-         last_indexed_cursor = NULL,
+     SET last_ledger = 0,
+         last_finalized_ledger = 0,
          updated_at = CURRENT_TIMESTAMP`,
   );
 };
@@ -755,9 +741,11 @@ const logSummary = () => {
   });
 };
 
-const runSeed = async () => {
-  const { reset } = parseArgs();
-
+/**
+ * Seeds the development database in one transaction. Rolls back and rethrows
+ * on failure; the caller owns the pool and the process (see `cli.ts`).
+ */
+export const runSeed = async ({ reset = false }: { reset?: boolean } = {}) => {
   logger.info('Starting development database seeding...');
   logger.info('='.repeat(50));
 
@@ -788,10 +776,8 @@ const runSeed = async () => {
       message: error instanceof Error ? error.message : String(error),
       ...(error instanceof Error && error.stack && { stack: error.stack }),
     });
-    process.exit(1);
-  } finally {
-    await closePool();
+    throw error;
   }
 };
 
-runSeed();
+export { devUsers, CONTRACT_ID, DEV_LENDER };

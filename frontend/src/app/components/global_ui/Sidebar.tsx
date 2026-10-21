@@ -55,11 +55,14 @@ export function Sidebar({ onClose, className }: SidebarProps) {
   const isAdmin = user?.role === "admin";
   // Mirrors the guard on the agent dashboard page, which turns away borrowers and lenders.
   const canSeeAgentDashboard = user?.role !== "borrower" && user?.role !== "lender";
+  const canSendMoney = user?.role !== "lender";
 
   const mainItems: NavItem[] = [
     { name: t("home"), href: `/${locale}`, icon: LayoutDashboard },
     { name: t("loans"), href: `/${locale}/loans`, icon: HandCoins },
-    { name: t("sendMoney"), href: `/${locale}/send-remittance`, icon: SendHorizontal },
+    ...(canSendMoney
+      ? [{ name: t("sendMoney"), href: `/${locale}/send-remittance`, icon: SendHorizontal }]
+      : []),
     { name: "Lend", href: `/${locale}/lend`, icon: PiggyBank },
     { name: t("activity"), href: `/${locale}/activity`, icon: Clock },
     { name: "Wallet", href: `/${locale}/wallet`, icon: CreditCard },
