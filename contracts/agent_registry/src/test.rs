@@ -1,6 +1,7 @@
 use crate::{AgentRegistry, AgentRegistryClient, AgentStatus, RegistryError};
 use proptest::prelude::*;
-use soroban_sdk::testutils::{Address as _, Events as _};
+use soroban_sdk::testutils::storage::Persistent as _;
+use soroban_sdk::testutils::{Address as _, Events as _, Ledger as _};
 use soroban_sdk::{Address, BytesN, Env, FromVal, IntoVal, Symbol, Val};
 
 fn setup() -> (Env, AgentRegistryClient<'static>, Address, Address) {
@@ -161,6 +162,125 @@ fn test_no_callable_initializer_after_deploy() {
         (owner, operator).into_val(&env),
     );
     assert!(result.is_err(), "old init entrypoint is still callable");
+}
+
+// ── TTL extension (#790) ─────────────────────────────────────────────────────
+
+#[test]
+fn test_agent_record_ttl_extended_past_original_write() {
+    let (env, client, _owner, _op) = setup();
+    let a = agent(&env);
+    client.register(&a, &kycs(&env), &region(&env), &100, &1_000_000);
+
+    let key = crate::DataKey::Agent(a.clone());
+
+    // Advance into the bump threshold's re-extension window (TTL_BUMP -
+    // TTL_THRESHOLD = 518_400 - 17_280 = 501_120), so the record is close to
+    // expiring, then touch it again. `extend_ttl` only re-extends once an
+    // entry is within its threshold of expiry, so this is the only way to
+    // observe a real bump rather than natural decay.
+    env.ledger()
+        .set_sequence_number(env.ledger().sequence() + 510_000);
+    client.activate(&a);
+
+    let ttl_after_activate =
+        env.as_contract(&client.address, || env.storage().persistent().get_ttl(&key));
+    // Without a bump on read/write this would be left at roughly 8,400
+    // ledgers remaining (518,400 - 510,000) and shrinking toward expiry —
+    // the archived-entry failure described in #790.
+    assert!(ttl_after_activate > 400_000);
+}
+
+// ── License expiry and reinstatement (#789) ─────────────────────────────────
+
+#[test]
+fn test_activate_rejects_expired_license() {
+    let (env, client, _owner, _op) = setup();
+    let a = agent(&env);
+    client.register(&a, &kycs(&env), &region(&env), &100, &100);
+    env.ledger().set_timestamp(101);
+    assert_eq!(
+        client.try_activate(&a),
+        Err(Ok(RegistryError::LicenseExpired))
+    );
+}
+
+#[test]
+fn test_renew_license_rejects_past_timestamp() {
+    let (env, client, _owner, _op) = setup();
+    let a = agent(&env);
+    client.register(&a, &kycs(&env), &region(&env), &100, &1_000_000);
+    env.ledger().set_timestamp(500);
+    assert_eq!(
+        client.try_renew_license(&a, &400),
+        Err(Ok(RegistryError::LicenseExpired))
+    );
+}
+
+#[test]
+fn test_expire_moves_lapsed_active_agent_to_expired() {
+    let (env, client, _owner, _op) = setup();
+    let a = agent(&env);
+    client.register(&a, &kycs(&env), &region(&env), &100, &100);
+    client.activate(&a);
+    env.ledger().set_timestamp(101);
+    client.expire(&a);
+    assert_eq!(client.get_agent(&a).status, AgentStatus::Expired);
+}
+
+#[test]
+fn test_expire_rejects_agent_not_active_or_not_lapsed() {
+    let (env, client, _owner, _op) = setup();
+    let a = agent(&env);
+    client.register(&a, &kycs(&env), &region(&env), &100, &1_000_000);
+    // Pending, never activated.
+    assert_eq!(
+        client.try_expire(&a),
+        Err(Ok(RegistryError::InvalidStatusTransition))
+    );
+    client.activate(&a);
+    // Active but not yet lapsed.
+    assert_eq!(
+        client.try_expire(&a),
+        Err(Ok(RegistryError::InvalidStatusTransition))
+    );
+}
+
+#[test]
+fn test_reinstate_suspended_agent_returns_to_active() {
+    let (env, client, _owner, _op) = setup();
+    let a = agent(&env);
+    client.register(&a, &kycs(&env), &region(&env), &100, &1_000_000);
+    client.activate(&a);
+    client.suspend(&a);
+    assert_eq!(client.get_agent(&a).status, AgentStatus::Suspended);
+
+    client.reinstate(&a);
+    assert_eq!(client.get_agent(&a).status, AgentStatus::Active);
+}
+
+#[test]
+fn test_reinstate_rejects_non_suspended_agent() {
+    let (env, client, _owner, _op) = setup();
+    let a = agent(&env);
+    client.register(&a, &kycs(&env), &region(&env), &100, &1_000_000);
+    // Still Pending.
+    assert_eq!(
+        client.try_reinstate(&a),
+        Err(Ok(RegistryError::InvalidStatusTransition))
+    );
+}
+
+#[test]
+#[should_panic]
+fn test_reinstate_requires_operator_auth() {
+    let (env, client, _owner, _op) = setup();
+    let a = agent(&env);
+    client.register(&a, &kycs(&env), &region(&env), &100, &1_000_000);
+    client.activate(&a);
+    client.suspend(&a);
+    env.mock_auths(&[]);
+    client.reinstate(&a);
 }
 
 proptest! {

@@ -25,7 +25,8 @@ jest.unstable_mockModule('../db/connection.js', () => ({
   query: mockQuery,
   getClient: jest.fn(),
   closePool: jest.fn(),
-  withTransaction: jest.fn(),
+  withTransaction: (fn: (client: { query: typeof mockQuery }) => unknown) =>
+    fn({ query: mockQuery }),
 }));
 
 await import('../db/connection.js');

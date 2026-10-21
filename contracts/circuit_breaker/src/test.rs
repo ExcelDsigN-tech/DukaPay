@@ -2,6 +2,7 @@ use crate::{
     CircuitBreaker, CircuitBreakerClient, CircuitBreakerError, OverrideTarget,
     PAUSE_DURATION_SECONDS,
 };
+use soroban_sdk::testutils::storage::Instance as _;
 use soroban_sdk::testutils::{Address as _, Ledger as _};
 use soroban_sdk::{Address, Env, IntoVal, Symbol, Val, Vec};
 
@@ -224,6 +225,27 @@ fn expired_pauses_are_cleaned_up_on_is_blocked() {
     env.ledger().set_timestamp(PAUSE_DURATION_SECONDS + 1);
     // is_blocked cleans up the expired entry.
     assert!(!client.is_blocked(&target, &func));
+}
+
+#[test]
+fn test_is_blocked_extends_instance_ttl() {
+    let (env, contract_id, _admin, _signers) = setup();
+    let client = CircuitBreakerClient::new(&env, &contract_id);
+    let target = Address::generate(&env);
+
+    // Advance into the bump threshold's re-extension window (TTL_BUMP -
+    // TTL_THRESHOLD = 518_400 - 17_280 = 501_120), so the instance is close
+    // to expiring, then call is_blocked again. `extend_ttl` only re-extends
+    // once an entry is within its threshold of expiry, so this is the only
+    // way to observe a real bump rather than natural decay.
+    env.ledger()
+        .set_sequence_number(env.ledger().sequence() + 510_000);
+    client.is_blocked(&target, &Symbol::new(&env, "deposit"));
+
+    let ttl_after = env.as_contract(&contract_id, || env.storage().instance().get_ttl());
+    // Without a bump this would be left at roughly 8,400 ledgers remaining
+    // (518,400 - 510,000) — the archived-instance failure described in #790.
+    assert!(ttl_after > 400_000);
 }
 
 #[test]
