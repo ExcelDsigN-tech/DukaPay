@@ -156,13 +156,11 @@ mod test {
         env.mock_auths(&[]);
 
         let root = BytesN::from_array(&env, &[9; 32]);
-        // Anchor with valid inputs but no auth should fail with an error.
-        // With zero leaf count as a guard, EmptyEpoch is checked before auth.
-        // So we anchor with leaf_count > 0, making auth the only failing check.
+        // No auth provided → require_auth() returns an auth error.
         let result = client.try_anchor(&1, &root, &1);
         assert!(
             result.is_err(),
-            "anchor without owner auth must be rejected with an error"
+            "anchor without owner auth must be rejected"
         );
     }
 }

@@ -676,7 +676,7 @@ impl GovernanceContract {
     fn bump_instance_ttl(env: &Env) {
         env.storage()
             .instance()
-            .extend_ttl(Self::INSTANCE_TTL_THRESHOLD, Self::INSTANCE_TTL_BUMP);
+            .extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_BUMP);
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
