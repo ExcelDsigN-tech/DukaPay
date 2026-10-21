@@ -35,9 +35,11 @@ jobs:
 
   semgrep:
     name: Semgrep SAST
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    if: github.event_name != 'push'
     runs-on: ubuntu-latest
-    continue-on-error: true
+    # Blocking on pull requests; scheduled runs stay non-blocking and feed the
+    # weekly report.
+    continue-on-error: ${{ github.event_name != 'pull_request' }}
     container:
       # Pinned to a specific release, not `latest`: a mutable tag lets a
       # compromised or buggy upstream image silently change what every PR
@@ -45,7 +47,19 @@ jobs:
       image: semgrep/semgrep:1.174.0
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - run: semgrep scan --config p/ci --config p/sql-injection --error --exclude='**/node_modules/**' --exclude='**/target/**'
+        with:
+          # Full history so --baseline-commit can see the PR's base commit.
+          fetch-depth: 0
+      - name: Semgrep scan
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          # On PRs, fail only on findings the PR introduces relative to its base.
+          baseline=()
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            baseline=(--baseline-commit "$BASE_SHA")
+          fi
+          semgrep scan "${baseline[@]}" --config p/ci --config p/sql-injection --error --exclude='**/node_modules/**' --exclude='**/target/**'
 
   gitleaks:
     name: Gitleaks secrets
@@ -81,9 +95,9 @@ jobs:
 
   trivy:
     name: Trivy filesystem scan
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    if: github.event_name != 'push'
     runs-on: ubuntu-latest
-    continue-on-error: true
+    continue-on-error: ${{ github.event_name != 'pull_request' }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       # Was pinned to `@master`, a mutable branch, the least hermetic
@@ -100,9 +114,9 @@ jobs:
 
   npm-audit:
     name: npm audit
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    if: github.event_name != 'push'
     runs-on: ubuntu-latest
-    continue-on-error: true
+    continue-on-error: ${{ github.event_name != 'pull_request' }}
     strategy:
       fail-fast: false
       matrix:
@@ -121,12 +135,12 @@ jobs:
 
   cargo-audit:
     name: cargo audit
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    if: github.event_name != 'push'
     runs-on: ubuntu-latest
-    continue-on-error: true
+    continue-on-error: ${{ github.event_name != 'pull_request' }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: dtolnay/rust-toolchain@stable # not SHA-pinned: rolling channel branch (stable/beta/nightly track new Rust releases); pinning would freeze the toolchain version
+      - uses: dtolnay/rust-toolchain@1.85.0 # matches contracts/rust-toolchain.toml
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ~/.cargo/bin/cargo-audit

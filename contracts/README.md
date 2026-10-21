@@ -37,6 +37,11 @@ targets = ["wasm32-unknown-unknown", "wasm32v1-none"]
 components = ["rustfmt", "clippy"]
 ```
 
+CI installs this same version (`dtolnay/rust-toolchain@1.85.0` in
+`.github/workflows/ci.yml`), so bump the pin here and in those CI references
+together. The one exception is `indexer/`: it has no toolchain file, and CI
+pins it to 1.93 to match the `rust:1.93` base image in `indexer/Dockerfile`.
+
 **You do not need to install this toolchain yourself.** Any `cargo` or `rustc`
 command run from inside `contracts/` is intercepted by `rustup`, which reads
 this file, downloads the pinned toolchain and the `wasm32-unknown-unknown`

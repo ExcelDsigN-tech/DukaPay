@@ -58,6 +58,7 @@ This threat model documents the trust boundaries, threat surface, potential atta
 ### 3.3 Logging, Alerting, and Audit Trail
 - All financial state mutations, PII decryption requests, and administrative setting changes log structured events to `audit_logs`.
 - Real-time alerts fire on PII key rotation failure, solvency invariant breach, or unhandled 5xx spikes.
+- Semgrep, Trivy, npm audit and cargo audit run on pull requests and block the PR on findings (Semgrep reports only findings the PR introduces). Scheduled runs keep their full, non-blocking report. Enforced in `.github/workflows/security-gates.yml`.
 
 ### 3.4 Residual Risks Accepted
 - **Soroban Network Congestion**: External Stellar network delay may cause temporary latency spikes in contract execution. *Accepted by Product Owner; mitigated by transaction status polling and user status messaging.*
@@ -67,6 +68,6 @@ This threat model documents the trust boundaries, threat surface, potential atta
 ## 4. Security Review & Sign-Off
 
 - [x] Threat model covers every changed trust boundary.
-- [x] Security-sensitive assumptions have tests (`piiCrypto.test.ts`, `agentFloatService.test.ts`, `agentRbac.test.ts`).
+- [x] Security-sensitive assumptions have tests (`piiCrypto.test.ts`, `agentFloatService.test.ts`, `agentRbac.test.ts`, `agentFloatConcurrency.integration.test.ts`).
 - [ ] A maintainer reviewed and validated this model.
 - [x] Follow-up items tracked in project milestone issues.

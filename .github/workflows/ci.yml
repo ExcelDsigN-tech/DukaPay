@@ -93,7 +93,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable # not SHA-pinned: rolling channel branch (stable/beta/nightly track new Rust releases); pinning would freeze the toolchain version
+        uses: dtolnay/rust-toolchain@1.85.0 # matches contracts/rust-toolchain.toml
       - name: Cache dependencies
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
@@ -286,7 +286,7 @@ jobs:
 
   migration-check:
     needs: [supply-chain-audit, changes]
-    if: github.event_name == 'push' || needs.changes.outputs.migrations == 'true'
+    if: github.event_name == 'push' || needs.changes.outputs.migrations == 'true' || needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     services:
@@ -334,6 +334,28 @@ jobs:
         working-directory: backend
         env:
           DATABASE_URL: postgres://pguser:pgpass@localhost:5432/dukapay_test
+      - name: Run DB-backed integration tests
+        # These suites are skipped without INTEGRATION_TESTS=true and a migrated
+        # database, which only this job provides.
+        run: npm test -- crossContractReconciler.integration agentFloatConcurrency.integration
+        working-directory: backend
+        env:
+          INTEGRATION_TESTS: 'true'
+          NODE_ENV: test
+          DATABASE_URL: postgres://pguser:pgpass@localhost:5432/dukapay_test
+          REDIS_URL: redis://localhost:6379
+          JWT_SECRET: test_jwt_secret
+          STELLAR_RPC_URL: https://rpc.test.invalid
+          STELLAR_NETWORK_PASSPHRASE: Test SDF Network ; September 2015
+          LOAN_MANAGER_CONTRACT_ID: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+          LENDING_POOL_CONTRACT_ID: CBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB
+          REMITTANCE_NFT_CONTRACT_ID: CDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD
+          MULTISIG_GOVERNANCE_CONTRACT_ID: CEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE
+          AGENT_VAULT_CONTRACT_ID: CFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+          POOL_TOKEN_ADDRESS: CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+          LOAN_MANAGER_ADMIN_SECRET: test_admin_secret
+          INTERNAL_API_KEY: test_internal_api_key
+          FRONTEND_URL: https://frontend.example.com
       - name: Verify no plaintext PII columns exist
         run: |
           echo "Checking for plaintext PII columns..."
@@ -533,7 +555,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable # not SHA-pinned: rolling channel branch (stable/beta/nightly track new Rust releases); pinning would freeze the toolchain version
+        uses: dtolnay/rust-toolchain@1.85.0 # matches contracts/rust-toolchain.toml
       - name: Cache dependencies
         # Pinned to a commit SHA, not the `v2` tag (see other pins in this
         # workflow for rationale).
@@ -634,7 +656,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable # not SHA-pinned: rolling channel branch (stable/beta/nightly track new Rust releases); pinning would freeze the toolchain version
+        uses: dtolnay/rust-toolchain@1.93.0 # matches the rust:1.93 base image in indexer/Dockerfile
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
