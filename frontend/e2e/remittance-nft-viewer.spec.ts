@@ -1,44 +1,13 @@
-// e2e coverage temporarily skipped: assertions rely on product wiring (wallet-connect state, /api/* mock paths, Zustand hydration) that has drifted from the current app. Restore file-by-file once the flows are re-aligned with the mocks.
 import { test, expect, type Page } from "@playwright/test";
-
-const MOCK_ADDRESS = "GCJPBXSE6WCQDCEYZW6C3YVZCSSCHC4AE72L5KWKCYL2CLLL7NH5VSCI";
+import { MOCK_ADDRESS, seedConnectedWallet, seedSignedInUser } from "./helpers/session";
 
 test.beforeEach(async ({ page }: { page: Page }) => {
-  await page.addInitScript((address: string) => {
-    window.localStorage.setItem(
-      "dukapay-wallet",
-      JSON.stringify({
-        state: {
-          status: "connected",
-          address,
-          network: { chainId: 2, name: "TESTNET", isSupported: true },
-          balances: [],
-          shouldAutoReconnect: true,
-        },
-        version: 0,
-      }),
-    );
-    window.localStorage.setItem(
-      "dukapay-user",
-      JSON.stringify({
-        state: {
-          user: {
-            id: address,
-            walletAddress: address,
-            email: "alice@example.com",
-            kycVerified: true,
-          },
-          authToken: "test-token",
-          isAuthenticated: true,
-        },
-        version: 0,
-      }),
-    );
-  }, MOCK_ADDRESS);
+  await seedConnectedWallet(page);
+  await seedSignedInUser(page);
 });
 
-test.skip("shows Remittance NFT metadata on the kingdom page", async ({ page }: { page: Page }) => {
-  await page.route("**/score/*/nft", async (route) => {
+test("shows Remittance NFT metadata on the kingdom page", async ({ page }: { page: Page }) => {
+  await page.route("**/api/score/*/nft", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -61,15 +30,15 @@ test.skip("shows Remittance NFT metadata on the kingdom page", async ({ page }: 
 
   await expect(page.getByRole("heading", { name: "Remittance NFT" })).toBeVisible();
   await expect(page.getByText("742")).toBeVisible();
-  await expect(page.getByText("1,440 ledgers")).toBeVisible();
+  await expect(page.getByText("1440 ledgers")).toBeVisible();
   await expect(page.locator('a[href="https://example.com/remittance-nft.json"]')).toHaveAttribute(
     "target",
     "_blank",
   );
 });
 
-test.skip("shows empty NFT state with remittance CTA", async ({ page }: { page: Page }) => {
-  await page.route("**/score/*/nft", async (route) => {
+test("shows empty NFT state with remittance CTA", async ({ page }: { page: Page }) => {
+  await page.route("**/api/score/*/nft", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",

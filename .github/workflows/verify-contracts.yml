@@ -9,6 +9,14 @@ on:
       - 'scripts/contract-registry.json'
       - 'docs/deployed-contracts.md'
       - 'scripts/verify-contracts.ts'
+      - 'contracts/*/src/lib.rs'
+      - '.github/workflows/verify-contracts.yml'
+  pull_request:
+    paths:
+      - 'scripts/contract-registry.json'
+      - 'docs/deployed-contracts.md'
+      - 'scripts/verify-contracts.ts'
+      - 'contracts/*/src/lib.rs'
       - '.github/workflows/verify-contracts.yml'
 
 permissions:

@@ -460,28 +460,28 @@ fn test_paused_blocks_new_loans_and_repayments_but_allows_collateral_release() {
 
     // Seed liquidity so approve_loan can proceed prior to pause.
     let stellar_token = StellarAssetClient::new(&env, &token_id);
-    seed_pool(&env, &pool_client, &token_id, 50_000);
+    seed_pool(&env, &pool_client, &token_id, usdc(50_000));
 
     // Fund borrower so they can repay.
     let token_client = TokenClient::new(&env, &token_id);
-    stellar_token.mint(&borrower, &5_000);
+    stellar_token.mint(&borrower, &usdc(5_000));
 
     // Loan A: pending loan that should be cancellable even while paused.
-    let loan_a = manager.request_loan(&borrower, &1_000, &17280);
+    let loan_a = manager.request_loan(&borrower, &usdc(1_000), &17280);
 
     // Loan B: approve before pausing so we can verify repay is blocked while paused.
-    let loan_b = manager.request_loan(&borrower, &1_000, &17280);
+    let loan_b = manager.request_loan(&borrower, &usdc(1_000), &17280);
     manager.approve_loan(&loan_b);
 
     // Loan C: pending loan used to verify approvals are blocked while paused.
-    let loan_c = manager.request_loan(&borrower, &500, &17280);
+    let loan_c = manager.request_loan(&borrower, &usdc(500), &17280);
 
     // Pause the contract.
     manager.pause();
     assert!(manager.is_paused());
 
     // New loan requests are blocked.
-    let blocked_request = manager.try_request_loan(&borrower, &500, &17280);
+    let blocked_request = manager.try_request_loan(&borrower, &usdc(500), &17280);
     assert_eq!(blocked_request, Err(Ok(LoanError::ContractPaused)));
 
     // Approvals are blocked.
@@ -489,7 +489,7 @@ fn test_paused_blocks_new_loans_and_repayments_but_allows_collateral_release() {
     assert_eq!(blocked_approve, Err(Ok(LoanError::ContractPaused)));
 
     // Repayments are blocked.
-    let blocked_repay = manager.try_repay(&borrower, &loan_b, &100);
+    let blocked_repay = manager.try_repay(&borrower, &loan_b, &usdc(100));
     assert_eq!(blocked_repay, Err(Ok(LoanError::ContractPaused)));
 
     // Existing borrower-initiated cleanup should still work while paused (cancel pending loan).
@@ -503,7 +503,7 @@ fn test_paused_blocks_new_loans_and_repayments_but_allows_collateral_release() {
     assert!(!manager.is_paused());
 
     // Now repay should succeed (partial repay).
-    manager.repay(&borrower, &loan_b, &100);
+    manager.repay(&borrower, &loan_b, &usdc(100));
 }
 
 #[test]
@@ -824,20 +824,20 @@ fn test_partial_repayment_tracks_split_balances() {
     );
 
     let stellar_token = StellarAssetClient::new(&env, &token_id);
-    seed_pool(&env, &pool_client, &token_id, 2_000_000);
-    stellar_token.mint(&borrower, &2_000_000);
+    seed_pool(&env, &pool_client, &token_id, usdc(200));
+    stellar_token.mint(&borrower, &usdc(200));
 
-    manager.set_max_loan_amount(&1_000_000);
-    let loan_id = manager.request_loan(&borrower, &1_000_000, &17280);
+    manager.set_max_loan_amount(&usdc(100));
+    let loan_id = manager.request_loan(&borrower, &usdc(100), &17280);
     manager.approve_loan(&loan_id);
 
-    manager.repay(&borrower, &loan_id, &400_000);
+    manager.repay(&borrower, &loan_id, &usdc(40));
 
     let after_partial = manager.get_loan(&loan_id);
     assert!(after_partial.principal_paid > 0);
     assert_eq!(
         after_partial.principal_paid + after_partial.interest_paid,
-        400_000
+        usdc(40)
     );
     assert_eq!(after_partial.status, LoanStatus::Approved);
 }
@@ -951,14 +951,14 @@ fn test_small_repayment_does_not_change_score() {
     assert_eq!(nft_client.get_score(&borrower), 600);
 
     let stellar_token = StellarAssetClient::new(&env, &token_id);
-    seed_pool(&env, &pool_client, &token_id, 10_000);
-    stellar_token.mint(&borrower, &10_000);
+    seed_pool(&env, &pool_client, &token_id, usdc(10_000));
+    stellar_token.mint(&borrower, &usdc(10_000));
 
-    let loan_id = manager.request_loan(&borrower, &1000, &17280);
+    let loan_id = manager.request_loan(&borrower, &usdc(1_000), &17280);
     manager.approve_loan(&loan_id);
 
-    manager.set_min_repayment_amount(&1);
-    manager.repay(&borrower, &loan_id, &99);
+    // Below STROOPS_PER_SCORE_POINT (100 USDC), so no score point is earned.
+    manager.repay(&borrower, &loan_id, &usdc(99));
 
     assert_eq!(nft_client.get_score(&borrower), 600);
 }
@@ -1503,28 +1503,31 @@ fn test_overdue_repayment_charges_late_fee() {
 
     let token_client = TokenClient::new(&env, &token_id);
     let stellar_token = StellarAssetClient::new(&env, &token_id);
-    seed_pool(&env, &pool_client, &token_id, 10_000);
-    stellar_token.mint(&borrower, &10_000);
+    seed_pool(&env, &pool_client, &token_id, usdc(10_000));
+    stellar_token.mint(&borrower, &usdc(10_000));
 
     manager.set_late_fee_rate(&500);
     manager.set_grace_period_ledgers(&0);
     env.ledger().set_sequence_number(1);
-    let loan_id = manager.request_loan(&borrower, &1000, &17280);
+    let loan_id = manager.request_loan(&borrower, &usdc(1_000), &17280);
     manager.approve_loan(&loan_id);
 
     let due_date = manager.get_loan(&loan_id).due_date;
     env.ledger().set_sequence_number(due_date + 8_640);
 
-    manager.repay(&borrower, &loan_id, &300);
+    manager.repay(&borrower, &loan_id, &usdc(300));
 
+    // Amounts are in USDC (the 1 USDC minimum rejects a 300-stroop partial
+    // repay), so the pro-rata split is no longer rounded to whole stroops of a
+    // 1,000-stroop loan: 44.81 / 6.22 / 248.96 USDC, summing to exactly 300.
     let loan = manager.get_loan(&loan_id);
-    assert_eq!(loan.interest_paid, 45);
-    assert_eq!(loan.late_fee_paid, 6);
-    assert_eq!(loan.principal_paid, 249);
-    assert_eq!(loan.accrued_interest, 135);
-    assert_eq!(loan.accrued_late_fee, 19);
+    assert_eq!(loan.interest_paid, 448_132_780);
+    assert_eq!(loan.late_fee_paid, 62_240_664);
+    assert_eq!(loan.principal_paid, 2_489_626_556);
+    assert_eq!(loan.accrued_interest, 1_351_867_220);
+    assert_eq!(loan.accrued_late_fee, 187_759_336);
     assert_eq!(loan.status, LoanStatus::Approved);
-    assert_eq!(token_client.balance(&pool_client), 9_300);
+    assert_eq!(token_client.balance(&pool_client), usdc(9_300));
 }
 
 #[test]
@@ -1546,26 +1549,26 @@ fn test_overdue_partial_repayment_still_reduces_principal() {
     );
 
     let stellar_token = StellarAssetClient::new(&env, &token_id);
-    seed_pool(&env, &pool_client, &token_id, 10_000);
-    stellar_token.mint(&borrower, &10_000);
+    seed_pool(&env, &pool_client, &token_id, usdc(10_000));
+    stellar_token.mint(&borrower, &usdc(10_000));
 
     manager.set_late_fee_rate(&500);
     manager.set_grace_period_ledgers(&0);
     env.ledger().set_sequence_number(1);
-    let loan_id = manager.request_loan(&borrower, &1_000, &17280);
+    let loan_id = manager.request_loan(&borrower, &usdc(1_000), &17280);
     manager.approve_loan(&loan_id);
 
     let due_date = manager.get_loan(&loan_id).due_date;
     env.ledger().set_sequence_number(due_date + 8_640);
 
-    manager.repay(&borrower, &loan_id, &300);
+    manager.repay(&borrower, &loan_id, &usdc(300));
 
     let loan = manager.get_loan(&loan_id);
     assert!(loan.principal_paid > 0);
     assert!(loan.accrued_late_fee > 0);
     assert_eq!(
         loan.principal_paid + loan.interest_paid + loan.late_fee_paid,
-        300
+        usdc(300)
     );
 }
 
@@ -2787,7 +2790,7 @@ fn test_interest_calculation_overflow_safety() {
         .set_sequence_number(loan.last_interest_ledger + 10_000);
 
     // Should not panic, should either calculate correctly or return AmountTooLarge error on next interaction
-    let result = manager.try_repay(&borrower, &loan_id, &100);
+    let result = manager.try_repay(&borrower, &loan_id, &usdc(1));
     // Given the massive principal and long duration, it should not panic.
     assert!(
         matches!(result, Ok(Ok(())) | Err(Ok(LoanError::AmountTooLarge))),
@@ -3999,4 +4002,125 @@ fn test_circuit_breaker_tripped_blocks_request_loan() {
         manager.try_request_loan(&borrower, &1000, &30),
         Err(Ok(LoanError::CircuitBreakerTripped))
     );
+}
+
+// ─── #727: minimum repayment is separate from the dust threshold ─────────────
+
+fn approved_loan_for(env: &Env, principal: i128) -> (LoanManagerClient<'_>, Address, u32) {
+    let (manager, nft_client, pool_client, token_id, _admin) = setup_test(env);
+    let borrower = Address::generate(env);
+    nft_client.mint(
+        &borrower,
+        &600,
+        &soroban_sdk::BytesN::from_array(env, &[0u8; 32]),
+        &String::from_str(env, "ipfs://QmTest"),
+        &create_test_commitment(env, 1),
+        &None,
+    );
+    seed_pool(env, &pool_client, &token_id, usdc(1_000));
+    StellarAssetClient::new(env, &token_id).mint(&borrower, &usdc(1_000));
+    let loan_id = manager.request_loan(&borrower, &principal, &17280);
+    manager.approve_loan(&loan_id);
+    (manager, borrower, loan_id)
+}
+
+#[test]
+fn test_default_min_repayment_is_one_usdc() {
+    let env = Env::default();
+    env.mock_all_auths_allowing_non_root_auth();
+    let (manager, _nft_client, _pool, _token, _admin) = setup_test(&env);
+
+    assert_eq!(manager.get_min_repayment_amount(), usdc(1));
+}
+
+#[test]
+fn test_set_min_repayment_amount_rejects_values_outside_bounds() {
+    let env = Env::default();
+    env.mock_all_auths_allowing_non_root_auth();
+    let (manager, _nft_client, _pool, _token, _admin) = setup_test(&env);
+
+    // At or below the 100-stroop dust threshold.
+    for amount in [-100, 0, 100] {
+        let res = manager.try_set_min_repayment_amount(&amount);
+        assert_eq!(res, Err(Ok(LoanError::InvalidAmount)));
+    }
+    // Above 10 USDC, including the 100 USDC minimum that let a 1-stroop
+    // payment close a 50 USDC debt before the dust threshold was split out.
+    for amount in [usdc(10) + 1, usdc(100)] {
+        let res = manager.try_set_min_repayment_amount(&amount);
+        assert_eq!(res, Err(Ok(LoanError::InvalidAmount)));
+    }
+    assert_eq!(manager.get_min_repayment_amount(), usdc(1));
+
+    manager.set_min_repayment_amount(&101);
+    assert_eq!(manager.get_min_repayment_amount(), 101);
+    manager.set_min_repayment_amount(&usdc(10));
+    assert_eq!(manager.get_min_repayment_amount(), usdc(10));
+}
+
+#[test]
+fn test_set_min_repayment_amount_requires_admin_auth() {
+    let env = Env::default();
+    env.mock_all_auths_allowing_non_root_auth();
+    let (manager, _nft_client, _pool, _token, _admin) = setup_test(&env);
+
+    env.mock_auths(&[]);
+    assert!(manager.try_set_min_repayment_amount(&usdc(2)).is_err());
+    assert_eq!(manager.get_min_repayment_amount(), usdc(1));
+}
+
+#[test]
+fn test_raised_minimum_does_not_raise_dust_forgiveness() {
+    let env = Env::default();
+    env.mock_all_auths_allowing_non_root_auth();
+    let (manager, borrower, loan_id) = approved_loan_for(&env, usdc(5));
+
+    // A 10 USDC minimum used to make any debt up to 10 USDC forgivable.
+    manager.set_min_repayment_amount(&usdc(10));
+    assert!(manager.try_repay(&borrower, &loan_id, &1).is_err());
+    assert_eq!(manager.get_loan(&loan_id).status, LoanStatus::Approved);
+    assert_eq!(manager.get_loan(&loan_id).principal_paid, 0);
+}
+
+#[test]
+fn test_one_stroop_does_not_close_debt_just_above_dust_threshold() {
+    let env = Env::default();
+    env.mock_all_auths_allowing_non_root_auth();
+    let (manager, borrower, loan_id) = approved_loan_for(&env, 101);
+
+    assert!(manager.try_repay(&borrower, &loan_id, &1).is_err());
+    assert_eq!(manager.get_loan(&loan_id).status, LoanStatus::Approved);
+}
+
+#[test]
+fn test_any_payment_closes_debt_at_dust_threshold() {
+    let env = Env::default();
+    env.mock_all_auths_allowing_non_root_auth();
+    let (manager, borrower, loan_id) = approved_loan_for(&env, 100);
+
+    manager.repay(&borrower, &loan_id, &1);
+    assert_eq!(manager.get_loan(&loan_id).status, LoanStatus::Repaid);
+}
+
+#[test]
+fn test_partial_repayment_below_one_usdc_is_rejected() {
+    let env = Env::default();
+    env.mock_all_auths_allowing_non_root_auth();
+    let (manager, borrower, loan_id) = approved_loan_for(&env, usdc(10));
+
+    assert!(manager
+        .try_repay(&borrower, &loan_id, &(usdc(1) - 1))
+        .is_err());
+    manager.repay(&borrower, &loan_id, &usdc(1));
+    assert_eq!(manager.get_loan(&loan_id).principal_paid, usdc(1));
+}
+
+#[test]
+fn test_full_payoff_below_one_usdc_is_accepted() {
+    let env = Env::default();
+    env.mock_all_auths_allowing_non_root_auth();
+    let (manager, borrower, loan_id) = approved_loan_for(&env, usdc(1) / 2);
+
+    manager.repay(&borrower, &loan_id, &(usdc(1) / 2));
+    assert_eq!(manager.get_loan(&loan_id).status, LoanStatus::Repaid);
 }

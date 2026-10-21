@@ -526,7 +526,7 @@ export class EventIndexer {
       await client.query(
         `INSERT INTO audit_logs (actor, action, target, payload, ip_address, status)
          SELECT 'SYSTEM', 'REORG_REVERSAL', target,
-                jsonb_build_object('reversedEventId', payload->>'eventId', 'rollbackLedger', $2),
+                jsonb_build_object('reversedEventId', payload->>'eventId', 'rollbackLedger', $2::int),
                 'internal-indexer', 200
          FROM audit_logs
          WHERE payload->>'eventId' IN (
