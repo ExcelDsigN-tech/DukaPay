@@ -26,9 +26,18 @@ impl AuditAnchor {
     /// Threshold: ~1 day (17 280 ledgers × 5 s). Bump: ~30 days (518 400 ledgers).
     const PERSISTENT_TTL_THRESHOLD: u32 = 17_280;
     const PERSISTENT_TTL_BUMP: u32 = 518_400;
+    const INSTANCE_TTL_THRESHOLD: u32 = 17_280;
+    const INSTANCE_TTL_BUMP: u32 = 518_400;
 
     pub fn __constructor(env: Env, owner: Address) {
         env.storage().instance().set(&DataKey::Owner, &owner);
+        Self::bump_instance_ttl(&env);
+    }
+
+    fn bump_instance_ttl(env: &Env) {
+        env.storage()
+            .instance()
+            .extend_ttl(Self::INSTANCE_TTL_THRESHOLD, Self::INSTANCE_TTL_BUMP);
     }
 
     pub fn anchor(
@@ -49,6 +58,7 @@ impl AuditAnchor {
         if env.storage().persistent().has(&DataKey::Root(epoch)) {
             return Err(AnchorError::EpochAlreadyAnchored);
         }
+        Self::bump_instance_ttl(&env);
         env.storage().persistent().set(&DataKey::Root(epoch), &root);
         env.storage()
             .persistent()
@@ -146,11 +156,13 @@ mod test {
         env.mock_auths(&[]);
 
         let root = BytesN::from_array(&env, &[9; 32]);
-        // No auth provided → require_auth() returns an auth error.
+        // Anchor with valid inputs but no auth should fail with an error.
+        // With zero leaf count as a guard, EmptyEpoch is checked before auth.
+        // So we anchor with leaf_count > 0, making auth the only failing check.
         let result = client.try_anchor(&1, &root, &1);
         assert!(
             result.is_err(),
-            "anchor without owner auth must be rejected"
+            "anchor without owner auth must be rejected with an error"
         );
     }
 }

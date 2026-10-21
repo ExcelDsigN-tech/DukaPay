@@ -277,6 +277,7 @@ impl CircuitBreaker {
     ) -> Result<(), CircuitBreakerError> {
         caller.require_auth();
         Self::read_admin(&env)?.require_auth();
+        Self::bump_instance_ttl(&env);
         env.storage().instance().set(&KEY_ADMIN, &new_admin);
         env.events()
             .publish((Symbol::new(&env, "BreakerAdmin"),), (caller, new_admin));
@@ -310,6 +311,7 @@ impl CircuitBreaker {
         if threshold > signers.len() {
             return Err(CircuitBreakerError::ThresholdExceedsSigners);
         }
+        Self::bump_instance_ttl(&env);
         env.storage().instance().set(&KEY_SIGNERS, &signers);
         env.storage().instance().set(&KEY_THRESHOLD, &threshold);
         Ok(())
@@ -325,6 +327,7 @@ impl CircuitBreaker {
         if override_timelock < MIN_OVERRIDE_TIMELOCK {
             return Err(CircuitBreakerError::TimelockTooShort);
         }
+        Self::bump_instance_ttl(&env);
         env.storage()
             .instance()
             .set(&KEY_TIMELOCK, &override_timelock);
@@ -434,6 +437,7 @@ impl CircuitBreaker {
             .get(&KEY_OVERRIDE_COUNT)
             .unwrap_or(0);
         let id = count + 1;
+        Self::bump_instance_ttl(&env);
         env.storage().instance().set(&KEY_OVERRIDE_COUNT, &id);
 
         let proposal = OverrideProposal {
@@ -482,6 +486,7 @@ impl CircuitBreaker {
         proposal.approvals.set(signer.clone(), true);
         let approvals_so_far = proposal.approvals.len();
         let threshold: u32 = env.storage().instance().get(&KEY_THRESHOLD).unwrap_or(0);
+        Self::bump_instance_ttl(&env);
         Self::write_proposal(&env, &proposal);
 
         env.events().publish(
@@ -532,6 +537,7 @@ impl CircuitBreaker {
         Self::apply_override(&env, &proposal.target);
 
         proposal.status = OverrideStatus::Executed;
+        Self::bump_instance_ttl(&env);
         Self::write_proposal(&env, &proposal);
 
         let (scope, contract, function) = Self::describe_target(&env, &proposal.target);
@@ -562,6 +568,7 @@ impl CircuitBreaker {
             return Err(CircuitBreakerError::ProposalNotActive);
         }
         proposal.status = OverrideStatus::Cancelled;
+        Self::bump_instance_ttl(&env);
         Self::write_proposal(&env, &proposal);
         env.events().publish(
             (Symbol::new(&env, "OverrideCanc"), proposal_id),

@@ -25,6 +25,10 @@ const MAX_SIGNERS: u32 = 20;
 /// Time-to-live for proposals before they expire (7 days in seconds).
 const PROPOSAL_TTL_SECONDS: u64 = 604_800;
 
+/// TTL constants for instance storage, matching agent_vault pattern.
+const INSTANCE_TTL_THRESHOLD: u32 = 17_280;
+const INSTANCE_TTL_BUMP: u32 = 518_400;
+
 // ─── Storage keys ─────────────────────────────────────────────────────────────
 
 const KEY_ADMIN: Symbol = symbol_short!("ADMIN");
@@ -281,6 +285,7 @@ impl GovernanceContract {
             .get(&KEY_PROPOSAL_COUNT)
             .unwrap_or(0);
         let proposal_id = proposal_count + 1;
+        Self::bump_instance_ttl(&env);
         env.storage()
             .instance()
             .set(&KEY_PROPOSAL_COUNT, &proposal_id);
@@ -344,6 +349,7 @@ impl GovernanceContract {
         let threshold = pending.threshold;
         let proposal_id = pending.id;
 
+        Self::bump_instance_ttl(&env);
         env.storage().instance().set(&KEY_PENDING, &pending);
 
         env.events().publish(
@@ -422,6 +428,7 @@ impl GovernanceContract {
         );
 
         // 2. Effects: Clear pending transfer and update local admin state only after successful interaction.
+        Self::bump_instance_ttl(&env);
         env.storage().instance().remove(&KEY_PENDING);
         env.storage().instance().set(&KEY_ADMIN, &new_admin);
 
@@ -459,6 +466,7 @@ impl GovernanceContract {
         }
 
         pending.status = ProposalStatus::Cancelled;
+        Self::bump_instance_ttl(&env);
         env.storage().instance().set(&KEY_PENDING, &pending);
 
         env.storage()
@@ -500,6 +508,7 @@ impl GovernanceContract {
         }
 
         pending.status = ProposalStatus::Cancelled;
+        Self::bump_instance_ttl(&env);
         env.storage().instance().set(&KEY_PENDING, &pending);
 
         // We also set the cooldown for security, same as regular cancel.
@@ -545,6 +554,7 @@ impl GovernanceContract {
             return Err(GovernanceError::ProposalNotExpired);
         }
 
+        Self::bump_instance_ttl(&env);
         env.storage().instance().remove(&KEY_PENDING);
 
         env.events().publish(
@@ -659,6 +669,14 @@ impl GovernanceContract {
             .get(&KEY_PENDING)
             .ok_or(GovernanceError::NoPendingTransfer)?;
         Ok(pending.approvals.get(signer).unwrap_or(false))
+    }
+
+    // ── TTL helpers ───────────────────────────────────────────────────────────
+
+    fn bump_instance_ttl(env: &Env) {
+        env.storage()
+            .instance()
+            .extend_ttl(Self::INSTANCE_TTL_THRESHOLD, Self::INSTANCE_TTL_BUMP);
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
