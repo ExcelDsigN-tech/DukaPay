@@ -77,6 +77,8 @@ interface ContractEvent extends IndexedLoanEvent {
   adminAddress?: string;
   /** Borrower refund amount decoded from a LoanLiquidated event value tuple (index 2). */
   borrowerRefund?: string;
+  /** Recipient address for FloatTransferred events (topic[2]). */
+  toAddress?: string;
   ledger: number;
   ledgerClosedAt: Date;
   txHash: string;
@@ -1088,6 +1090,28 @@ export class EventIndexer {
             );
           }
 
+          // FloatTransferred carries no resulting balances, so it is the one
+          // agent event applied as a delta. This block only runs when the
+          // event row was newly inserted, so a replayed event can't apply twice.
+          if (
+            event.eventType === 'FloatTransferred' &&
+            event.address &&
+            event.toAddress &&
+            event.amount
+          ) {
+            const amountBigInt = BigInt(event.amount);
+            // Subtract from source agent
+            await client.query(
+              `UPDATE agent_vaults SET float_balance = float_balance - $1, updated_at = CURRENT_TIMESTAMP WHERE agent_address = $2`,
+              [amountBigInt.toString(), event.address],
+            );
+            // Add to destination agent
+            await client.query(
+              `UPDATE agent_vaults SET float_balance = float_balance + $1, updated_at = CURRENT_TIMESTAMP WHERE agent_address = $2`,
+              [amountBigInt.toString(), event.toAddress],
+            );
+          }
+
           // Aggregate score deltas per borrower; a single bulk upsert at
           // the end of the transaction avoids N+1 score updates.
           if (event.eventType === 'LoanRepaid') {
@@ -1196,6 +1220,7 @@ export class EventIndexer {
     let termLedgers: number | undefined;
     let borrowerRefund: string | undefined;
     let agentUpdate: ContractEvent['agentUpdate'];
+    let toAddress: string | undefined;
 
     if (type === 'LoanRequested') {
       // (type, loan_id, borrower), amount
@@ -1422,10 +1447,11 @@ export class EventIndexer {
       agentUpdate = newFloat ? { agentAddress: address, floatBalance: newFloat } : undefined;
     } else if (type === 'FloatTransferred') {
       // agent_vault: (type, from, to), amount. No resulting-balance field is
-      // emitted for either side, so this only lands in the generic event
-      // log (loan_events), not the agent_vaults projection.
+      // emitted for either side, so storeEvents applies the amount as a delta
+      // to both agents' agent_vaults rows (#828).
       if (!event.topic[1]) return null;
       address = this.decodeAddress(event.topic[1]);
+      toAddress = event.topic[2] ? this.decodeAddress(event.topic[2]) : undefined;
       amount = this.decodeAmount(event.value);
     } else if (type === 'VaultSettled') {
       // agent_vault: (type, agent), (delta, new_float)
@@ -1523,6 +1549,7 @@ export class EventIndexer {
       ...(adminAddress !== undefined ? { adminAddress } : {}),
       ...(borrowerRefund !== undefined ? { borrowerRefund } : {}),
       ...(agentUpdate !== undefined ? { agentUpdate } : {}),
+      ...(toAddress !== undefined ? { toAddress } : {}),
     };
   }
 
