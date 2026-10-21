@@ -78,10 +78,12 @@
             "type": "object",
             "properties": {
               "totalFloat": {
-                "type": "number"
+                "type": "number",
+                "description": "Whole tokens, up to 7 decimal places."
               },
               "allocated": {
-                "type": "number"
+                "type": "number",
+                "description": "Whole tokens, up to 7 decimal places."
               },
               "utilizationPct": {
                 "type": "number"
@@ -92,16 +94,20 @@
             "type": "object",
             "properties": {
               "daily": {
-                "type": "number"
+                "type": "number",
+                "description": "Whole tokens, up to 7 decimal places."
               },
               "weekly": {
-                "type": "number"
+                "type": "number",
+                "description": "Whole tokens, up to 7 decimal places."
               },
               "monthly": {
-                "type": "number"
+                "type": "number",
+                "description": "Whole tokens, up to 7 decimal places."
               },
               "total": {
-                "type": "number"
+                "type": "number",
+                "description": "Whole tokens, up to 7 decimal places."
               }
             }
           },
@@ -118,7 +124,8 @@
                 "type": "integer"
               },
               "totalOutstanding": {
-                "type": "number"
+                "type": "number",
+                "description": "Whole tokens, up to 7 decimal places."
               },
               "byStatus": {
                 "type": "object",
@@ -135,7 +142,8 @@
                 "type": "integer"
               },
               "totalValue": {
-                "type": "number"
+                "type": "number",
+                "description": "Whole tokens, up to 7 decimal places."
               }
             }
           },
@@ -143,10 +151,12 @@
             "type": "object",
             "properties": {
               "totalCollateral": {
-                "type": "number"
+                "type": "number",
+                "description": "Whole tokens, up to 7 decimal places."
               },
               "totalDebt": {
-                "type": "number"
+                "type": "number",
+                "description": "Whole tokens, up to 7 decimal places."
               },
               "ratio": {
                 "type": "number"

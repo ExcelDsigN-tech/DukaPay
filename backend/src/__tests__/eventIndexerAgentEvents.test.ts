@@ -367,34 +367,65 @@ describe('EventIndexer: agent registry / agent vault events', () => {
     expect(floatBalance).toBe('4200');
   });
 
-  it('FloatTransferred lands in the event log but does not touch agent_vaults (no resulting balance emitted)', async () => {
-    const from = makeAddr();
-    const to = makeAddr();
-    const insertedLoanEvents: unknown[][] = [];
+  /** Records agent_vaults UPDATEs; `inserted` controls the event dedupe result. */
+  function captureFloatDeltas(inserted: boolean): unknown[][] {
+    const updates: unknown[][] = [];
     mockQuery.mockImplementation(async (sql: string, params: unknown[] = []) => {
       if (sql === 'BEGIN' || sql === 'COMMIT') return { rows: [], rowCount: 0 };
       if (sql.includes('INSERT INTO loan_events')) {
-        insertedLoanEvents.push(params);
-        return { rows: [{ event_id: params[0] }], rowCount: 1 };
+        return inserted
+          ? { rows: [{ event_id: params[0] }], rowCount: 1 }
+          : { rows: [], rowCount: 0 };
       }
       if (sql.includes('INSERT INTO agent_vaults')) {
-        throw new Error('FloatTransferred must not write agent_vaults');
+        throw new Error('FloatTransferred must not upsert agent_vaults');
+      }
+      if (sql.includes('UPDATE agent_vaults')) {
+        updates.push([sql, ...params]);
+        return { rows: [], rowCount: 1 };
       }
       return { rows: [], rowCount: 0 };
     });
+    return updates;
+  }
 
-    await makeIndexer().ingestRawEvents([
-      makeAgentEvent({
-        id: 'evt-transfer',
-        ledger: 10,
-        type: 'FloatTransferred',
-        contractId: AGENT_VAULT_CONTRACT,
-        topic: [scSymbol('FloatTransferred'), scAddress(from), scAddress(to)],
-        value: scI128(1000),
-      }),
-    ]);
+  function transferEvent(from: string, to: string, amount: bigint) {
+    return makeAgentEvent({
+      id: 'evt-transfer',
+      ledger: 10,
+      type: 'FloatTransferred',
+      contractId: AGENT_VAULT_CONTRACT,
+      topic: [scSymbol('FloatTransferred'), scAddress(from), scAddress(to)],
+      value: scI128(amount),
+    });
+  }
 
-    expect(insertedLoanEvents).toHaveLength(1);
+  it('FloatTransferred moves the exact amount from the sender to the receiver float', async () => {
+    const from = makeAddr();
+    const to = makeAddr();
+    const updates = captureFloatDeltas(true);
+    // Above 2^53 to prove the delta never passes through Number.
+    const amount = 9_007_199_254_740_993n;
+
+    await makeIndexer().ingestRawEvents([transferEvent(from, to, amount)]);
+
+    expect(updates).toHaveLength(2);
+    const [debitSql, debitAmount, debitAgent] = updates[0]!;
+    const [creditSql, creditAmount, creditAgent] = updates[1]!;
+    expect(debitSql).toContain('float_balance = float_balance - $1');
+    expect(debitAmount).toBe(amount.toString());
+    expect(debitAgent).toBe(from);
+    expect(creditSql).toContain('float_balance = float_balance + $1');
+    expect(creditAmount).toBe(amount.toString());
+    expect(creditAgent).toBe(to);
+  });
+
+  it('FloatTransferred ingested twice applies its delta only once', async () => {
+    const updates = captureFloatDeltas(false);
+
+    await makeIndexer().ingestRawEvents([transferEvent(makeAddr(), makeAddr(), 1000n)]);
+
+    expect(updates).toHaveLength(0);
   });
 });
 
