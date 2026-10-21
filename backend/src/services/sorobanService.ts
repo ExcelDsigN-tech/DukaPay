@@ -5,6 +5,7 @@ import {
   nativeToScVal,
   scValToNative,
   Address,
+  FeeBumpTransaction,
   StrKey,
   Keypair,
 } from '@stellar/stellar-sdk';
@@ -791,6 +792,85 @@ class SorobanService {
     });
 
     return { unsignedTxXdr, networkPassphrase: passphrase };
+  }
+
+  /**
+   * Ensures a signed envelope still represents the exact float transfer that
+   * was approved. Soroban authorization signatures may change the transaction
+   * body, so comparing the signed envelope with the original unsigned XDR by
+   * hash is not sufficient.
+   */
+  validateTransferToAgentTx(
+    signedTxXdr: string,
+    fromAgent: string,
+    toAgent: string,
+    amount: bigint,
+  ): void {
+    let parsed;
+    try {
+      parsed = TransactionBuilder.fromXDR(signedTxXdr, this.getNetworkPassphrase());
+    } catch {
+      throw AppError.badRequest(
+        'signedTxXdr is not a valid transaction envelope',
+        undefined,
+        'signedTxXdr',
+      );
+    }
+
+    const transaction = parsed instanceof FeeBumpTransaction ? parsed.innerTransaction : parsed;
+    const mismatch = (detail: string) =>
+      AppError.badRequest(
+        `signedTxXdr does not match float transfer: ${detail}`,
+        undefined,
+        'signedTxXdr',
+      );
+
+    if (transaction.source !== fromAgent) {
+      throw mismatch('source account');
+    }
+    if (
+      transaction.operations.length !== 1 ||
+      transaction.operations[0]?.type !== 'invokeHostFunction'
+    ) {
+      throw mismatch('expected exactly one contract invocation');
+    }
+
+    const operation = transaction.operations[0] as Operation.InvokeHostFunction;
+    if (operation.source && operation.source !== fromAgent) {
+      throw mismatch('operation source account');
+    }
+    if (operation.func.switch().name !== 'hostFunctionTypeInvokeContract') {
+      throw mismatch('expected a contract invocation');
+    }
+
+    const invocation = operation.func.invokeContract();
+    const contractId = Address.fromScAddress(invocation.contractAddress()).toString();
+    if (contractId !== this.getAgentVaultContractId()) {
+      throw mismatch('contract address');
+    }
+
+    const functionName = invocation.functionName();
+    const decodedFunctionName = Buffer.isBuffer(functionName)
+      ? functionName.toString('utf8')
+      : functionName;
+    if (decodedFunctionName !== 'transfer_to_agent') {
+      throw mismatch('contract function');
+    }
+
+    const expectedArgs = [
+      nativeToScVal(Address.fromString(fromAgent), { type: 'address' }),
+      nativeToScVal(Address.fromString(toAgent), { type: 'address' }),
+      nativeToScVal(amount, { type: 'i128' }),
+    ];
+    const actualArgs = invocation.args();
+    const argsMatch =
+      actualArgs.length === expectedArgs.length &&
+      actualArgs.every(
+        (arg, index) => arg.toXDR('base64') === expectedArgs[index]?.toXDR('base64'),
+      );
+    if (!argsMatch) {
+      throw mismatch('contract arguments');
+    }
   }
 
   /**

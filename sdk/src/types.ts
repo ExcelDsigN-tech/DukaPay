@@ -324,6 +324,7 @@ export interface AgentDashboard {
 
 export type AgentFloatTransferStatus =
   | 'PENDING_APPROVAL'
+  | 'AWAITING_SIGNATURE'
   | 'COMPLETED'
   | 'REJECTED'
   | 'CANCELLED'
@@ -367,8 +368,18 @@ export interface ApproveFloatTransferResponse {
   data: {
     transfer: AgentFloatTransfer;
     approvals: AgentFloatTransferApproval[];
-    executedOnChain?: boolean;
+    executedOnChain: false;
     unsignedTxXdr?: string;
+  };
+}
+
+/** Response envelope for `POST /agents/float-transfer/{id}/submit`. */
+export interface SubmitFloatTransferResponse {
+  success: boolean;
+  data: {
+    transfer: AgentFloatTransfer;
+    executedOnChain: true;
+    txHash: string;
   };
 }
 

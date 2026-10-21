@@ -3314,6 +3314,65 @@
         }
       }
     },
+    "/agents/float-transfer/{id}/submit": {
+      "post": {
+        "summary": "Submit a signed float transfer transaction",
+        "tags": [
+          "Agents"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "signedTxXdr"
+                ],
+                "properties": {
+                  "signedTxXdr": {
+                    "type": "string",
+                    "format": "byte"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Float transfer confirmed on the Stellar network."
+          },
+          "400": {
+            "description": "Invalid transfer status or signed transaction."
+          },
+          "401": {
+            "description": "Unauthorized."
+          },
+          "403": {
+            "description": "Forbidden."
+          },
+          "404": {
+            "description": "Transfer not found."
+          }
+        }
+      }
+    },
     "/agents/float-transfer/{id}/reject": {
       "post": {
         "summary": "Reject a pending float transfer",

@@ -151,6 +151,7 @@ describe('SDK paths against the backend OpenAPI spec', () => {
       reason: 'rebalance',
     });
     await agents.approveFloatTransfer('ft_12345');
+    await agents.submitFloatTransfer('ft_12345', 'c2lnbmVkLXhkcg==');
     await agents.rejectFloatTransfer('ft_12345');
     await agents.getPairLimits({ fromAgent: ADDRESS, toAgent: ADDRESS_B });
     await agents.setPairLimits({
@@ -162,7 +163,7 @@ describe('SDK paths against the backend OpenAPI spec', () => {
 
     // Sanity check on the fixture itself: a renamed SDK method would otherwise
     // silently stop being exercised.
-    expect(calls.length).toBeGreaterThanOrEqual(32);
+    expect(calls.length).toBeGreaterThanOrEqual(33);
 
     const mismatches = calls
       .map((call) => {
