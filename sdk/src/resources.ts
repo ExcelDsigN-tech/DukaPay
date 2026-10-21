@@ -24,6 +24,7 @@ import type {
   Score,
   Session,
   SetAgentPairLimitsResponse,
+  SubmitFloatTransferResponse,
   UnsignedTransaction,
   YieldHistoryPoint,
 } from './types.js';
@@ -326,6 +327,18 @@ export class AgentsResource {
   approveFloatTransfer(transferId: string): Promise<ApproveFloatTransferResponse> {
     validateTransferId(transferId, 'transferId');
     return this.http.post(`/agents/float-transfer/${transferId}/approve`);
+  }
+
+  /** Submits the fully signed float transfer for Stellar confirmation. */
+  submitFloatTransfer(
+    transferId: string,
+    signedTxXdr: string,
+  ): Promise<SubmitFloatTransferResponse> {
+    validateTransferId(transferId, 'transferId');
+    if (typeof signedTxXdr !== 'string' || signedTxXdr.trim().length === 0) {
+      throw new ValidationError('signedTxXdr is required');
+    }
+    return this.http.post(`/agents/float-transfer/${transferId}/submit`, { signedTxXdr });
   }
 
   /** Rejects a pending agent float transfer (`POST /agents/float-transfer/{id}/reject`). */

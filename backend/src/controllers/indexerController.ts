@@ -22,6 +22,7 @@ import logger from '../utils/logger.js';
 import { getStellarRpcUrl } from '../config/stellar.js';
 import { amountToStroops } from '../money/decimal.js';
 import { eventAmountFields } from '../money/eventAmounts.js';
+import { env } from '../config/env.js';
 
 /** Money event amounts go out in whole tokens; see money/eventAmounts.ts. */
 const withApiAmount = (row: Record<string, unknown>) => ({
@@ -80,10 +81,10 @@ type QuarantineEventRow = {
 
 const buildIndexerFromConfig = (): EventIndexer => {
   const contractIds = [
-    process.env.LOAN_MANAGER_CONTRACT_ID,
-    process.env.LENDING_POOL_CONTRACT_ID,
-    process.env.REMITTANCE_NFT_CONTRACT_ID,
-    process.env.MULTISIG_GOVERNANCE_CONTRACT_ID,
+    env.LOAN_MANAGER_CONTRACT_ID,
+    env.LENDING_POOL_CONTRACT_ID,
+    env.REMITTANCE_NFT_CONTRACT_ID,
+    env.MULTISIG_GOVERNANCE_CONTRACT_ID,
   ].filter((id): id is string => Boolean(id && id.trim().length > 0));
 
   if (contractIds.length === 0) {
@@ -91,7 +92,7 @@ const buildIndexerFromConfig = (): EventIndexer => {
   }
 
   const rpcUrl = getStellarRpcUrl();
-  const batchSize = Number(process.env.INDEXER_BATCH_SIZE ?? 100);
+  const batchSize = env.INDEXER_BATCH_SIZE;
 
   return new EventIndexer({
     rpcUrl,
@@ -748,7 +749,7 @@ export const reindexLedgerRange = async (req: Request, res: Response) => {
       });
     }
 
-    const maxRange = Number(process.env.REINDEX_MAX_RANGE ?? 25000);
+    const maxRange = env.REINDEX_MAX_RANGE;
     const requestedRange = toLedger - fromLedger + 1;
     if (requestedRange > maxRange) {
       return res.status(400).json({

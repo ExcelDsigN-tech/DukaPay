@@ -608,17 +608,26 @@ describe('AgentsResource', () => {
     ).toThrow(ValidationError);
   });
 
-  it('approves and rejects float transfers and validates transferId', async () => {
+  it('approves, submits, and rejects float transfers and validates inputs', async () => {
     const post = vi.fn().mockResolvedValue({ success: true, data: {} });
     const resource = new AgentsResource({ post } as unknown as HttpClient);
 
     await resource.approveFloatTransfer('ft_123');
     expect(post).toHaveBeenCalledWith('/agents/float-transfer/ft_123/approve');
 
+    await resource.submitFloatTransfer('ft_123', 'c2lnbmVkLXhkcg==');
+    expect(post).toHaveBeenCalledWith('/agents/float-transfer/ft_123/submit', {
+      signedTxXdr: 'c2lnbmVkLXhkcg==',
+    });
+
     await resource.rejectFloatTransfer('ft_123');
     expect(post).toHaveBeenCalledWith('/agents/float-transfer/ft_123/reject');
 
     expect(() => resource.approveFloatTransfer('')).toThrow(ValidationError);
+    expect(() => resource.submitFloatTransfer('ft_123', '')).toThrow(ValidationError);
+    expect(() => resource.submitFloatTransfer('bad/id', 'c2lnbmVkLXhkcg==')).toThrow(
+      ValidationError,
+    );
     expect(() => resource.rejectFloatTransfer('   ')).toThrow(ValidationError);
     expect(() => resource.approveFloatTransfer('ft/../../loans')).toThrow(ValidationError);
   });

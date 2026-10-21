@@ -2,8 +2,9 @@ import crypto from 'node:crypto';
 import type { Request, Response, NextFunction } from 'express';
 import { AppError } from '../errors/AppError.js';
 import { ErrorCode } from '../errors/errorCodes.js';
+import { env } from '../config/env.js';
 
-export const CSRF_COOKIE_NAME = process.env.CSRF_COOKIE_NAME ?? 'XSRF-TOKEN';
+export const CSRF_COOKIE_NAME = env.CSRF_COOKIE_NAME;
 export const CSRF_HEADER_NAME = 'x-csrf-token';
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
@@ -37,8 +38,6 @@ export function generateCsrfToken(): string {
   return crypto.randomBytes(32).toString('hex');
 }
 
-const DEFAULT_JWT_COOKIE_NAME = 'dukapay_jwt';
-
 /**
  * Returns true when the request carries the httpOnly JWT auth cookie.
  *
@@ -51,12 +50,12 @@ export function hasAuthCookie(cookieHeader: string | undefined): boolean {
     return false;
   }
 
-  const cookieName = process.env.JWT_COOKIE_NAME ?? DEFAULT_JWT_COOKIE_NAME;
+  const cookieName = env.JWT_COOKIE_NAME;
   return parseCookies(cookieHeader)[cookieName] !== undefined;
 }
 
 export function setCsrfCookie(res: Response, token: string): void {
-  const isProduction = process.env.NODE_ENV === 'production';
+  const isProduction = env.NODE_ENV === 'production';
   // httpOnly: true prevents JavaScript from reading the cookie directly,
   // which closes the XSS-based CSRF bypass attack vector.
   // The token is delivered to the frontend via the X-CSRF-Token response header

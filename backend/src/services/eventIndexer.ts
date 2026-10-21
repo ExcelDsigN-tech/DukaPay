@@ -18,6 +18,7 @@ import { AppError } from '../errors/AppError.js';
 import { recordIndexerLedgers } from '../middleware/metrics.js';
 import { setPauseState } from '../middleware/pauseGuard.js';
 import { fromStroops } from '../money/decimal.js';
+import { env } from '../config/env.js';
 
 const EVENT_TYPE_ALIASES: Record<string, WebhookEventType> = {
   Mint: 'NFTMinted',
@@ -130,10 +131,8 @@ export class EventIndexer {
   constructor(config: EventIndexerConfig);
   constructor(rpcUrl: string, contractId: string);
   constructor(configOrRpcUrl: EventIndexerConfig | string, contractId?: string) {
-    const thresholdRaw = Number.parseInt(process.env.QUARANTINE_ALERT_THRESHOLD ?? '25', 10);
-    this.quarantineAlertThreshold =
-      Number.isFinite(thresholdRaw) && thresholdRaw > 0 ? thresholdRaw : 25;
-    const lagThresholdRaw = Number.parseInt(process.env.INDEXER_LAG_ALERT_THRESHOLD ?? '100', 10);
+    this.quarantineAlertThreshold = env.QUARANTINE_ALERT_THRESHOLD;
+    const lagThresholdRaw = env.INDEXER_LAG_ALERT_THRESHOLD;
     this.lagAlertThreshold =
       Number.isFinite(lagThresholdRaw) && lagThresholdRaw > 0 ? lagThresholdRaw : 100;
 
@@ -145,7 +144,7 @@ export class EventIndexer {
       this.contractIds = [contractId];
       this.pollIntervalMs = 30_000;
       this.batchSize = 100;
-      this.finalityDepth = this.parseNonNegativeInt(process.env.INDEXER_FINALITY_DEPTH, 0);
+      this.finalityDepth = this.envFinalityDepth();
       return;
     }
 
@@ -165,9 +164,7 @@ export class EventIndexer {
     this.contractIds = [...new Set(normalized)];
     this.pollIntervalMs = configOrRpcUrl.pollIntervalMs ?? 30_000;
     this.batchSize = configOrRpcUrl.batchSize ?? 100;
-    this.finalityDepth =
-      configOrRpcUrl.finalityDepth ??
-      this.parseNonNegativeInt(process.env.INDEXER_FINALITY_DEPTH, 0);
+    this.finalityDepth = configOrRpcUrl.finalityDepth ?? this.envFinalityDepth();
   }
 
   async ingestRawEvents(events: SorobanRawEvent[]): Promise<StoreEventsResult> {
@@ -491,7 +488,7 @@ export class EventIndexer {
       await client.query(
         `INSERT INTO audit_logs (actor, action, target, payload, ip_address, status)
          SELECT 'SYSTEM', 'REORG_REVERSAL', target,
-                jsonb_build_object('reversedEventId', payload->>'eventId', 'rollbackLedger', $2),
+                jsonb_build_object('reversedEventId', payload->>'eventId', 'rollbackLedger', $2::int),
                 'internal-indexer', 200
          FROM audit_logs
          WHERE payload->>'eventId' IN (
@@ -580,9 +577,9 @@ export class EventIndexer {
     }
   }
 
-  private parseNonNegativeInt(value: string | undefined, fallback: number): number {
-    const parsed = Number.parseInt(value ?? '', 10);
-    return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+  private envFinalityDepth(): number {
+    const depth = env.INDEXER_FINALITY_DEPTH;
+    return depth !== undefined && depth >= 0 ? depth : 0;
   }
 
   private getContractId(): string {

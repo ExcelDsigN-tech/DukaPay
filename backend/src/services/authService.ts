@@ -6,6 +6,7 @@ import { cacheService } from './cacheService.js';
 import { AppError } from '../errors/AppError.js';
 import { ErrorCode } from '../errors/errorCodes.js';
 import logger from '../utils/logger.js';
+import { env } from '../config/env.js';
 
 export interface JwtPayload {
   publicKey: string;
@@ -58,15 +59,9 @@ export interface StoredRefreshTokenMetadata {
 }
 
 function getTokenTTLConfig() {
-  const accessTtl = process.env.ACCESS_TOKEN_TTL_SECONDS
-    ? Number.parseInt(process.env.ACCESS_TOKEN_TTL_SECONDS, 10)
-    : 15 * 60;
-  const refreshTtl = process.env.REFRESH_TOKEN_TTL_SECONDS
-    ? Number.parseInt(process.env.REFRESH_TOKEN_TTL_SECONDS, 10)
-    : 7 * 24 * 60 * 60;
-  const challengeTtl = process.env.CHALLENGE_EXPIRES_IN_MS
-    ? Number.parseInt(process.env.CHALLENGE_EXPIRES_IN_MS, 10)
-    : 5 * 60 * 1000;
+  const accessTtl = env.ACCESS_TOKEN_TTL_SECONDS;
+  const refreshTtl = env.REFRESH_TOKEN_TTL_SECONDS;
+  const challengeTtl = env.CHALLENGE_EXPIRES_IN_MS;
 
   if (!Number.isFinite(accessTtl) || accessTtl <= 0) {
     throw new Error('ACCESS_TOKEN_TTL_SECONDS must be a positive number');
@@ -120,7 +115,7 @@ export async function storeChallenge(
   const key = getChallengeKey(publicKey, challenge.message);
   if (!key) throw new Error('Generated challenge has an invalid nonce');
 
-  if (process.env.NODE_ENV === 'test') {
+  if (env.NODE_ENV === 'test') {
     inMemoryChallenges.set(key, stored);
     return;
   }
@@ -135,7 +130,7 @@ export async function getIssuedChallenge(
   const key = getChallengeKey(publicKey, message);
   if (!key) return null;
 
-  if (process.env.NODE_ENV === 'test') {
+  if (env.NODE_ENV === 'test') {
     const stored = inMemoryChallenges.get(key) ?? null;
     if (stored && stored.expiresAt < Date.now()) {
       inMemoryChallenges.delete(key);
@@ -155,7 +150,7 @@ export async function consumeIssuedChallenge(
   const key = getChallengeKey(publicKey, message);
   if (!key) return false;
 
-  if (process.env.NODE_ENV === 'test') {
+  if (env.NODE_ENV === 'test') {
     const stored = inMemoryChallenges.get(key);
     if (
       !stored ||
@@ -173,7 +168,7 @@ export async function consumeIssuedChallenge(
 }
 
 function getJwtSecret(): string {
-  const secret = process.env.JWT_SECRET;
+  const secret = env.JWT_SECRET;
   if (!secret) {
     throw new Error('JWT_SECRET environment variable is not set');
   }
@@ -188,7 +183,7 @@ export function generateChallenge(publicKey: string): ChallengeMessage {
   const nonce = crypto.randomBytes(32).toString('hex');
   const timestamp = Date.now();
 
-  const domain = new URL(process.env.FRONTEND_URL ?? 'https://dukapay.com').host;
+  const domain = new URL(env.FRONTEND_URL ?? 'https://dukapay.com').host;
   const message = `Sign this message to authenticate with DukaPay.\n\nDomain: ${domain}\nNonce: ${nonce}\nTimestamp: ${timestamp}\n\nThis request will expire in 5 minutes.`;
 
   return {

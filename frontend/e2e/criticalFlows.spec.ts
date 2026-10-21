@@ -1,5 +1,3 @@
-// e2e coverage temporarily skipped: assertions rely on product wiring (wallet-connect state, /api/* mock paths, Zustand hydration) that has drifted from the current app. Restore file-by-file once the flows are re-aligned with the mocks.
-//
 // Scope after consolidation (see frontend/e2e/README.md):
 //   - Lending-pool deposit flow
 //   - Remittance history view

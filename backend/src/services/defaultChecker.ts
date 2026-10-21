@@ -15,6 +15,7 @@ import { cacheService } from './cacheService.js';
 import { jobMetricsService } from './jobMetricsService.js';
 import { fromStroops } from '../money/decimal.js';
 import { hasUnresolvedLedgerGaps } from './ledgerCheckpoints.js';
+import { env } from '../config/env.js';
 
 /**
  * Owed-vs-paid reconciliation for a single loan, computed entirely in
@@ -76,11 +77,6 @@ export async function reconcileLoanStroops(loanId: number): Promise<LoanReconcil
   };
 }
 
-/**
- * Mirrors `LoanManager::DEFAULT_TERM_LEDGERS` in `contracts/loan_manager/src/lib.rs`.
- * Used to estimate on-chain due ledgers from indexed `LoanApproved` events.
- */
-const DEFAULT_TERM_LEDGERS = 17_280;
 const LOCK_KEY = 'default_checker:running';
 const LOCK_TTL_SECONDS = 600; // 10 minutes - prevents stuck locks from crashed runs
 
@@ -113,11 +109,6 @@ export interface DefaultCheckRunResult {
    */
   skipped?: boolean;
   skippedReason?: string;
-}
-
-function parsePositiveInt(value: string | undefined, fallback: number): number {
-  const n = parseInt(value ?? '', 10);
-  return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
 function chunk<T>(items: T[], size: number): T[][] {
@@ -165,17 +156,14 @@ export class DefaultChecker {
   private currentLockValue: string | null = null;
 
   constructor() {
-    this.contractId = process.env.LOAN_MANAGER_CONTRACT_ID || '';
-    this.termLedgers = parsePositiveInt(process.env.LOAN_TERM_LEDGERS, DEFAULT_TERM_LEDGERS);
-    this.batchSize = parsePositiveInt(process.env.DEFAULT_CHECK_BATCH_SIZE, 25);
-    this.batchTimeoutMs = parsePositiveInt(
-      process.env.DEFAULT_CHECK_BATCH_TIMEOUT_MS,
-      5 * 60 * 1000,
-    );
-    this.maxLoansPerRun = parsePositiveInt(process.env.DEFAULT_CHECK_MAX_LOANS_PER_RUN, 500);
-    this.pollAttempts = parsePositiveInt(process.env.DEFAULT_CHECK_POLL_ATTEMPTS, 30);
-    this.pollSleepMs = parsePositiveInt(process.env.DEFAULT_CHECK_POLL_SLEEP_MS, 1_000);
-    this.concurrency = parsePositiveInt(process.env.DEFAULT_CHECK_CONCURRENCY, 3);
+    this.contractId = env.LOAN_MANAGER_CONTRACT_ID ?? '';
+    this.termLedgers = env.LOAN_TERM_LEDGERS;
+    this.batchSize = env.DEFAULT_CHECK_BATCH_SIZE;
+    this.batchTimeoutMs = env.DEFAULT_CHECK_BATCH_TIMEOUT_MS;
+    this.maxLoansPerRun = env.DEFAULT_CHECK_MAX_LOANS_PER_RUN;
+    this.pollAttempts = env.DEFAULT_CHECK_POLL_ATTEMPTS;
+    this.pollSleepMs = env.DEFAULT_CHECK_POLL_SLEEP_MS;
+    this.concurrency = env.DEFAULT_CHECK_CONCURRENCY;
   }
 
   private assertConfigured(): {
@@ -189,7 +177,7 @@ export class DefaultChecker {
       );
     }
 
-    const secret = process.env.LOAN_MANAGER_ADMIN_SECRET;
+    const secret = env.LOAN_MANAGER_ADMIN_SECRET;
     if (!secret) {
       throw AppError.internal(
         'Default checker misconfiguration: LOAN_MANAGER_ADMIN_SECRET is not set',
@@ -651,11 +639,11 @@ let inFlight = false;
 export function startDefaultCheckerScheduler(): void {
   if (interval) return;
 
-  if (process.env.NODE_ENV === 'test') {
+  if (env.NODE_ENV === 'test') {
     return;
   }
 
-  if (!process.env.LOAN_MANAGER_CONTRACT_ID || !process.env.LOAN_MANAGER_ADMIN_SECRET) {
+  if (!env.LOAN_MANAGER_CONTRACT_ID || !env.LOAN_MANAGER_ADMIN_SECRET) {
     logger
       .withContext()
       .warn(
@@ -664,7 +652,7 @@ export function startDefaultCheckerScheduler(): void {
     return;
   }
 
-  const intervalMs = parsePositiveInt(process.env.DEFAULT_CHECK_INTERVAL_MS, 30 * 60 * 1000);
+  const intervalMs = env.DEFAULT_CHECK_INTERVAL_MS;
 
   interval = setInterval(() => {
     void (async () => {

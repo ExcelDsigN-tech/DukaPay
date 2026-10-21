@@ -41,16 +41,17 @@ import {
 } from '../schemas/loanSchemas.js';
 
 import { buildCancelLoanTx } from '../controllers/loanController.js';
+import { env } from '../config/env.js';
 
 const router = Router();
 
 // TEST/DEV ONLY: Create a loan directly for test setup
-if (process.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'development') {
+if (env.NODE_ENV === 'test' || env.NODE_ENV === 'development') {
   router.post('/', requireJwtAuth, createTestLoan);
 }
 
 // TEST/DEV ONLY: Mark a loan as defaulted for test setup
-if (process.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'development') {
+if (env.NODE_ENV === 'test' || env.NODE_ENV === 'development') {
   router.post('/:loanId/mark-defaulted', requireJwtAuth, requireLoanOwner, markLoanDefaulted);
 }
 

@@ -1,11 +1,12 @@
 import cron, { type ScheduledTask } from 'node-cron';
 import { auditMerkleService } from '../services/auditMerkleService.js';
 import logger from '../utils/logger.js';
+import { env } from '../config/env.js';
 
 let task: ScheduledTask | null = null;
 
 export function startAuditAnchorJob(): void {
-  if (task || process.env.AUDIT_ANCHOR_ENABLED !== 'true') return;
+  if (task || !env.AUDIT_ANCHOR_ENABLED) return;
   task = cron.schedule('5 * * * *', () => {
     auditMerkleService.sealAndAnchor().catch((error) => {
       logger.withContext().error('Audit Merkle epoch job failed', {

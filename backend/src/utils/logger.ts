@@ -1,5 +1,6 @@
 import winston from 'winston';
 import { getRequestId } from './requestContext.js';
+import { env } from '../config/envSchema.js';
 
 const levels = {
   error: 0,
@@ -12,12 +13,12 @@ const levels = {
 const validLevels = Object.keys(levels);
 
 const defaultLevelForEnv = () => {
-  const env = process.env.NODE_ENV || 'development';
-  return env === 'development' ? 'debug' : 'http';
+  const nodeEnv = env.NODE_ENV ?? 'development';
+  return nodeEnv === 'development' ? 'debug' : 'http';
 };
 
 const level = () => {
-  const configured = process.env.LOG_LEVEL?.toLowerCase();
+  const configured = env.LOG_LEVEL?.toLowerCase();
   if (configured && validLevels.includes(configured)) {
     return configured;
   }
@@ -47,7 +48,7 @@ const REDACTED_FIELDS = [
 ];
 
 const redactPiiFormat = winston.format((info) => {
-  if (process.env.LOG_REDACTION !== 'strict') return info;
+  if (env.LOG_REDACTION !== 'strict') return info;
   for (const field of REDACTED_FIELDS) {
     if (field in info) {
       (info as Record<string, unknown>)[field] = '[REDACTED]';
@@ -92,7 +93,7 @@ const withRequestId = winston.format((info) => {
   return info;
 });
 
-const isProduction = process.env.NODE_ENV === 'production';
+const isProduction = env.NODE_ENV === 'production';
 
 const transports: winston.transport[] = [
   new winston.transports.Console({

@@ -11,6 +11,7 @@ import {
   initiateFloatTransferBodySchema,
   pairLimitsQuerySchema,
   setPairLimitsBodySchema,
+  submitFloatTransferBodySchema,
 } from '../schemas/agentSchemas.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { AppError } from '../errors/AppError.js';
@@ -116,6 +117,65 @@ router.post(
     const result = await agentFloatService.approveTransfer({
       transferId: id,
       approver: publicKey!,
+      userRole: role,
+    });
+
+    res.status(200).json({ success: true, data: result });
+  }),
+);
+
+/**
+ * @swagger
+ * /agents/float-transfer/{id}/submit:
+ *   post:
+ *     summary: Submit a signed float transfer transaction
+ *     tags: [Agents]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [signedTxXdr]
+ *             properties:
+ *               signedTxXdr:
+ *                 type: string
+ *                 format: byte
+ *     responses:
+ *       200:
+ *         description: Float transfer confirmed on the Stellar network.
+ *       400:
+ *         description: Invalid transfer status or signed transaction.
+ *       401:
+ *         description: Unauthorized.
+ *       403:
+ *         description: Forbidden.
+ *       404:
+ *         description: Transfer not found.
+ */
+router.post(
+  '/float-transfer/:id/submit',
+  requireJwtAuth,
+  validateParams(floatTransferIdParamsSchema),
+  validateQuery(emptyAgentQuerySchema),
+  validateBody(submitFloatTransferBodySchema),
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params.id as string;
+    const publicKey = (req as { user?: { publicKey?: string } }).user?.publicKey;
+    const role = (req as { user?: { role?: string } }).user?.role;
+
+    const result = await agentFloatService.submitTransfer({
+      transferId: id,
+      signedTxXdr: req.body.signedTxXdr,
+      submitter: publicKey!,
       userRole: role,
     });
 

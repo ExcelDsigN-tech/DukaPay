@@ -1,29 +1,22 @@
 import pg, { type PoolClient } from 'pg';
 import logger from '../utils/logger.js';
 import { databaseQueryDuration } from '../metrics/index.js';
+import { env } from '../config/env.js';
 
 export type { PoolClient };
 
 const { Pool } = pg;
 
 // Parse pool configuration from environment
-const maxPoolSize = process.env.DB_POOL_MAX ? parseInt(process.env.DB_POOL_MAX, 10) : 10;
-const minPoolSize = process.env.DB_POOL_MIN ? parseInt(process.env.DB_POOL_MIN, 10) : 2;
-const idleTimeoutMillis = process.env.DB_IDLE_TIMEOUT_MS
-  ? parseInt(process.env.DB_IDLE_TIMEOUT_MS, 10)
-  : 30000;
-const connectionTimeoutMillis = process.env.DB_CONN_TIMEOUT_MS
-  ? parseInt(process.env.DB_CONN_TIMEOUT_MS, 10)
-  : 10000;
-const statementTimeoutMillis = process.env.DB_STATEMENT_TIMEOUT_MS
-  ? parseInt(process.env.DB_STATEMENT_TIMEOUT_MS, 10)
-  : 30000;
-const slowQueryThresholdMs = process.env.DB_SLOW_QUERY_THRESHOLD_MS
-  ? parseInt(process.env.DB_SLOW_QUERY_THRESHOLD_MS, 10)
-  : 100;
+const maxPoolSize = env.DB_POOL_MAX;
+const minPoolSize = env.DB_POOL_MIN;
+const idleTimeoutMillis = env.DB_IDLE_TIMEOUT_MS;
+const connectionTimeoutMillis = env.DB_CONN_TIMEOUT_MS;
+const statementTimeoutMillis = env.DB_STATEMENT_TIMEOUT_MS;
+const slowQueryThresholdMs = env.DB_SLOW_QUERY_THRESHOLD_MS;
 
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: env.DATABASE_URL,
   min: minPoolSize,
   max: maxPoolSize,
   idleTimeoutMillis,

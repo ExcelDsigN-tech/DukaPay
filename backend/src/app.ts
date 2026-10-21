@@ -37,10 +37,11 @@ import { pauseGuard, getPauseGuardHealth } from './middleware/pauseGuard.js';
 import { csrfProtection, hasAuthCookie } from './middleware/csrf.js';
 import { asyncHandler } from './utils/asyncHandler.js';
 import { AppError } from './errors/AppError.js';
+import { env } from './config/env.js';
 const app = express();
 
-const isProduction = process.env.NODE_ENV === 'production';
-const configuredFrontendUrl = process.env.FRONTEND_URL?.trim();
+const isProduction = env.NODE_ENV === 'production';
+const configuredFrontendUrl = env.FRONTEND_URL?.trim();
 
 if (isProduction && !configuredFrontendUrl) {
   throw new Error('FRONTEND_URL environment variable is required in production');
@@ -48,9 +49,7 @@ if (isProduction && !configuredFrontendUrl) {
 
 // `CORS_ALLOWED_ORIGINS` is retained as a migration fallback while `FRONTEND_URL`
 // becomes the primary documented config for the frontend origin.
-const additionalAllowedOrigins = process.env.CORS_ALLOWED_ORIGINS
-  ? process.env.CORS_ALLOWED_ORIGINS.split(',').map((origin) => origin.trim())
-  : [];
+const additionalAllowedOrigins = env.CORS_ALLOWED_ORIGINS;
 
 const allowedOriginsList = [configuredFrontendUrl, ...additionalAllowedOrigins].filter(
   (origin): origin is string => Boolean(origin),
@@ -170,15 +169,15 @@ app.get('/', (_req: Request, res: Response) => {
  */
 app.get('/version', (_req: Request, res: Response) => {
   res.json({
-    gitSha: process.env.GIT_SHA ?? 'unknown',
-    builtAt: process.env.BUILD_TIME ?? 'unknown',
+    gitSha: env.GIT_SHA,
+    builtAt: env.BUILD_TIME,
     nodeVersion: process.version,
     contracts: {
-      loanManager: process.env.LOAN_MANAGER_CONTRACT_ID ?? 'unknown',
-      lendingPool: process.env.LENDING_POOL_CONTRACT_ID ?? 'unknown',
-      remittanceNft: process.env.REMITTANCE_NFT_CONTRACT_ID ?? 'unknown',
-      multisigGovernance: process.env.MULTISIG_GOVERNANCE_CONTRACT_ID ?? 'unknown',
-      settlementNetter: process.env.SETTLEMENT_NETTER_CONTRACT_ID ?? 'unknown',
+      loanManager: env.LOAN_MANAGER_CONTRACT_ID ?? 'unknown',
+      lendingPool: env.LENDING_POOL_CONTRACT_ID ?? 'unknown',
+      remittanceNft: env.REMITTANCE_NFT_CONTRACT_ID ?? 'unknown',
+      multisigGovernance: env.MULTISIG_GOVERNANCE_CONTRACT_ID ?? 'unknown',
+      settlementNetter: env.SETTLEMENT_NETTER_CONTRACT_ID ?? 'unknown',
     },
   });
 });
@@ -224,8 +223,8 @@ app.get('/metrics', requireApiKey('admin:indexer'), asyncHandler(metricsHandler)
 app.get(
   '/health/indexer',
   asyncHandler(async (_req: Request, res: Response) => {
-    const threshold = Number.parseInt(process.env.INDEXER_LAG_ALERT_THRESHOLD ?? '100', 10);
-    const finalityDepth = Number.parseInt(process.env.INDEXER_FINALITY_DEPTH ?? '5', 10);
+    const threshold = env.INDEXER_LAG_ALERT_THRESHOLD;
+    const finalityDepth = env.INDEXER_FINALITY_DEPTH ?? 5;
     const [rpcResult, stateResult] = await Promise.allSettled([
       sorobanService.healthCheck(),
       pool.query(
@@ -275,10 +274,7 @@ app.get(
   '/health/deep',
   asyncHandler(async (_req: Request, res: Response) => {
     const TIMEOUT_MS = 2000;
-    const INDEXER_HEALTH_LAG_LIMIT = Number.parseInt(
-      process.env.INDEXER_HEALTH_LAG_LIMIT ?? '100',
-      10,
-    );
+    const INDEXER_HEALTH_LAG_LIMIT = env.INDEXER_HEALTH_LAG_LIMIT;
 
     const withTimeout = <T>(promise: Promise<T>, fallback: T): Promise<T> =>
       Promise.race([
@@ -394,7 +390,7 @@ mountSwaggerDocs(app);
 
 // ── Diagnostic / Test Routes ─────────────────────────────────────
 // Only exposed in test environment to verify centralized error handling.
-if (process.env.NODE_ENV === 'test') {
+if (env.NODE_ENV === 'test') {
   app.get('/test/error/operational', () => {
     throw AppError.badRequest('Diagnostic operational error');
   });

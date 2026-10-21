@@ -1,8 +1,9 @@
 import { createClient, type RedisClientType } from 'redis';
 import crypto from 'node:crypto';
 import logger from '../utils/logger.js';
+import { env } from '../config/env.js';
 
-const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
+const REDIS_URL = env.REDIS_URL;
 
 export enum RateLimitTier {
   ANONYMOUS = 'anonymous',
@@ -84,7 +85,7 @@ end
     this.client = createClient({ url: REDIS_URL });
     this.client.on('error', (error) => {
       this.isConnected = false;
-      if (process.env.NODE_ENV !== 'test') {
+      if (env.NODE_ENV !== 'test') {
         logger.withContext().error('Rate limit Redis client error', { error });
       }
     });

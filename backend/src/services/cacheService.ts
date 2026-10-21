@@ -1,7 +1,8 @@
 import { createClient, type RedisClientType } from 'redis';
 import logger from '../utils/logger.js';
+import { env } from '../config/env.js';
 
-const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
+const REDIS_URL = env.REDIS_URL;
 
 class CacheService {
   private client: RedisClientType | undefined;
@@ -14,7 +15,7 @@ class CacheService {
 
     this.client.on('error', (err) => {
       // In tests, we don't want to spam the console with ECONNREFUSED if Redis isn't running
-      if (process.env.NODE_ENV !== 'test' || err.code !== 'ECONNREFUSED') {
+      if (env.NODE_ENV !== 'test' || err.code !== 'ECONNREFUSED') {
         logger.withContext().error('Redis Client Error', err);
       }
       this.isConnected = false;
@@ -27,7 +28,7 @@ class CacheService {
 
     this.client.on('reconnecting', () => {
       // Only log reconnecting in non-test environments to keep test output clean
-      if (process.env.NODE_ENV !== 'test') {
+      if (env.NODE_ENV !== 'test') {
         logger.withContext().info('Redis Client Reconnecting');
       }
     });
@@ -42,7 +43,7 @@ class CacheService {
         this.isConnected = true;
       } catch (err) {
         // Silently fail in tests if connection fails, but log in production
-        if (process.env.NODE_ENV !== 'test') {
+        if (env.NODE_ENV !== 'test') {
           logger.withContext().error('Failed to connect to Redis', err);
         }
         throw err;
@@ -62,7 +63,7 @@ class CacheService {
       const stringValue = JSON.stringify(value);
       await this.client!.setEx(key, ttlSeconds, stringValue);
     } catch (error) {
-      if (process.env.NODE_ENV !== 'test') {
+      if (env.NODE_ENV !== 'test') {
         logger.withContext().error(`Error setting cache for key ${key}`, { error });
       }
     }
@@ -88,7 +89,7 @@ class CacheService {
 
       return JSON.parse(value) as T;
     } catch (error) {
-      if (process.env.NODE_ENV !== 'test') {
+      if (env.NODE_ENV !== 'test') {
         logger.withContext().error(`Error getting cache for key ${key}`, { error });
       }
       return null;
@@ -144,7 +145,7 @@ class CacheService {
       await this.ensureConnected();
       await this.client!.del(key);
     } catch (error) {
-      if (process.env.NODE_ENV !== 'test') {
+      if (env.NODE_ENV !== 'test') {
         logger.withContext().error(`Error deleting cache for key ${key}`, { error });
       }
     }
@@ -183,7 +184,7 @@ return 0
       });
       return result === 1;
     } catch (error) {
-      if (process.env.NODE_ENV !== 'test') {
+      if (env.NODE_ENV !== 'test') {
         logger.withContext().error(`Error in deleteIfMatch for key ${key}`, { error });
       }
       return false;
@@ -202,7 +203,7 @@ return 0
         await this.client!.del(keys);
       }
     } catch (error) {
-      if (process.env.NODE_ENV !== 'test') {
+      if (env.NODE_ENV !== 'test') {
         logger.withContext().error(`Error invalidating pattern ${pattern}`, { error });
       }
     }

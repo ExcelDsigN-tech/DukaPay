@@ -27,6 +27,52 @@ pub trait BreakerInterface {
     fn is_blocked(env: Env, contract: Address, function: Symbol) -> bool;
 }
 
+/// Mirrors agent_registry::AgentStatus field-for-field so cross-contract
+/// decoding matches exactly (#788).
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum AgentStatus {
+    Pending,
+    Active,
+    Suspended,
+    Expired,
+}
+
+/// Mirrors agent_registry::AgentInfo. Only `status` is read here, but the
+/// whole struct is decoded so the encoding matches the registry exactly.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AgentInfo {
+    pub status: AgentStatus,
+    pub kyc_ref: Symbol,
+    pub bond_amount: i128,
+    pub license_expiry: u64,
+    pub region: Symbol,
+    pub reputation: i128,
+}
+
+/// Mirrors agent_registry::RegistryError so a failed `get_agent` call (e.g.
+/// unregistered agent) decodes instead of panicking the vault call.
+#[contracterror]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum RegistryError {
+    NotInitialized = 2,
+    Unauthorized = 3,
+    AgentAlreadyRegistered = 4,
+    AgentNotFound = 5,
+    InvalidBond = 6,
+    MissingKyc = 7,
+    InvalidStatusTransition = 8,
+    BondFrozen = 9,
+}
+
+/// Interface exposed by the DukaPay `AgentRegistry` contract. The vault
+/// consults `get_agent` before minting new float (#788).
+#[contractclient(name = "RegistryClient")]
+pub trait RegistryInterface {
+    fn get_agent(env: Env, agent: Address) -> Result<AgentInfo, RegistryError>;
+}
+
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum VaultError {
@@ -73,6 +119,9 @@ pub enum DataKey {
     /// Optional address of the DukaPay CircuitBreaker contract. When set, the
     /// vault consults it before executing value-moving operations.
     CircuitBreaker,
+    /// Optional address of the DukaPay AgentRegistry contract. When set, the
+    /// vault requires an Active status before minting new float (#788).
+    Registry,
     Vault(Address),
     ReentrancyLock,
     /// Contract code version, bumped by every `upgrade`.
@@ -162,6 +211,27 @@ impl AgentVault {
             }
         }
         Ok(())
+    }
+
+    /// Require that `agent` is registered and `Active` before minting new
+    /// float for them (#788). A no-op when no registry is configured, so
+    /// existing deployments stay backward compatible until they wire one in
+    /// via `set_registry`.
+    fn assert_agent_active(env: &Env, agent: &Address) -> Result<(), VaultError> {
+        if let Some(registry) = env
+            .storage()
+            .instance()
+            .get::<_, Option<Address>>(&DataKey::Registry)
+            .flatten()
+        {
+            let client = RegistryClient::new(env, &registry);
+            match client.try_get_agent(agent) {
+                Ok(Ok(info)) if info.status == AgentStatus::Active => Ok(()),
+                _ => Err(VaultError::AgentNotFound),
+            }
+        } else {
+            Ok(())
+        }
     }
 
     fn acquire_lock(env: &Env) -> Result<(), VaultError> {
@@ -368,6 +438,7 @@ impl AgentVault {
     pub fn mint_float(env: Env, agent: Address, amount: i128) -> Result<(), VaultError> {
         Self::require_operator(&env)?;
         Self::assert_circuit_ok(&env, Symbol::new(&env, "mint_float"))?;
+        Self::assert_agent_active(&env, &agent)?;
         if amount <= 0 {
             return Err(VaultError::InvalidAmount);
         }
@@ -530,6 +601,14 @@ impl AgentVault {
         env.storage()
             .instance()
             .set(&DataKey::CircuitBreaker, &breaker);
+        Self::bump_instance_ttl(&env);
+        Ok(())
+    }
+
+    /// Configure (or clear) the `AgentRegistry` contract address. Owner only.
+    pub fn set_registry(env: Env, registry: Option<Address>) -> Result<(), VaultError> {
+        Self::owner(&env)?.require_auth();
+        env.storage().instance().set(&DataKey::Registry, &registry);
         Self::bump_instance_ttl(&env);
         Ok(())
     }

@@ -10,10 +10,22 @@
  * See issue #536.
  */
 
+import { DEFAULT_MODE, DISPLAY_DECIMAL_PLACES, RoundingMode } from "../../../lib/money/format";
+
 const FALLBACK_LOCALE = "en-US";
 
+/** money-policy.json rounding mode, as `Intl.NumberFormat` names it. */
+const INTL_ROUNDING_MODE: Record<RoundingMode, Intl.NumberFormatOptions["roundingMode"]> = {
+  [RoundingMode.HalfEven]: "halfEven",
+  [RoundingMode.HalfUp]: "halfExpand",
+  [RoundingMode.Floor]: "floor",
+  [RoundingMode.Ceil]: "ceil",
+};
+
 /**
- * Format a numeric `amount` as a USD currency string in the given locale.
+ * Format a numeric `amount` as a USD currency string in the given locale,
+ * rounded to the display precision and mode in money-policy.json (half-even
+ * to 2 decimals), so a shown balance never exceeds what is owed.
  *
  * @example
  *   formatCurrency(1234.5, "es")   // "1234,50 US$"
@@ -25,7 +37,9 @@ export function formatCurrency(amount: number, locale: string = FALLBACK_LOCALE)
   return new Intl.NumberFormat(resolvedLocale, {
     style: "currency",
     currency: "USD",
-    minimumFractionDigits: 2,
+    minimumFractionDigits: DISPLAY_DECIMAL_PLACES,
+    maximumFractionDigits: DISPLAY_DECIMAL_PLACES,
+    roundingMode: INTL_ROUNDING_MODE[DEFAULT_MODE],
   }).format(amount);
 }
 

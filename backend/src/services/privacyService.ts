@@ -1,8 +1,9 @@
 import crypto from 'node:crypto';
 import { query, withTransaction } from '../db/connection.js';
 import logger from '../utils/logger.js';
+import { env } from '../config/env.js';
 
-const ANONYMIZATION_HASH_SALT = process.env.ANONYMIZATION_HASH_SALT ?? 'dukapay-anon-default';
+const ANONYMIZATION_HASH_SALT = env.ANONYMIZATION_HASH_SALT;
 
 export interface DsarRequest {
   id: string;

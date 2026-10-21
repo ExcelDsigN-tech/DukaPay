@@ -25,6 +25,17 @@ export const floatTransferIdParamsSchema = z
   })
   .strict();
 
+const base64Regex = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
+
+export const submitFloatTransferBodySchema = z
+  .object({
+    signedTxXdr: z
+      .string()
+      .min(1, 'signedTxXdr is required')
+      .regex(base64Regex, 'Must be a valid base64 string'),
+  })
+  .strict();
+
 export const pairLimitsQuerySchema = z
   .object({
     fromAgent: stellarAddressSchema,

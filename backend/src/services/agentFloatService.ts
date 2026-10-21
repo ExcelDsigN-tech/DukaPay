@@ -1,9 +1,10 @@
 import crypto from 'node:crypto';
-import { query } from '../db/connection.js';
+import { query, withTransaction, type PoolClient } from '../db/connection.js';
 import { AppError } from '../errors/AppError.js';
 import logger from '../utils/logger.js';
 import { sorobanService } from './sorobanService.js';
 import { toStroops } from '../money/decimal.js';
+import { env } from '../config/env.js';
 
 export interface InitiateTransferInput {
   fromAgent: string;
@@ -17,6 +18,13 @@ export interface InitiateTransferInput {
 export interface ApproveTransferInput {
   transferId: string;
   approver: string;
+  userRole?: string | undefined;
+}
+
+export interface SubmitTransferInput {
+  transferId: string;
+  signedTxXdr: string;
+  submitter: string;
   userRole?: string | undefined;
 }
 
@@ -40,7 +48,13 @@ export interface AgentFloatTransferRow {
   to_agent: string;
   amount: string;
   reason: string | null;
-  status: 'PENDING_APPROVAL' | 'COMPLETED' | 'REJECTED' | 'CANCELLED';
+  status:
+    | 'PENDING_APPROVAL'
+    | 'AWAITING_SIGNATURE'
+    | 'COMPLETED'
+    | 'REJECTED'
+    | 'CANCELLED'
+    | 'FAILED';
   required_approvals: number;
   approval_count: number;
   created_by: string;
@@ -142,15 +156,24 @@ export class AgentFloatService {
 
   /**
    * Check if transfer amount respects daily and weekly limits.
+   *
+   * Runs on `client`, the same connection holding the per-pair advisory
+   * lock in `initiateTransfer`, so the SUMs below see every transfer
+   * concurrent initiations for this pair have already inserted (#791).
    */
-  private async checkLimits(fromAgent: string, toAgent: string, amount: number): Promise<void> {
+  private async checkLimits(
+    fromAgent: string,
+    toAgent: string,
+    amount: number,
+    client: PoolClient,
+  ): Promise<void> {
     const limits = await this.getPairLimits(fromAgent, toAgent);
 
     // Check rolling 24-hour total
-    const dailyRes = await query(
+    const dailyRes = await client.query(
       `SELECT COALESCE(SUM(amount), 0) as total FROM agent_float_transfers
        WHERE from_agent = $1 AND to_agent = $2
-         AND status IN ('PENDING_APPROVAL', 'COMPLETED')
+         AND status IN ('PENDING_APPROVAL', 'AWAITING_SIGNATURE', 'COMPLETED')
          AND created_at >= NOW() - INTERVAL '24 hours'`,
       [fromAgent, toAgent],
     );
@@ -163,10 +186,10 @@ export class AgentFloatService {
     }
 
     // Check rolling 7-day total
-    const weeklyRes = await query(
+    const weeklyRes = await client.query(
       `SELECT COALESCE(SUM(amount), 0) as total FROM agent_float_transfers
        WHERE from_agent = $1 AND to_agent = $2
-         AND status IN ('PENDING_APPROVAL', 'COMPLETED')
+         AND status IN ('PENDING_APPROVAL', 'AWAITING_SIGNATURE', 'COMPLETED')
          AND created_at >= NOW() - INTERVAL '7 days'`,
       [fromAgent, toAgent],
     );
@@ -203,32 +226,37 @@ export class AgentFloatService {
       );
     }
 
-    // Enforce daily/weekly pair limits
-    await this.checkLimits(fromAgent, toAgent, amount);
-
     const transferId = `ft_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
     const initialRole = createdBy === fromAgent ? 'initiator' : 'admin';
+    const pairKey = `${fromAgent}:${toAgent}`;
 
-    // Insert transfer record
-    const transferRes = await query(
-      `INSERT INTO agent_float_transfers
-       (id, from_agent, to_agent, amount, reason, status, required_approvals, approval_count, created_by)
-       VALUES ($1, $2, $3, $4, $5, 'PENDING_APPROVAL', 2, 1, $6)
-       RETURNING *`,
-      [transferId, fromAgent, toAgent, amount, reason ?? null, createdBy],
-    );
+    // Serialize concurrent initiations for this agent pair, and run the
+    // limit check in the same transaction that holds the lock, so it is
+    // impossible for two concurrent requests to both pass checkLimits
+    // against the same pre-insert totals (#791).
+    const { transfer, approvals } = await withTransaction(async (client) => {
+      await client.query('SELECT pg_advisory_xact_lock(hashtext($1)::bigint)', [pairKey]);
 
-    const transfer = transferRes.rows[0] as AgentFloatTransferRow;
+      await this.checkLimits(fromAgent, toAgent, amount, client);
 
-    // Insert initial approval
-    const approvalRes = await query(
-      `INSERT INTO agent_float_transfer_approvals (transfer_id, approver, role)
-       VALUES ($1, $2, $3)
-       RETURNING *`,
-      [transferId, createdBy, initialRole],
-    );
+      const transferRes = await client.query(
+        `INSERT INTO agent_float_transfers
+         (id, from_agent, to_agent, amount, reason, status, required_approvals, approval_count, created_by)
+         VALUES ($1, $2, $3, $4, $5, 'PENDING_APPROVAL', 2, 1, $6)
+         RETURNING *`,
+        [transferId, fromAgent, toAgent, amount, reason ?? null, createdBy],
+      );
+      const transfer = transferRes.rows[0] as AgentFloatTransferRow;
 
-    const approvals = approvalRes.rows as TransferApprovalRow[];
+      const approvalRes = await client.query(
+        `INSERT INTO agent_float_transfer_approvals (transfer_id, approver, role)
+         VALUES ($1, $2, $3)
+         RETURNING *`,
+        [transferId, createdBy, initialRole],
+      );
+
+      return { transfer, approvals: approvalRes.rows as TransferApprovalRow[] };
+    });
 
     // Log immutable audit trail
     await this.logAudit({
@@ -248,55 +276,108 @@ export class AgentFloatService {
   async approveTransfer(input: ApproveTransferInput): Promise<{
     transfer: AgentFloatTransferRow;
     approvals: TransferApprovalRow[];
-    executedOnChain?: boolean;
+    executedOnChain: false;
     unsignedTxXdr?: string;
   }> {
     const { transferId, approver, userRole } = input;
 
-    const transferRes = await query(`SELECT * FROM agent_float_transfers WHERE id = $1`, [
-      transferId,
-    ]);
-    if (transferRes.rows.length === 0) {
-      throw AppError.notFound(`Float transfer request '${transferId}' not found.`);
-    }
-
-    const transfer = transferRes.rows[0] as AgentFloatTransferRow;
-
-    if (transfer.status !== 'PENDING_APPROVAL') {
-      throw AppError.badRequest(`Transfer is already in status '${transfer.status}'.`);
-    }
-
-    // Determine approver role
-    let role: string;
-    if (approver === transfer.from_agent) {
-      role = 'initiator';
-    } else if (approver === transfer.to_agent) {
-      role = 'recipient';
-    } else if (userRole === 'admin' || userRole === 'super_admin') {
-      role = 'admin';
-    } else {
-      throw AppError.forbidden(
-        'Approver must be either the initiating agent, recipient agent, or an admin.',
+    // Lock the transfer row for the duration of the read-decide-write
+    // sequence below, so a concurrent approval can't act on the same stale
+    // approval_count or role set (#791). `approval_count` is incremented
+    // atomically in the same statement that re-reads it, rather than
+    // computed from the pre-lock snapshot.
+    const { transfer, role, newCount, claimedExecution } = await withTransaction(async (client) => {
+      const transferRes = await client.query(
+        `SELECT * FROM agent_float_transfers WHERE id = $1 FOR UPDATE`,
+        [transferId],
       );
-    }
+      if (transferRes.rows.length === 0) {
+        throw AppError.notFound(`Float transfer request '${transferId}' not found.`);
+      }
 
-    // Check if already approved by this approver
-    const existingApproval = await query(
-      `SELECT * FROM agent_float_transfer_approvals WHERE transfer_id = $1 AND approver = $2`,
-      [transferId, approver],
-    );
-    if (existingApproval.rows.length > 0) {
-      throw AppError.badRequest(`Approver '${approver}' has already approved this transfer.`);
-    }
+      const transfer = transferRes.rows[0] as AgentFloatTransferRow;
 
-    // Insert approval
-    await query(
-      `INSERT INTO agent_float_transfer_approvals (transfer_id, approver, role)
-       VALUES ($1, $2, $3)`,
-      [transferId, approver, role],
-    );
+      if (transfer.status !== 'PENDING_APPROVAL') {
+        throw AppError.badRequest(`Transfer is already in status '${transfer.status}'.`);
+      }
 
-    const newCount = transfer.approval_count + 1;
+      // Determine approver role
+      let role: string;
+      if (approver === transfer.from_agent) {
+        role = 'initiator';
+      } else if (approver === transfer.to_agent) {
+        role = 'recipient';
+      } else if (userRole === 'admin' || userRole === 'super_admin') {
+        role = 'admin';
+      } else {
+        throw AppError.forbidden(
+          'Approver must be either the initiating agent, recipient agent, or an admin.',
+        );
+      }
+
+      // Check if already approved by this approver
+      const existingApproval = await client.query(
+        `SELECT * FROM agent_float_transfer_approvals WHERE transfer_id = $1 AND approver = $2`,
+        [transferId, approver],
+      );
+      if (existingApproval.rows.length > 0) {
+        throw AppError.badRequest(`Approver '${approver}' has already approved this transfer.`);
+      }
+
+      // Require distinct roles toward the threshold: two admin approvals
+      // must not complete a transfer neither agent approved (#791).
+      if (role === 'admin') {
+        const existingAdmin = await client.query(
+          `SELECT 1 FROM agent_float_transfer_approvals WHERE transfer_id = $1 AND role = 'admin'`,
+          [transferId],
+        );
+        if (existingAdmin.rows.length > 0) {
+          throw AppError.badRequest('Only one admin approval is allowed per transfer.');
+        }
+      }
+
+      // Insert approval
+      await client.query(
+        `INSERT INTO agent_float_transfer_approvals (transfer_id, approver, role)
+         VALUES ($1, $2, $3)`,
+        [transferId, approver, role],
+      );
+
+      const countRes = await client.query(
+        `UPDATE agent_float_transfers
+         SET approval_count = approval_count + 1
+         WHERE id = $1
+         RETURNING approval_count`,
+        [transferId],
+      );
+      const newCount = (countRes.rows[0] as { approval_count: number }).approval_count;
+
+      // Claim the threshold atomically, still holding the row lock: only the
+      // approval that reaches it flips status away from PENDING_APPROVAL,
+      // with a WHERE guard so a second approval racing to the same threshold
+      // (e.g. a third approver, or a retried request arriving before the
+      // post-lock status update below lands) cannot also claim it (#791).
+      // The transfer only awaits signatures here; COMPLETED is set by
+      // submitTransfer once Stellar confirms it (#792).
+      let claimedExecution = false;
+      if (newCount >= transfer.required_approvals) {
+        // Fail closed before anything is recorded: throwing here rolls back
+        // the approval insert and the count increment.
+        if (!env.AGENT_VAULT_CONTRACT_ID?.trim()) {
+          throw AppError.internal('AGENT_VAULT_CONTRACT_ID is not configured');
+        }
+        const claim = await client.query(
+          `UPDATE agent_float_transfers
+           SET status = 'AWAITING_SIGNATURE'
+           WHERE id = $1 AND status = 'PENDING_APPROVAL'
+           RETURNING id`,
+          [transferId],
+        );
+        claimedExecution = claim.rows.length > 0;
+      }
+
+      return { transfer, role, newCount, claimedExecution };
+    });
 
     // Log approval audit entry
     await this.logAudit({
@@ -309,26 +390,26 @@ export class AgentFloatService {
 
     let updatedTransfer = transfer;
     let unsignedTxXdr: string | undefined;
-    let executedOnChain = false;
+    const executedOnChain = false as const;
 
-    // Threshold check (2-of-3)
-    if (newCount >= transfer.required_approvals) {
-      // Execute the float transfer on Soroban contract if configured
-      let onChainError: string | null = null;
+    if (claimedExecution) {
+      // We atomically claimed the threshold inside the locked transaction
+      // above (status is already AWAITING_SIGNATURE there), so no concurrent
+      // approval can also reach this branch for the same transfer (#791).
+      // Build the transaction for both agents to authorize; building does
+      // not execute it. Correct status to FAILED if the build errors.
+      let buildError: string | null = null;
       try {
-        if (process.env.AGENT_VAULT_CONTRACT_ID) {
-          const result = await sorobanService.buildTransferToAgentTx(
-            transfer.from_agent,
-            transfer.to_agent,
-            // Stored in whole tokens; the contract takes stroops.
-            toStroops(String(transfer.amount)),
-          );
-          unsignedTxXdr = result.unsignedTxXdr;
-        }
-        executedOnChain = true;
+        const result = await sorobanService.buildTransferToAgentTx(
+          transfer.from_agent,
+          transfer.to_agent,
+          // Stored in whole tokens; the contract takes stroops.
+          toStroops(String(transfer.amount)),
+        );
+        unsignedTxXdr = result.unsignedTxXdr;
       } catch (err) {
-        onChainError = err instanceof Error ? err.message : String(err);
-        logger.error('Soroban contract execution failed', {
+        buildError = err instanceof Error ? err.message : String(err);
+        logger.error('Failed to build Soroban float transfer transaction', {
           err,
           transferId,
           fromAgent: transfer.from_agent,
@@ -337,38 +418,38 @@ export class AgentFloatService {
         });
       }
 
-      // Mark as FAILED if on-chain execution failed, COMPLETED otherwise
-      const transferStatus = onChainError ? 'FAILED' : 'COMPLETED';
       const updateRes = await query(
         `UPDATE agent_float_transfers
-         SET status = $3, approval_count = $2, updated_at = NOW(),
-             error_message = $4
+         SET status = COALESCE($2, status), updated_at = NOW(), error_message = $3
          WHERE id = $1
          RETURNING *`,
-        [transferId, newCount, transferStatus, onChainError],
+        [transferId, buildError ? 'FAILED' : null, buildError],
       );
       updatedTransfer = updateRes.rows[0] as AgentFloatTransferRow;
 
-      // Log execution audit entry
+      // Record the real lifecycle stage: no on-chain execution has happened.
       await this.logAudit({
         actor: approver,
-        action: 'AGENT_FLOAT_TRANSFER_EXECUTED',
+        action: buildError
+          ? 'AGENT_FLOAT_TRANSFER_BUILD_FAILED'
+          : 'AGENT_FLOAT_TRANSFER_AWAITING_SIGNATURE',
         target: `TransferID:${transferId}`,
         payload: {
           fromAgent: transfer.from_agent,
           toAgent: transfer.to_agent,
           amount: transfer.amount,
-          executedOnChain,
+          executedOnChain: false,
         },
-        status: 200,
+        status: buildError ? 500 : 200,
       });
     } else {
+      // approval_count was already incremented atomically above.
       const updateRes = await query(
         `UPDATE agent_float_transfers
-         SET approval_count = $2, updated_at = NOW()
+         SET updated_at = NOW()
          WHERE id = $1
          RETURNING *`,
-        [transferId, newCount],
+        [transferId],
       );
       updatedTransfer = updateRes.rows[0] as AgentFloatTransferRow;
     }
@@ -383,6 +464,86 @@ export class AgentFloatService {
       approvals: approvalsRes.rows as TransferApprovalRow[],
       executedOnChain,
       ...(unsignedTxXdr ? { unsignedTxXdr } : {}),
+    };
+  }
+
+  /**
+   * Validate and submit a fully authorized float-transfer transaction.
+   * The transfer is completed only after Stellar confirms SUCCESS.
+   */
+  async submitTransfer(input: SubmitTransferInput): Promise<{
+    transfer: AgentFloatTransferRow;
+    executedOnChain: true;
+    txHash: string;
+  }> {
+    const { transferId, signedTxXdr, submitter, userRole } = input;
+
+    const transferRes = await query(`SELECT * FROM agent_float_transfers WHERE id = $1`, [
+      transferId,
+    ]);
+    if (transferRes.rows.length === 0) {
+      throw AppError.notFound(`Float transfer request '${transferId}' not found.`);
+    }
+
+    const transfer = transferRes.rows[0] as AgentFloatTransferRow;
+    if (transfer.status !== 'AWAITING_SIGNATURE') {
+      throw AppError.badRequest(`Transfer is already in status '${transfer.status}'.`);
+    }
+
+    const isParticipant = submitter === transfer.from_agent || submitter === transfer.to_agent;
+    const isAdmin = userRole === 'admin' || userRole === 'super_admin';
+    if (!isParticipant && !isAdmin) {
+      throw AppError.forbidden(
+        'Only the initiating agent, recipient agent, or an admin can submit this transfer.',
+      );
+    }
+    if (!env.AGENT_VAULT_CONTRACT_ID?.trim()) {
+      throw AppError.internal('AGENT_VAULT_CONTRACT_ID is not configured');
+    }
+
+    const amount = toStroops(String(transfer.amount));
+    sorobanService.validateTransferToAgentTx(
+      signedTxXdr,
+      transfer.from_agent,
+      transfer.to_agent,
+      amount,
+    );
+
+    const stellarResult = await sorobanService.submitSignedTx(signedTxXdr);
+    if (stellarResult.status !== 'SUCCESS') {
+      throw AppError.internal('Float transfer was not confirmed on the Stellar network');
+    }
+
+    const updateRes = await query(
+      `UPDATE agent_float_transfers
+       SET status = 'COMPLETED', tx_hash = $2, updated_at = NOW()
+       WHERE id = $1 AND status = 'AWAITING_SIGNATURE'
+       RETURNING *`,
+      [transferId, stellarResult.txHash],
+    );
+    if (updateRes.rows.length === 0) {
+      throw AppError.conflict('Float transfer status changed while the transaction was submitted');
+    }
+
+    const updatedTransfer = updateRes.rows[0] as AgentFloatTransferRow;
+    await this.logAudit({
+      actor: submitter,
+      action: 'AGENT_FLOAT_TRANSFER_EXECUTED',
+      target: `TransferID:${transferId}`,
+      payload: {
+        fromAgent: transfer.from_agent,
+        toAgent: transfer.to_agent,
+        amount: transfer.amount,
+        txHash: stellarResult.txHash,
+        executedOnChain: true,
+      },
+      status: 200,
+    });
+
+    return {
+      transfer: updatedTransfer,
+      executedOnChain: true,
+      txHash: stellarResult.txHash,
     };
   }
 

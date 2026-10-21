@@ -442,6 +442,10 @@ async function main() {
     console.log('  LendingPool.set_loan_manager(LoanManager)');
     await invoke(server, poolContractId, 'set_loan_manager', [managerContractId], account, passphrase);
 
+    // Wire AgentRegistry into AgentVault so mint_float rejects non-Active agents (#788)
+    console.log('  AgentVault.set_registry');
+    await invoke(server, vaultContractId, 'set_registry', [registryContractId], account, passphrase);
+
     // Wire CircuitBreaker into AgentVault, LendingPool, and LoanManager
     console.log('  AgentVault.set_circuit_breaker');
     await invoke(server, vaultContractId, 'set_circuit_breaker', [breakerContractId], account, passphrase);

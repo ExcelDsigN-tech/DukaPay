@@ -3,7 +3,16 @@
  * never record a rejected or failed transaction as completed.
  */
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
-import { Account, Keypair, Networks, Operation, TransactionBuilder } from '@stellar/stellar-sdk';
+import {
+  Account,
+  Address,
+  Keypair,
+  Networks,
+  Operation,
+  StrKey,
+  TransactionBuilder,
+  nativeToScVal,
+} from '@stellar/stellar-sdk';
 
 const mockSendTransaction = jest.fn<() => Promise<unknown>>();
 const mockPollTransaction = jest.fn<() => Promise<unknown>>();
@@ -20,6 +29,8 @@ jest.unstable_mockModule('../../config/stellar.js', () => ({
 const { sorobanService } = await import('../sorobanService.js');
 
 const source = Keypair.random();
+const destination = Keypair.random();
+const vaultContractId = StrKey.encodeContract(Buffer.alloc(32, 1));
 const signedXdr = new TransactionBuilder(new Account(source.publicKey(), '1'), {
   fee: '100',
   networkPassphrase: Networks.TESTNET,
@@ -31,8 +42,30 @@ const signedXdr = new TransactionBuilder(new Account(source.publicKey(), '1'), {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  process.env.AGENT_VAULT_CONTRACT_ID = vaultContractId;
   mockSendTransaction.mockResolvedValue({ hash: 'tx-1', status: 'PENDING' });
 });
+
+function transferXdr(options?: { amount?: bigint; functionName?: string; contractId?: string }) {
+  return new TransactionBuilder(new Account(source.publicKey(), '1'), {
+    fee: '100',
+    networkPassphrase: Networks.TESTNET,
+  })
+    .addOperation(
+      Operation.invokeContractFunction({
+        contract: options?.contractId ?? vaultContractId,
+        function: options?.functionName ?? 'transfer_to_agent',
+        args: [
+          nativeToScVal(Address.fromString(source.publicKey()), { type: 'address' }),
+          nativeToScVal(Address.fromString(destination.publicKey()), { type: 'address' }),
+          nativeToScVal(options?.amount ?? 250_000_000n, { type: 'i128' }),
+        ],
+      }),
+    )
+    .setTimeout(30)
+    .build()
+    .toXDR();
+}
 
 describe('sorobanService.submitSignedTx', () => {
   it('returns the result when the transaction succeeds', async () => {
@@ -67,5 +100,44 @@ describe('sorobanService.submitSignedTx', () => {
       statusCode,
       details: { txHash: 'tx-1', txStatus: status },
     });
+  });
+});
+
+describe('sorobanService.validateTransferToAgentTx', () => {
+  it('accepts the exact approved vault invocation', () => {
+    expect(() =>
+      sorobanService.validateTransferToAgentTx(
+        transferXdr(),
+        source.publicKey(),
+        destination.publicKey(),
+        250_000_000n,
+      ),
+    ).not.toThrow();
+  });
+
+  it.each([
+    ['amount', { amount: 250_000_001n }],
+    ['function', { functionName: 'deposit' }],
+    ['contract', { contractId: StrKey.encodeContract(Buffer.alloc(32, 2)) }],
+  ])('rejects a signed XDR with a mismatched %s', (_label, options) => {
+    expect(() =>
+      sorobanService.validateTransferToAgentTx(
+        transferXdr(options),
+        source.publicKey(),
+        destination.publicKey(),
+        250_000_000n,
+      ),
+    ).toThrow(/does not match float transfer/);
+  });
+
+  it('rejects malformed XDR before submission', () => {
+    expect(() =>
+      sorobanService.validateTransferToAgentTx(
+        'not-an-envelope',
+        source.publicKey(),
+        destination.publicKey(),
+        250_000_000n,
+      ),
+    ).toThrow('signedTxXdr is not a valid transaction envelope');
   });
 });

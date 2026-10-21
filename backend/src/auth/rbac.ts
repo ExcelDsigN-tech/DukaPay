@@ -1,3 +1,4 @@
+import { env } from '../config/env.js';
 export const USER_ROLES = [
   'admin',
   'super_admin',
@@ -81,49 +82,38 @@ export const ROLE_HIERARCHY: Record<UserRole, number> = {
   borrower: 1,
 };
 
-const parseWalletSet = (wallets: string | undefined): Set<string> => {
-  if (!wallets) return new Set();
-
-  return new Set(
-    wallets
-      .split(',')
-      .map((wallet) => wallet.trim())
-      .filter((wallet) => wallet.length > 0),
-  );
-};
-
 export const resolveRoleForWallet = (publicKey: string): UserRole => {
-  const superAdminWallets = parseWalletSet(process.env.SUPER_ADMIN_WALLETS);
+  const superAdminWallets = new Set(env.SUPER_ADMIN_WALLETS);
   if (superAdminWallets.has(publicKey)) {
     return 'super_admin';
   }
 
-  const opsWallets = parseWalletSet(process.env.OPS_WALLETS);
+  const opsWallets = new Set(env.OPS_WALLETS);
   if (opsWallets.has(publicKey)) {
     return 'ops';
   }
 
-  const supportWallets = parseWalletSet(process.env.SUPPORT_WALLETS);
+  const supportWallets = new Set(env.SUPPORT_WALLETS);
   if (supportWallets.has(publicKey)) {
     return 'support';
   }
 
-  const adminWallets = parseWalletSet(process.env.ADMIN_WALLETS);
+  const adminWallets = new Set(env.ADMIN_WALLETS);
   if (adminWallets.has(publicKey)) {
     return 'admin';
   }
 
-  const agentWallets = parseWalletSet(process.env.AGENT_WALLETS);
+  const agentWallets = new Set(env.AGENT_WALLETS);
   if (agentWallets.has(publicKey)) {
     return 'agent';
   }
 
-  const auditorWallets = parseWalletSet(process.env.AUDITOR_WALLETS);
+  const auditorWallets = new Set(env.AUDITOR_WALLETS);
   if (auditorWallets.has(publicKey)) {
     return 'auditor';
   }
 
-  const lenderWallets = parseWalletSet(process.env.LENDER_WALLETS);
+  const lenderWallets = new Set(env.LENDER_WALLETS);
   if (lenderWallets.has(publicKey)) {
     return 'lender';
   }
