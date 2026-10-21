@@ -3,6 +3,8 @@ import type {
   AgentAssignmentsResponse,
   AgentDashboard,
   AgentPairLimitsResponse,
+  AmortizationPreview,
+  AmortizationSchedule,
   ApproveFloatTransferResponse,
   AssignBorrowerResponse,
   BorrowerLoanStatus,
@@ -12,6 +14,7 @@ import type {
   InitiateFloatTransferResponse,
   Loan,
   LoanConfig,
+  LoanEvents,
   PoolAnalyticsResponse,
   PoolStats,
   RejectFloatTransferResponse,
@@ -20,8 +23,12 @@ import type {
   RemittanceList,
   RemittanceSubmitResult,
   RemoveBorrowerResponse,
+  RepaymentPreview,
   RepayTransaction,
   Score,
+  ScoreBreakdown,
+  ScoreHistory,
+  ScoreNFT,
   Session,
   SetAgentPairLimitsResponse,
   SubmitFloatTransferResponse,
@@ -72,6 +79,43 @@ export class AuthResource {
 
   logout(): Promise<void> {
     return this.http.post('/auth/logout');
+  }
+
+  refresh(refreshToken: string): Promise<Session> {
+    if (!refreshToken || typeof refreshToken !== 'string') {
+      throw new ValidationError('Invalid refreshToken: must be a non-empty string');
+    }
+    return this.http.post('/auth/refresh', { refreshToken });
+  }
+
+  logoutAll(): Promise<void> {
+    return this.http.post('/auth/logout-all');
+  }
+
+  submitKyc(params: {
+    fullName: string;
+    dateOfBirth: string;
+    address: string;
+    idType: string;
+    idNumber: string;
+    idDocument?: string;
+  }): Promise<{ success: boolean; kycId: string }> {
+    if (!params.fullName || typeof params.fullName !== 'string') {
+      throw new ValidationError('Invalid fullName: must be a non-empty string');
+    }
+    if (!params.dateOfBirth || typeof params.dateOfBirth !== 'string') {
+      throw new ValidationError('Invalid dateOfBirth: must be a non-empty string');
+    }
+    if (!params.address || typeof params.address !== 'string') {
+      throw new ValidationError('Invalid address: must be a non-empty string');
+    }
+    if (!params.idType || typeof params.idType !== 'string') {
+      throw new ValidationError('Invalid idType: must be a non-empty string');
+    }
+    if (!params.idNumber || typeof params.idNumber !== 'string') {
+      throw new ValidationError('Invalid idNumber: must be a non-empty string');
+    }
+    return this.http.post('/auth/kyc', params);
   }
 }
 
@@ -140,6 +184,40 @@ export class LoansResource {
   submit(loanId: number | string, signedXdr: string): Promise<Loan> {
     return this.http.post(`/loans/${loanId}/submit`, { signedXdr });
   }
+
+  /**
+   * Compute an amortization preview for a loan before applying.
+   * Amounts are in whole tokens.
+   */
+  amortizationPreview(params: {
+    principal: number;
+    interestRateBps: number;
+    termMonths: number;
+  }): Promise<AmortizationPreview> {
+    validateTokenAmount(params.principal, 'principal');
+    validatePositiveInt(params.interestRateBps, 'interestRateBps');
+    validatePositiveInt(params.termMonths, 'termMonths');
+    return this.http.post('/loans/amortization-preview', params);
+  }
+
+  amortizationSchedule(loanId: number | string): Promise<AmortizationSchedule> {
+    validatePositiveInt(loanId, 'loanId');
+    return this.http.get(`/loans/${loanId}/amortization-schedule`);
+  }
+
+  /**
+   * Returns the current repayment preview for an active loan.
+   * Amounts are in whole tokens.
+   */
+  repaymentPreview(loanId: number | string): Promise<RepaymentPreview> {
+    validatePositiveInt(loanId, 'loanId');
+    return this.http.get(`/loans/${loanId}/repayment-preview`);
+  }
+
+  events(loanId: number | string): Promise<LoanEvents> {
+    validatePositiveInt(loanId, 'loanId');
+    return this.http.get(`/loans/${loanId}/events`);
+  }
 }
 
 export class PoolResource {
@@ -197,6 +275,21 @@ export class ScoresResource {
   get(address: string): Promise<Score> {
     validateStellarAddress(address, 'address');
     return this.http.get(`/score/${address}`);
+  }
+
+  history(address: string): Promise<ScoreHistory> {
+    validateStellarAddress(address, 'address');
+    return this.http.get(`/score/${address}/history`);
+  }
+
+  nft(address: string): Promise<ScoreNFT> {
+    validateStellarAddress(address, 'address');
+    return this.http.get(`/score/${address}/nft`);
+  }
+
+  breakdown(userId: string): Promise<ScoreBreakdown> {
+    validateStellarAddress(userId, 'userId');
+    return this.http.get(`/score/${userId}/breakdown`);
   }
 }
 

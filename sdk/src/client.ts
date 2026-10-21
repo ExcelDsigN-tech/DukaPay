@@ -56,6 +56,12 @@ export class DukaPayClient {
     this.http = new HttpClient({
       baseUrl: opts.baseUrl,
       token: () => this.session?.token,
+      onUnauthorized: async () => {
+        if (!this.session?.refreshToken) return null;
+        const newSession = await this.auth.refresh(this.session.refreshToken);
+        this.setSession(newSession);
+        return newSession;
+      },
       ...opts.http,
     });
     if (opts.token) this.session = { token: opts.token } as Session;

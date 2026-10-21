@@ -27,6 +27,7 @@ export interface Challenge {
 
 export interface Session {
   token: string;
+  refreshToken?: string;
   expiresAt: string;
   address: Address;
   scopes: string[];
@@ -115,6 +116,53 @@ export interface SimulationResult {
   error?: string;
 }
 
+export interface AmortizationScheduleEntry {
+  period: number;
+  paymentDate: string;
+  principalPayment: number;
+  interestPayment: number;
+  totalPayment: number;
+  remainingBalance: number;
+}
+
+export interface AmortizationPreview {
+  success: boolean;
+  principal: number;
+  interestRateBps: number;
+  termMonths: number;
+  schedule: AmortizationScheduleEntry[];
+}
+
+export interface AmortizationSchedule {
+  success: boolean;
+  loanId: number;
+  schedule: AmortizationScheduleEntry[];
+}
+
+export interface RepaymentPreview {
+  success: boolean;
+  loanId: number;
+  currentBalance: number;
+  accruedInterest: number;
+  totalOwed: number;
+  nextPaymentDue: string;
+}
+
+export interface LoanEvent {
+  id: number;
+  loanId: number;
+  eventType: string;
+  amount?: number;
+  timestamp: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface LoanEvents {
+  success: boolean;
+  loanId: number;
+  events: LoanEvent[];
+}
+
 // ── Pool / float ──────────────────────────────────────────────────────────────
 
 export interface PoolStats {
@@ -187,6 +235,41 @@ export interface Score {
   score: number;
   band: CreditBand;
   factors: ScoreFactors;
+}
+
+export interface ScoreHistoryPoint {
+  score: number;
+  timestamp: string;
+  reason?: string;
+}
+
+export interface ScoreHistory {
+  success: boolean;
+  walletAddress: Address;
+  history: ScoreHistoryPoint[];
+}
+
+export interface ScoreNFT {
+  success: boolean;
+  walletAddress: Address;
+  nftId?: string;
+  metadata?: {
+    score: number;
+    band: CreditBand;
+    issuedAt: string;
+  };
+}
+
+export interface ScoreBreakdown {
+  success: boolean;
+  userId: Address;
+  score: number;
+  components: {
+    repaymentHistory: number;
+    loanUtilization: number;
+    accountAge: number;
+    diversification: number;
+  };
 }
 
 // ── Remittance ────────────────────────────────────────────────────────────────
