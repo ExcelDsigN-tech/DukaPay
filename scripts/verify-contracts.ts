@@ -17,6 +17,10 @@
  *   4. Metadata completeness: ABI version, upgrade authority, timelock,
  *                             deployer and deploy tx hash are recorded for every
  *                             deployed contract.
+ *   5. Init params:           initParams lists the parameter names of the
+ *                             contract's `__constructor` in
+ *                             contracts/<name>/src/lib.rs, in order. Runs for
+ *                             every entry, deployed or not (Issue #754).
  *
  * Unrecorded placeholders ("not yet recorded") and missing environment inputs
  * are reported as SKIPPED, never as failures, so a fresh checkout stays green
@@ -70,6 +74,7 @@ interface ContractMeta {
   upgradeAuthority?: string | null;
   timelock?: string | null;
   envVar?: string;
+  initParams?: string[];
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -91,6 +96,22 @@ function readDotenvValue(file: string, key: string): string | undefined {
     if (trimmed.slice(0, eq).trim() === key) return trimmed.slice(eq + 1).trim();
   }
   return undefined;
+}
+
+/**
+ * Parameter names of `pub fn __constructor(env: Env, ...)` in
+ * contracts/<name>/src/lib.rs, or undefined when the registry entry has no
+ * contract crate (e.g. the Stellar Asset Contract `token`).
+ */
+function readConstructorParams(contractName: string): string[] | undefined {
+  const abs = path.join(REPO_ROOT, 'contracts', contractName, 'src/lib.rs');
+  if (!fs.existsSync(abs)) return undefined;
+  const match = /pub fn __constructor\s*\(([^)]*)\)/.exec(fs.readFileSync(abs, 'utf8'));
+  if (!match) return [];
+  return match[1]
+    .split(',')
+    .map((param) => param.split(':')[0].trim())
+    .filter((param) => param !== '' && param !== 'env');
 }
 
 const isPlaceholder = (v: unknown): boolean =>
@@ -214,6 +235,30 @@ async function main(): Promise<void> {
           severity: 'SKIPPED',
           key: base,
           detail: `${meta.envVar} unset in backend/.env; run scripts/deploy.ts`,
+        });
+      }
+
+      // 5. initParams match the Rust constructor signature.
+      const constructorParams = readConstructorParams(name);
+      const initParams = meta.initParams ?? [];
+      if (constructorParams === undefined) {
+        findings.push({
+          check: 'init-params',
+          severity: initParams.length ? 'DRIFT' : 'SKIPPED',
+          key: base,
+          detail: initParams.length
+            ? `initParams [${initParams.join(', ')}] recorded but contracts/${name} does not exist`
+            : `no contracts/${name} crate; nothing to compare`,
+        });
+      } else {
+        const match = constructorParams.join(',') === initParams.join(',');
+        findings.push({
+          check: 'init-params',
+          severity: match ? 'OK' : 'DRIFT',
+          key: base,
+          detail: match
+            ? 'initParams match __constructor'
+            : `initParams [${initParams.join(', ')}] differ from __constructor [${constructorParams.join(', ')}]`,
         });
       }
 
