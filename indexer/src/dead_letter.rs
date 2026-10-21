@@ -152,7 +152,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("missing_dlq.ndjson");
         let path = path.to_str().unwrap().to_string();
-        // File doesn't exist yet — new() should start with an empty set.
+        // File doesn't exist yet: new() should start with an empty set.
 
         let dlq = DeadLetterQueue::new(&path).await.unwrap();
         let event = fake_event("ev3", "CABC", 300);

@@ -185,7 +185,7 @@ mod tests {
             store.save(0, "CABC", 999).await.unwrap();
         }
 
-        // New instance — reads the file written above.
+        // New instance: reads the file written above.
         let store2 = FileCheckpointStore::new(&path).await.unwrap();
         assert_eq!(store2.load(0, "CABC").await.unwrap(), Some(999));
     }
@@ -207,7 +207,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("missing_checkpoint.json");
         let path = path.to_str().unwrap().to_string();
-        // File doesn't exist yet — new() should start empty rather than error.
+        // File doesn't exist yet: new() should start empty rather than error.
 
         let store = FileCheckpointStore::new(&path).await.unwrap();
         assert_eq!(store.load(0, "C1").await.unwrap(), None);

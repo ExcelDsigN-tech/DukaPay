@@ -27,18 +27,36 @@ export const swaggerSchemas = {
       floatUtilization: {
         type: 'object',
         properties: {
-          totalFloat: { type: 'number' },
-          allocated: { type: 'number' },
+          totalFloat: {
+            type: 'number',
+            description: 'Whole tokens, up to 7 decimal places.',
+          },
+          allocated: {
+            type: 'number',
+            description: 'Whole tokens, up to 7 decimal places.',
+          },
           utilizationPct: { type: 'number' },
         },
       },
       earnings: {
         type: 'object',
         properties: {
-          daily: { type: 'number' },
-          weekly: { type: 'number' },
-          monthly: { type: 'number' },
-          total: { type: 'number' },
+          daily: {
+            type: 'number',
+            description: 'Whole tokens, up to 7 decimal places.',
+          },
+          weekly: {
+            type: 'number',
+            description: 'Whole tokens, up to 7 decimal places.',
+          },
+          monthly: {
+            type: 'number',
+            description: 'Whole tokens, up to 7 decimal places.',
+          },
+          total: {
+            type: 'number',
+            description: 'Whole tokens, up to 7 decimal places.',
+          },
         },
       },
       borrowerPortfolio: {
@@ -47,7 +65,10 @@ export const swaggerSchemas = {
           totalLoans: { type: 'integer' },
           activeLoans: { type: 'integer' },
           defaultedLoans: { type: 'integer' },
-          totalOutstanding: { type: 'number' },
+          totalOutstanding: {
+            type: 'number',
+            description: 'Whole tokens, up to 7 decimal places.',
+          },
           byStatus: { type: 'object', additionalProperties: { type: 'integer' } },
         },
       },
@@ -55,14 +76,23 @@ export const swaggerSchemas = {
         type: 'object',
         properties: {
           count: { type: 'integer' },
-          totalValue: { type: 'number' },
+          totalValue: {
+            type: 'number',
+            description: 'Whole tokens, up to 7 decimal places.',
+          },
         },
       },
       collateralRatio: {
         type: 'object',
         properties: {
-          totalCollateral: { type: 'number' },
-          totalDebt: { type: 'number' },
+          totalCollateral: {
+            type: 'number',
+            description: 'Whole tokens, up to 7 decimal places.',
+          },
+          totalDebt: {
+            type: 'number',
+            description: 'Whole tokens, up to 7 decimal places.',
+          },
           ratio: { type: 'number' },
         },
       },

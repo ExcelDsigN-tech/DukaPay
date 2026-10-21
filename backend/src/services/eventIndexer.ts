@@ -77,6 +77,8 @@ interface ContractEvent extends IndexedLoanEvent {
   adminAddress?: string;
   /** Borrower refund amount decoded from a LoanLiquidated event value tuple (index 2). */
   borrowerRefund?: string;
+  /** Recipient address for FloatTransferred events (topic[2]). */
+  toAddress?: string;
   ledger: number;
   ledgerClosedAt: Date;
   txHash: string;
@@ -878,6 +880,21 @@ export class EventIndexer {
             );
           }
 
+          // Handle FloatTransferred events: update float_balance for both agents
+          if (event.eventType === 'FloatTransferred' && event.address && event.toAddress && event.amount) {
+            const amountBigInt = BigInt(event.amount);
+            // Subtract from source agent
+            await client.query(
+              `UPDATE agent_vaults SET float_balance = float_balance - $1, updated_at = CURRENT_TIMESTAMP WHERE agent_address = $2`,
+              [amountBigInt.toString(), event.address],
+            );
+            // Add to destination agent
+            await client.query(
+              `UPDATE agent_vaults SET float_balance = float_balance + $1, updated_at = CURRENT_TIMESTAMP WHERE agent_address = $2`,
+              [amountBigInt.toString(), event.toAddress],
+            );
+          }
+
           // Aggregate score deltas per borrower; a single bulk upsert at
           // the end of the transaction avoids N+1 score updates.
           if (event.eventType === 'LoanRepaid') {
@@ -985,6 +1002,7 @@ export class EventIndexer {
     let interestRateBps: number | undefined;
     let termLedgers: number | undefined;
     let borrowerRefund: string | undefined;
+    let toAddress: string | undefined;
 
     if (type === 'LoanRequested') {
       // (type, loan_id, borrower), amount
@@ -1216,6 +1234,20 @@ export class EventIndexer {
       address = this.decodeAddress(event.topic[2]);
       amount = this.decodeTupleFirstNumericValue(event.value);
       borrowerRefund = this.decodeTupleThirdNumericValue(event.value);
+    } else if (type === 'FloatTransferred') {
+      // (type, from, to), amount
+      if (!event.topic[1] || !event.topic[2]) return null;
+      address = this.decodeAddress(event.topic[1]);
+      toAddress = this.decodeAddress(event.topic[2]);
+      if (!toAddress) return null;
+      amount = this.decodeAmount(event.value);
+    } else if (type === 'FloatMinted' || type === 'FloatBurned' || type === 'VaultSettled') {
+      // Float events: (type, agent), amount / ()
+      if (!event.topic[1]) return null;
+      address = this.decodeAddress(event.topic[1]);
+      if (type === 'FloatMinted' || type === 'FloatBurned') {
+        amount = this.decodeAmount(event.value);
+      }
     }
 
     // Decode admin address for LoanApprv events (topic[1] = approving admin)
@@ -1244,6 +1276,7 @@ export class EventIndexer {
       ...(address !== undefined ? { address } : {}),
       ...(adminAddress !== undefined ? { adminAddress } : {}),
       ...(borrowerRefund !== undefined ? { borrowerRefund } : {}),
+      ...(toAddress !== undefined ? { toAddress } : {}),
     };
   }
 
