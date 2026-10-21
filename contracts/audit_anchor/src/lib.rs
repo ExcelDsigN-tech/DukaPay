@@ -26,9 +26,18 @@ impl AuditAnchor {
     /// Threshold: ~1 day (17 280 ledgers × 5 s). Bump: ~30 days (518 400 ledgers).
     const PERSISTENT_TTL_THRESHOLD: u32 = 17_280;
     const PERSISTENT_TTL_BUMP: u32 = 518_400;
+    const INSTANCE_TTL_THRESHOLD: u32 = 17_280;
+    const INSTANCE_TTL_BUMP: u32 = 518_400;
 
     pub fn __constructor(env: Env, owner: Address) {
         env.storage().instance().set(&DataKey::Owner, &owner);
+        Self::bump_instance_ttl(&env);
+    }
+
+    fn bump_instance_ttl(env: &Env) {
+        env.storage()
+            .instance()
+            .extend_ttl(Self::INSTANCE_TTL_THRESHOLD, Self::INSTANCE_TTL_BUMP);
     }
 
     pub fn anchor(
@@ -49,6 +58,7 @@ impl AuditAnchor {
         if env.storage().persistent().has(&DataKey::Root(epoch)) {
             return Err(AnchorError::EpochAlreadyAnchored);
         }
+        Self::bump_instance_ttl(&env);
         env.storage().persistent().set(&DataKey::Root(epoch), &root);
         env.storage()
             .persistent()

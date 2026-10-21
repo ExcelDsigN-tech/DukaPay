@@ -496,6 +496,7 @@ impl AgentVault {
         from.require_auth();
         to.require_auth();
         Self::assert_circuit_ok(&env, Symbol::new(&env, "transfer_float"))?;
+        Self::assert_agent_active(&env, &to)?;
         if amount <= 0 {
             return Err(VaultError::InvalidAmount);
         }
@@ -554,6 +555,9 @@ impl AgentVault {
         for entry in entries.iter() {
             let agent = entry.0;
             let delta = entry.1;
+            if delta > 0 {
+                Self::assert_agent_active(&env, &agent)?;
+            }
             let mut vault = Self::read_vault(&env, &agent);
             let new_float = vault
                 .float

@@ -607,6 +607,68 @@ fn test_mint_float_rejects_non_active_agent() {
     }
 }
 
+const NON_ACTIVE_STATUSES: [Option<crate::AgentStatus>; 4] = [
+    None,
+    Some(crate::AgentStatus::Pending),
+    Some(crate::AgentStatus::Suspended),
+    Some(crate::AgentStatus::Expired),
+];
+
+/// Two funded agents, each holding 300 float, minted before any registry is
+/// set so the mock's status applies only to the call under test.
+fn setup_with_float() -> (Setup, Address, Address) {
+    let s = setup();
+    let a = agent(&s.env);
+    let b = agent(&s.env);
+    fund(&s, &a, 1_000);
+    fund(&s, &b, 1_000);
+    s.client.mint_float(&a, &300);
+    s.client.mint_float(&b, &300);
+    (s, a, b)
+}
+
+#[test]
+fn test_transfer_float_rejects_non_active_recipient() {
+    for status in NON_ACTIVE_STATUSES {
+        let (s, a, b) = setup_with_float();
+        s.client.set_registry(&Some(mock_registry(&s.env, status)));
+        assert_eq!(
+            s.client.try_transfer_float(&a, &b, &100),
+            Err(Ok(VaultError::AgentNotFound))
+        );
+        assert_eq!(s.client.get_vault(&b).float, 300);
+    }
+}
+
+#[test]
+fn test_settle_net_rejects_non_active_positive_delta() {
+    for status in NON_ACTIVE_STATUSES {
+        let (s, a, b) = setup_with_float();
+        s.client.set_registry(&Some(mock_registry(&s.env, status)));
+        let entries: Vec<(Address, i128)> = vec![&s.env, (a.clone(), -100), (b.clone(), 100)];
+        assert_eq!(
+            s.client.try_settle_net(&entries),
+            Err(Ok(VaultError::AgentNotFound))
+        );
+        assert_eq!(s.client.get_vault(&a).float, 300);
+        assert_eq!(s.client.get_vault(&b).float, 300);
+    }
+}
+
+#[test]
+fn test_transfer_and_settle_allow_active_agents() {
+    let (s, a, b) = setup_with_float();
+    s.client.set_registry(&Some(mock_registry(
+        &s.env,
+        Some(crate::AgentStatus::Active),
+    )));
+    s.client.transfer_float(&a, &b, &100);
+    let entries: Vec<(Address, i128)> = vec![&s.env, (a.clone(), 50), (b.clone(), -50)];
+    s.client.settle_net(&entries);
+    assert_eq!(s.client.get_vault(&a).float, 250);
+    assert_eq!(s.client.get_vault(&b).float, 350);
+}
+
 #[test]
 fn test_mint_float_allows_active_agent() {
     let s = setup();
