@@ -27,7 +27,7 @@ const REQUIRED_ENV_VARS = [
   'SCORE_DELTA_DEFAULT',
   'SCORE_DELTA_LATE',
   'PII_KEK_KEY',
-] as const;
+];
 
 const requiredEnvSchema = z.object(
   Object.fromEntries(REQUIRED_ENV_VARS.map((key) => [key, z.string().trim().min(1)])),
