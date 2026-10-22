@@ -55,11 +55,12 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           # On PRs, fail only on findings the PR introduces relative to its base.
-          baseline=()
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
           if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
-            baseline=(--baseline-commit "$BASE_SHA")
+            semgrep scan --baseline-commit "$BASE_SHA" --config p/ci --config p/sql-injection --error --exclude='**/node_modules/**' --exclude='**/target/**'
+          else
+            semgrep scan --config p/ci --config p/sql-injection --error --exclude='**/node_modules/**' --exclude='**/target/**'
           fi
-          semgrep scan "${baseline[@]}" --config p/ci --config p/sql-injection --error --exclude='**/node_modules/**' --exclude='**/target/**'
 
   gitleaks:
     name: Gitleaks secrets
