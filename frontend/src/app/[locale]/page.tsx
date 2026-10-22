@@ -10,17 +10,11 @@ import {
   selectWalletBalances,
 } from "../stores/useWalletStore";
 import { useWalletConnectAction } from "../hooks/useWalletConnectAction";
-import {
-  useBorrowerLoans,
-  useRemittances,
-  useCreditScoreHistory,
-  useScoreBreakdown,
-} from "../hooks/useApi";
+import { useBorrowerLoans, useRemittances, useCreditScoreHistory } from "../hooks/useApi";
 import { DashboardSkeleton } from "../components/skeletons/DashboardSkeleton";
 import { LandingPage } from "../components/landing/LandingPage";
 import { CreditScoreGauge } from "../components/ui/CreditScoreGauge";
 import { EmptyState } from "../components/ui/EmptyState";
-import { CreditScoreBreakdown } from "../components/ui/CreditScoreBreakdown";
 import { ErrorBoundary } from "../components/global_ui/ErrorBoundary";
 import { Tooltip } from "../components/ui/Tooltip";
 import React, { useMemo, useState, useEffect } from "react";

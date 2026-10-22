@@ -134,7 +134,7 @@ export default function NotificationsPage() {
     unread: unreadOnly,
   });
 
-  const notifications = data?.notifications ?? [];
+  const notifications = useMemo(() => data?.notifications ?? [], [data?.notifications]);
   const filteredNotifications = useMemo(() => {
     return notifications.filter((notification) => {
       const matchesType = activeType === "all" || notification.type === activeType;

@@ -1,6 +1,6 @@
 "use client";
 
-import { Skeleton, SkeletonCard } from "../ui/Skeleton";
+import { Skeleton } from "../ui/Skeleton";
 
 export function DepositWithdrawSkeleton() {
   return (

@@ -1,5 +1,3 @@
-import { Skeleton } from "../ui/Skeleton";
-
 export function AchievementsSkeleton() {
   return (
     <div className="space-y-4">

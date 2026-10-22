@@ -17,7 +17,7 @@ import {
   type UseQueryOptions,
   type UseMutationOptions,
 } from "@tanstack/react-query";
-import { LoanStatusBadge, type LoanStatus } from "../components/ui/LoanStatusBadge";
+import { type LoanStatus } from "../components/ui/LoanStatusBadge";
 import { useUserStore } from "../stores/useUserStore";
 import { logoutUser, SessionExpiredError } from "../lib/session";
 import { useWallet } from "../components/providers/WalletProvider";
@@ -1560,7 +1560,7 @@ export interface NotificationsQueryParams {
 
 /**
  * Fetches the authenticated user's notifications.
- * Polls every 60s as a fallback alongside the SSE stream.
+ * Real-time updates come from the SSE stream via useNotificationStream.
  */
 export function useNotifications(
   params: NotificationsQueryParams = {},
@@ -1580,7 +1580,6 @@ export function useNotifications(
       );
       return res.data;
     },
-    refetchInterval: 60_000,
     ...options,
   });
 }
@@ -1680,7 +1679,6 @@ export function useAdminDisputes(
 
       return disputes.map(normalizeDispute);
     },
-    refetchInterval: 60_000,
     ...options,
   });
 }

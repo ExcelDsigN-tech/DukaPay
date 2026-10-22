@@ -43,11 +43,6 @@ export default function AdminUsersPage() {
     setActionType("activate");
   };
 
-  const handleRoleChange = (user: AdminUser) => {
-    setActionUser(user);
-    setActionType("role");
-  };
-
   const confirmAction = async () => {
     if (!actionUser || !actionType) return;
 

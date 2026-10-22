@@ -139,8 +139,8 @@ interface OperationProgressListProps {
 
 export function OperationProgressList({ transactions }: OperationProgressListProps) {
   const activeTransactions = Object.entries(transactions)
-    .filter(([_, tx]) => tx && tx.status !== "idle")
-    .sort(([_, a], [__, b]) => (b?.startTime ?? 0) - (a?.startTime ?? 0));
+    .filter(([, tx]) => tx && tx.status !== "idle")
+    .sort(([, a], [, b]) => (b?.startTime ?? 0) - (a?.startTime ?? 0));
 
   if (activeTransactions.length === 0) return null;
 

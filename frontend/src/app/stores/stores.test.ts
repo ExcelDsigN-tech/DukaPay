@@ -312,7 +312,6 @@ describe("useGamificationStore", () => {
   describe("addXP / checkLevelUp", () => {
     it.each(
       LEVEL_THRESHOLDS.slice(1).map((threshold) => {
-        const previousThreshold = LEVEL_THRESHOLDS[threshold.level - 2];
         return {
           fromXp: threshold.xpRequired - 1,
           addAmount: 1,
