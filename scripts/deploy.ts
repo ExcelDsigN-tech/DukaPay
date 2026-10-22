@@ -14,7 +14,7 @@ import { createHash } from 'crypto';
 import * as fs from 'fs-extra';
 import * as path from 'path';
 import * as dotenv from 'dotenv';
-import { checkDeployConfig, OracleSource } from './deploy-config-check';
+import { ADMIN_PLACEHOLDER, checkDeployConfig, OracleSource } from './deploy-config-check';
 
 dotenv.config();
 
@@ -239,7 +239,7 @@ async function main() {
     const account = Keypair.fromSecret(secretKey);
     // Fall back to the deployer's own key when admin is not set in config.
     const adminAddr =
-        config.admin === 'YOUR_ADMIN_PUBLIC_KEY' ? account.publicKey() : config.admin;
+        config.admin === ADMIN_PLACEHOLDER ? account.publicKey() : config.admin;
 
     const server = new Rpc.Server(config.rpcUrl);
     const passphrase = config.networkPassphrase;
