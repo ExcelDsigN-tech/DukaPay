@@ -4,6 +4,9 @@ import { StrKey } from '@stellar/stellar-sdk';
 // return a median with fewer fresh sources than this.
 export const MIN_ORACLE_SOURCES = 2;
 
+// deploy.ts uses the deployer's own key as admin when config.admin is this.
+export const ADMIN_PLACEHOLDER = 'YOUR_ADMIN_PUBLIC_KEY';
+
 // Soroban Symbol rules: at most 32 characters from [a-zA-Z0-9_].
 const SYMBOL_RE = /^[A-Za-z0-9_]{1,32}$/;
 
@@ -16,12 +19,24 @@ function isPublicKey(value: unknown): value is string {
     return typeof value === 'string' && StrKey.isValidEd25519PublicKey(value);
 }
 
-// Check the circuit breaker and oracle settings for one network before
-// anything is uploaded. Returns one message per problem, each naming the
-// config field to fix; an empty list means the config is usable.
+// Check the admin, token, circuit breaker and oracle settings for one network
+// before anything is uploaded. Returns one message per problem, each naming
+// the config field to fix; an empty list means the config is usable.
 export function checkDeployConfig(config: any, network: string): string[] {
     const errors: string[] = [];
     const at = (field: string) => `${network}.contracts.${field}`;
+
+    const admin = config?.admin;
+    if (admin !== ADMIN_PLACEHOLDER && !isPublicKey(admin)) {
+        errors.push(
+            `${network}.admin must be a valid G... public key or ${ADMIN_PLACEHOLDER}, got ${JSON.stringify(admin)}`,
+        );
+    }
+
+    const token = config?.token;
+    if (typeof token !== 'string' || !StrKey.isValidContract(token)) {
+        errors.push(`${network}.token is not a valid C... contract address: ${JSON.stringify(token)}`);
+    }
 
     const breaker = config?.contracts?.circuit_breaker;
     if (!breaker) {
