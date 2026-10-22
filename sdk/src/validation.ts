@@ -41,6 +41,18 @@ export function validateStellarAddress(address: unknown, fieldName = 'address'):
 }
 
 /**
+ * Throws ValidationError if the value is not a Soroban contract address
+ * (56 characters starting with 'C').
+ */
+export function validateContractAddress(address: unknown, fieldName = 'address'): asserts address is string {
+  if (typeof address !== 'string' || !address.startsWith('C') || address.length !== 56) {
+    throw new ValidationError(
+      `Invalid contract address format for ${fieldName}: must be a 56-character string starting with 'C'`,
+    );
+  }
+}
+
+/**
  * Throws ValidationError if the amount is invalid.
  */
 export function validateAmount(amount: unknown, fieldName = 'amount'): asserts amount is string {

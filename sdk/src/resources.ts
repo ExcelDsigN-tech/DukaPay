@@ -38,6 +38,7 @@ import type {
 import { ValidationError } from './errors.js';
 import {
   validateStellarAddress,
+  validateContractAddress,
   validateAmount,
   validatePositiveInt,
   validateTokenAmount,
@@ -175,6 +176,135 @@ export class LoansResource {
     return this.http.post(`/loans/${loanId}/build-cancel`);
   }
 
+  /**
+   * Requests a new loan and returns the unsigned transaction XDR for signing
+   * and submission.
+   *
+   * `amount` is in whole tokens (e.g. `250.5` USDC, up to 7 decimal places);
+   * the API converts it to stroops. `termLedgers` is the loan term in ledgers.
+   * `borrowerPublicKey` must match the authenticated wallet.
+   */
+  requestLoan(
+    amount: number,
+    borrowerPublicKey: string,
+    termLedgers: number,
+  ): Promise<UnsignedTransaction> {
+    validateTokenAmount(amount, 'amount');
+    validateStellarAddress(borrowerPublicKey, 'borrowerPublicKey');
+    validatePositiveInt(termLedgers, 'termLedgers');
+    return this.http.post(`/loans/request`, { amount, borrowerPublicKey, termLedgers });
+  }
+
+  /**
+   * Builds the deposit collateral transaction for a loan and returns the
+   * unsigned XDR for signing.
+   *
+   * `amount` is in whole tokens (e.g. `250.5` USDC, up to 7 decimal places);
+   * the API converts it to stroops. `borrowerPublicKey` must match the
+   * authenticated wallet.
+   */
+  buildDepositCollateral(
+    loanId: number | string,
+    amount: number,
+    borrowerPublicKey: string,
+  ): Promise<UnsignedTransaction> {
+    validatePositiveInt(loanId, 'loanId');
+    validateTokenAmount(amount, 'amount');
+    validateStellarAddress(borrowerPublicKey, 'borrowerPublicKey');
+    return this.http.post(`/loans/${loanId}/build-deposit-collateral`, {
+      amount,
+      borrowerPublicKey,
+    });
+  }
+
+  /**
+   * Builds the release collateral transaction for a loan and returns the
+   * unsigned XDR for signing.
+   *
+   * `borrowerPublicKey` must match the authenticated wallet.
+   */
+  buildReleaseCollateral(
+    loanId: number | string,
+    borrowerPublicKey: string,
+  ): Promise<UnsignedTransaction> {
+    validatePositiveInt(loanId, 'loanId');
+    validateStellarAddress(borrowerPublicKey, 'borrowerPublicKey');
+    return this.http.post(`/loans/${loanId}/build-release-collateral`, {
+      borrowerPublicKey,
+    });
+  }
+
+  /**
+   * Builds the refinance transaction for a loan and returns the unsigned XDR
+   * for signing.
+   *
+   * `newAmount` is in whole tokens (e.g. `250.5` USDC, up to 7 decimal places);
+   * the API converts it to stroops. `newTerm` is the new loan term in ledgers.
+   * `borrowerPublicKey` must match the authenticated wallet.
+   */
+  buildRefinance(
+    loanId: number | string,
+    newAmount: number,
+    newTerm: number,
+    borrowerPublicKey: string,
+  ): Promise<UnsignedTransaction> {
+    validatePositiveInt(loanId, 'loanId');
+    validateTokenAmount(newAmount, 'newAmount');
+    validatePositiveInt(newTerm, 'newTerm');
+    validateStellarAddress(borrowerPublicKey, 'borrowerPublicKey');
+    return this.http.post(`/loans/${loanId}/build-refinance`, {
+      newAmount,
+      newTerm,
+      borrowerPublicKey,
+    });
+  }
+
+  /**
+   * Builds the extend transaction for a loan and returns the unsigned XDR
+   * for signing.
+   *
+   * `extraLedgers` is the number of additional ledgers to extend the loan
+   * term. `borrowerPublicKey` must match the authenticated wallet.
+   */
+  buildExtend(
+    loanId: number | string,
+    extraLedgers: number,
+    borrowerPublicKey: string,
+  ): Promise<UnsignedTransaction> {
+    validatePositiveInt(loanId, 'loanId');
+    validatePositiveInt(extraLedgers, 'extraLedgers');
+    validateStellarAddress(borrowerPublicKey, 'borrowerPublicKey');
+    return this.http.post(`/loans/${loanId}/build-extend`, {
+      extraLedgers,
+      borrowerPublicKey,
+    });
+  }
+
+  /**
+   * Builds the contest default transaction for a loan and returns the unsigned
+   * XDR for signing.
+   *
+   * `reason` must be at least 5 characters and at most 500 characters.
+   * `borrowerPublicKey` must match the authenticated wallet.
+   */
+  contestDefault(
+    loanId: number | string,
+    reason: string,
+    borrowerPublicKey: string,
+  ): Promise<UnsignedTransaction> {
+    validatePositiveInt(loanId, 'loanId');
+    if (typeof reason !== 'string' || reason.length < 5 || reason.length > 500) {
+      throw new ValidationError(
+        `Invalid reason: must be between 5 and 500 characters`,
+      );
+    }
+    validateStellarAddress(borrowerPublicKey, 'borrowerPublicKey');
+    return this.http.post(`/loans/${loanId}/contest-default`, {
+      reason,
+      borrowerPublicKey,
+    });
+  }
+
   /** Submit a wallet-signed XDR for on-chain execution. */
   submit(loanId: number | string, signedXdr: string): Promise<Loan> {
     return this.http.post(`/loans/${loanId}/submit`, { signedXdr });
@@ -254,6 +384,25 @@ export class PoolResource {
     validateAmount(params.shares, 'shares');
     validateStellarAddress(params.from, 'from');
     return this.http.post('/pool/build-withdraw', params);
+  }
+
+  /**
+   * Builds the emergency withdraw transaction for a depositor and returns the
+   * unsigned XDR for signing.
+   *
+   * `shares` is in whole tokens (up to 7 decimal places); the API converts it
+   * to stroops. `token` is the pool token's contract address (C...).
+   * `depositorPublicKey` must match the authenticated wallet.
+   */
+  buildEmergencyWithdraw(params: {
+    depositorPublicKey: string;
+    token: string;
+    shares: number;
+  }): Promise<UnsignedTransaction> {
+    validateStellarAddress(params.depositorPublicKey, 'depositorPublicKey');
+    validateContractAddress(params.token, 'token');
+    validateTokenAmount(params.shares, 'shares');
+    return this.http.post('/pool/build-emergency-withdraw', params);
   }
 }
 
