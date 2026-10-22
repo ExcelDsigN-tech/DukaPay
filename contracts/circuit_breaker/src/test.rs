@@ -1,10 +1,10 @@
 use crate::{
-    CircuitBreaker, CircuitBreakerClient, CircuitBreakerError, OverrideTarget,
-    PAUSE_DURATION_SECONDS,
+    CircuitBreaker, CircuitBreakerClient, CircuitBreakerError, OverrideTarget, MAX_SIGNERS,
+    MIN_OVERRIDE_TIMELOCK, PAUSE_DURATION_SECONDS,
 };
 use soroban_sdk::testutils::storage::Instance as _;
-use soroban_sdk::testutils::{Address as _, Ledger as _};
-use soroban_sdk::{Address, Env, IntoVal, Symbol, Val, Vec};
+use soroban_sdk::testutils::{Address as _, Events as _, Ledger as _, MockAuth, MockAuthInvoke};
+use soroban_sdk::{Address, Env, FromVal, IntoVal, InvokeError, Symbol, Val, Vec};
 
 fn setup() -> (Env, Address, Address, Vec<Address>) {
     let env = Env::default();
@@ -279,4 +279,246 @@ fn global_pause_cleanup_on_is_blocked() {
     // Cleanup happens in is_blocked.
     assert!(!client.is_blocked(&target, &Symbol::new(&env, "any_function")));
     assert!(!client.is_globally_paused());
+}
+
+// ── Admin setters (#848) ──────────────────────────────────────────────────────
+
+fn generate_signers(env: &Env, count: u32) -> Vec<Address> {
+    let mut signers = Vec::new(env);
+    for _ in 0..count {
+        signers.push_back(Address::generate(env));
+    }
+    signers
+}
+
+/// Authorizes only `signer` for `fn_name(args)`. The setters call
+/// `require_auth` on both `caller` and the stored admin, and each
+/// authorization entry matches once, so two copies are supplied: the call
+/// passes only when `signer` is the stored admin. A missing admin auth is
+/// narrowed by the host to `Error(Context, InvalidAction)` across `try_call`,
+/// which the client surfaces as `InvokeError::Abort`.
+fn authorize_only(
+    env: &Env,
+    contract_id: &Address,
+    signer: &Address,
+    fn_name: &str,
+    args: Vec<Val>,
+) {
+    let invoke = MockAuthInvoke {
+        contract: contract_id,
+        fn_name,
+        args,
+        sub_invokes: &[],
+    };
+    env.mock_auths(&[
+        MockAuth {
+            address: signer,
+            invoke: &invoke,
+        },
+        MockAuth {
+            address: signer,
+            invoke: &invoke,
+        },
+    ]);
+}
+
+#[test]
+fn set_admin_updates_admin_and_emits_event() {
+    let (env, contract_id, admin, _signers) = setup();
+    let client = CircuitBreakerClient::new(&env, &contract_id);
+    let new_admin = Address::generate(&env);
+
+    client.set_admin(&admin, &new_admin);
+
+    // Events are only visible from the latest invocation, so read them first.
+    let events = env.events().all();
+    let (emitter, topics, data) = events.get(events.len() - 1).unwrap();
+    assert_eq!(emitter, contract_id);
+    assert_eq!(
+        Symbol::from_val(&env, &topics.get(0).unwrap()),
+        Symbol::new(&env, "BreakerAdmin")
+    );
+    let (caller, emitted_admin): (Address, Address) = FromVal::from_val(&env, &data);
+    assert_eq!((caller, emitted_admin), (admin, new_admin.clone()));
+
+    assert_eq!(client.get_admin(), new_admin);
+}
+
+#[test]
+fn set_admin_rejects_non_admin() {
+    let (env, contract_id, admin, _signers) = setup();
+    let client = CircuitBreakerClient::new(&env, &contract_id);
+    let stranger = Address::generate(&env);
+
+    authorize_only(
+        &env,
+        &contract_id,
+        &stranger,
+        "set_admin",
+        (stranger.clone(), stranger.clone()).into_val(&env),
+    );
+    assert_eq!(
+        client.try_set_admin(&stranger, &stranger),
+        Err(Err(InvokeError::Abort))
+    );
+    assert_eq!(client.get_admin(), admin);
+}
+
+#[test]
+fn old_admin_loses_access_after_set_admin() {
+    let (env, contract_id, admin, _signers) = setup();
+    let client = CircuitBreakerClient::new(&env, &contract_id);
+    let new_admin = Address::generate(&env);
+    client.set_admin(&admin, &new_admin);
+
+    authorize_only(
+        &env,
+        &contract_id,
+        &admin,
+        "set_override_timelock",
+        (admin.clone(), MIN_OVERRIDE_TIMELOCK).into_val(&env),
+    );
+    assert_eq!(
+        client.try_set_override_timelock(&admin, &MIN_OVERRIDE_TIMELOCK),
+        Err(Err(InvokeError::Abort))
+    );
+    assert_eq!(client.get_override_timelock(), 86_400);
+
+    // The same call authorized by the new admin alone succeeds.
+    authorize_only(
+        &env,
+        &contract_id,
+        &new_admin,
+        "set_override_timelock",
+        (new_admin.clone(), MIN_OVERRIDE_TIMELOCK).into_val(&env),
+    );
+    client.set_override_timelock(&new_admin, &MIN_OVERRIDE_TIMELOCK);
+    assert_eq!(client.get_override_timelock(), MIN_OVERRIDE_TIMELOCK);
+}
+
+#[test]
+fn set_signers_updates_signers_and_threshold() {
+    let (env, contract_id, admin, _signers) = setup();
+    let client = CircuitBreakerClient::new(&env, &contract_id);
+    let new_signers = generate_signers(&env, 2);
+
+    client.set_signers(&admin, &new_signers, &2);
+
+    assert_eq!(client.get_signers(), new_signers);
+    assert_eq!(client.get_threshold(), 2);
+}
+
+#[test]
+fn set_signers_rejects_non_admin() {
+    let (env, contract_id, _admin, signers) = setup();
+    let client = CircuitBreakerClient::new(&env, &contract_id);
+    let stranger = Address::generate(&env);
+    let new_signers = generate_signers(&env, 1);
+
+    authorize_only(
+        &env,
+        &contract_id,
+        &stranger,
+        "set_signers",
+        (stranger.clone(), new_signers.clone(), 1u32).into_val(&env),
+    );
+    assert_eq!(
+        client.try_set_signers(&stranger, &new_signers, &1),
+        Err(Err(InvokeError::Abort))
+    );
+    assert_eq!(client.get_signers(), signers);
+    assert_eq!(client.get_threshold(), 3);
+}
+
+#[test]
+fn set_signers_rejects_empty_list() {
+    let (env, contract_id, admin, _signers) = setup();
+    let client = CircuitBreakerClient::new(&env, &contract_id);
+    assert_eq!(
+        client.try_set_signers(&admin, &Vec::new(&env), &1),
+        Err(Ok(CircuitBreakerError::EmptySignerList))
+    );
+}
+
+#[test]
+fn set_signers_rejects_too_many_signers() {
+    let (env, contract_id, admin, _signers) = setup();
+    let client = CircuitBreakerClient::new(&env, &contract_id);
+    assert_eq!(
+        client.try_set_signers(&admin, &generate_signers(&env, MAX_SIGNERS + 1), &1),
+        Err(Ok(CircuitBreakerError::TooManySigners))
+    );
+}
+
+#[test]
+fn set_signers_rejects_duplicate_signer() {
+    let (env, contract_id, admin, _signers) = setup();
+    let client = CircuitBreakerClient::new(&env, &contract_id);
+    let mut duplicated = generate_signers(&env, 2);
+    duplicated.push_back(duplicated.get(0).unwrap());
+    assert_eq!(
+        client.try_set_signers(&admin, &duplicated, &1),
+        Err(Ok(CircuitBreakerError::DuplicateSigner))
+    );
+}
+
+#[test]
+fn set_signers_rejects_zero_threshold() {
+    let (env, contract_id, admin, _signers) = setup();
+    let client = CircuitBreakerClient::new(&env, &contract_id);
+    assert_eq!(
+        client.try_set_signers(&admin, &generate_signers(&env, 2), &0),
+        Err(Ok(CircuitBreakerError::ThresholdTooLow))
+    );
+}
+
+#[test]
+fn set_signers_rejects_threshold_above_signer_count() {
+    let (env, contract_id, admin, _signers) = setup();
+    let client = CircuitBreakerClient::new(&env, &contract_id);
+    assert_eq!(
+        client.try_set_signers(&admin, &generate_signers(&env, 2), &3),
+        Err(Ok(CircuitBreakerError::ThresholdExceedsSigners))
+    );
+}
+
+#[test]
+fn set_override_timelock_accepts_minimum() {
+    let (env, contract_id, admin, _signers) = setup();
+    let client = CircuitBreakerClient::new(&env, &contract_id);
+
+    client.set_override_timelock(&admin, &MIN_OVERRIDE_TIMELOCK);
+
+    assert_eq!(client.get_override_timelock(), MIN_OVERRIDE_TIMELOCK);
+}
+
+#[test]
+fn set_override_timelock_rejects_below_minimum() {
+    let (env, contract_id, admin, _signers) = setup();
+    let client = CircuitBreakerClient::new(&env, &contract_id);
+    assert_eq!(
+        client.try_set_override_timelock(&admin, &(MIN_OVERRIDE_TIMELOCK - 1)),
+        Err(Ok(CircuitBreakerError::TimelockTooShort))
+    );
+    assert_eq!(client.get_override_timelock(), 86_400);
+}
+
+#[test]
+fn set_override_timelock_rejects_non_admin() {
+    let (env, contract_id, _admin, _signers) = setup();
+    let client = CircuitBreakerClient::new(&env, &contract_id);
+    let stranger = Address::generate(&env);
+
+    authorize_only(
+        &env,
+        &contract_id,
+        &stranger,
+        "set_override_timelock",
+        (stranger.clone(), MIN_OVERRIDE_TIMELOCK).into_val(&env),
+    );
+    assert_eq!(
+        client.try_set_override_timelock(&stranger, &MIN_OVERRIDE_TIMELOCK),
+        Err(Err(InvokeError::Abort))
+    );
+    assert_eq!(client.get_override_timelock(), 86_400);
 }
