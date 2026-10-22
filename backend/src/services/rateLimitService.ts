@@ -83,8 +83,13 @@ end
   }
 
   private async ensureConnected(): Promise<void> {
+    if (this.client.isOpen) {
+      this.isConnected = true;
+      return;
+    }
     if (!this.isConnected) {
       await this.client.connect();
+      this.isConnected = true;
     }
   }
 

@@ -8,6 +8,15 @@ export function getRedisClient(): RedisClientType {
   if (!sharedClient) {
     sharedClient = createClient({
       url: env.REDIS_URL,
+      socket: {
+        reconnectStrategy: (retries: number) => {
+          if (env.NODE_ENV === 'test') {
+            return false;
+          }
+          return Math.min(retries * 50, 3000);
+        },
+        connectTimeout: env.NODE_ENV === 'test' ? 1000 : 5000,
+      },
     });
 
     sharedClient.on('error', (err: { code?: string }) => {
