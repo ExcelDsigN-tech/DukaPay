@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import { query } from '../db/connection.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import { env } from '../config/env.js';
 
 type GovernanceRow = {
   proposal_id?: string;
@@ -14,17 +15,13 @@ type GovernanceRow = {
 };
 
 function parseSignersFromEnv() {
-  return (process.env.GOVERNANCE_SIGNERS ?? '')
-    .split(',')
-    .map((address) => address.trim())
-    .filter(Boolean)
-    .map((address) => ({ address, approved: false }));
+  return env.GOVERNANCE_SIGNERS.map((address) => ({ address, approved: false }));
 }
 
 export const getPendingGovernance = asyncHandler(async (_req: Request, res: Response) => {
-  const currentAdmin = process.env.GOVERNANCE_CURRENT_ADMIN ?? process.env.ADMIN_PUBLIC_KEY ?? null;
-  const targetContract = process.env.MULTISIG_GOVERNANCE_CONTRACT_ID ?? null;
-  const threshold = Number.parseInt(process.env.GOVERNANCE_THRESHOLD ?? '0', 10) || 0;
+  const currentAdmin = env.GOVERNANCE_CURRENT_ADMIN ?? env.ADMIN_PUBLIC_KEY ?? null;
+  const targetContract = env.MULTISIG_GOVERNANCE_CONTRACT_ID ?? null;
+  const threshold = env.GOVERNANCE_THRESHOLD || 0;
 
   try {
     const result = await query(

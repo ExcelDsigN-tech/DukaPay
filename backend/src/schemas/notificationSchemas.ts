@@ -39,6 +39,18 @@ export const getNotificationsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).optional(),
 });
 
+export const markNotificationsReadBodySchema = z
+  .object({
+    ids: z
+      .array(z.number().int('Notification ID must be an integer').positive())
+      .max(100, 'Cannot mark more than 100 notifications at once'),
+  })
+  .strict();
+
+export const emptyNotificationsParamsSchema = z.object({}).strict();
+export const emptyNotificationsQuerySchema = z.object({}).strict();
+export const emptyNotificationsBodySchema = z.object({}).strict().optional();
+
 export const validateNotificationPhone = (phone: string | null): boolean => {
   if (!phone) return true;
   return e164PhoneRegex.test(phone);

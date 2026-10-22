@@ -17,13 +17,12 @@ import {
   type UseQueryOptions,
   type UseMutationOptions,
 } from "@tanstack/react-query";
-import { LoanStatusBadge, type LoanStatus } from "../components/ui/LoanStatusBadge";
+import { type LoanStatus } from "../components/ui/LoanStatusBadge";
 import { useUserStore } from "../stores/useUserStore";
 import { logoutUser, SessionExpiredError } from "../lib/session";
 import { useWallet } from "../components/providers/WalletProvider";
 import { useContractToast } from "./useContractToast";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+import { NEXT_PUBLIC_API_URL } from "../lib/apiConfig";
 
 // ─── Query key factory ────────────────────────────────────────────────────────
 
@@ -194,7 +193,7 @@ export async function getCsrfToken(): Promise<string | null> {
   }
 
   try {
-    const response = await fetch(`${API_URL}/api/auth/csrf`, {
+    const response = await fetch(`${NEXT_PUBLIC_API_URL}/api/auth/csrf`, {
       method: "GET",
       credentials: "include",
       headers: { Accept: "application/json" },
@@ -234,7 +233,7 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
     }
   }
 
-  const response = await fetch(`${API_URL}/api${path}`, {
+  const response = await fetch(`${NEXT_PUBLIC_API_URL}/api${path}`, {
     ...options,
     headers,
     credentials: "include",
@@ -1290,7 +1289,7 @@ export function useCreditScore(
       abortControllerRef = controller;
 
       try {
-        const url = `${API_URL}/api/events/stream?borrower=${encodeURIComponent(walletAddress)}`;
+        const url = `${NEXT_PUBLIC_API_URL}/api/events/stream?borrower=${encodeURIComponent(walletAddress)}`;
 
         const response = await fetch(url, {
           headers: { Accept: "text/event-stream" },
@@ -1561,7 +1560,7 @@ export interface NotificationsQueryParams {
 
 /**
  * Fetches the authenticated user's notifications.
- * Polls every 60s as a fallback alongside the SSE stream.
+ * Real-time updates come from the SSE stream via useNotificationStream.
  */
 export function useNotifications(
   params: NotificationsQueryParams = {},
@@ -1581,7 +1580,6 @@ export function useNotifications(
       );
       return res.data;
     },
-    refetchInterval: 60_000,
     ...options,
   });
 }
@@ -1681,7 +1679,6 @@ export function useAdminDisputes(
 
       return disputes.map(normalizeDispute);
     },
-    refetchInterval: 60_000,
     ...options,
   });
 }

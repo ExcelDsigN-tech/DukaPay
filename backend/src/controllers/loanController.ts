@@ -25,6 +25,7 @@ import {
 } from '../money/decimal.js';
 import { eventAmountFields } from '../money/eventAmounts.js';
 import { sanitizeHtml } from '../utils/sanitize.js';
+import { env } from '../config/env.js';
 
 interface LoanTermConfig {
   defaultTermLedgers: number;
@@ -34,18 +35,10 @@ interface LoanTermConfig {
 }
 
 function getLoanTermConfig(): LoanTermConfig {
-  const defaultTermLedgers = process.env.DEFAULT_TERM_LEDGERS
-    ? Number.parseInt(process.env.DEFAULT_TERM_LEDGERS, 10)
-    : 17280;
-  const defaultInterestRateBps = process.env.DEFAULT_INTEREST_RATE_BPS
-    ? Number.parseInt(process.env.DEFAULT_INTEREST_RATE_BPS, 10)
-    : 1200;
-  const defaultFeeRateBps = process.env.DEFAULT_FEE_RATE_BPS
-    ? Number.parseInt(process.env.DEFAULT_FEE_RATE_BPS, 10)
-    : 100;
-  const ledgerCloseSeconds = process.env.LEDGER_CLOSE_SECONDS
-    ? Number.parseInt(process.env.LEDGER_CLOSE_SECONDS, 10)
-    : 5;
+  const defaultTermLedgers = env.DEFAULT_TERM_LEDGERS;
+  const defaultInterestRateBps = env.DEFAULT_INTEREST_RATE_BPS;
+  const defaultFeeRateBps = env.DEFAULT_FEE_RATE_BPS;
+  const ledgerCloseSeconds = env.LEDGER_CLOSE_SECONDS;
 
   if (!Number.isFinite(defaultTermLedgers) || defaultTermLedgers <= 0) {
     throw new Error('DEFAULT_TERM_LEDGERS must be a positive number');
@@ -863,7 +856,7 @@ export const requestLoan = asyncHandler(async (req: Request, res: Response) => {
   }
 
   if (
-    process.env.NODE_ENV !== 'test' &&
+    env.NODE_ENV !== 'test' &&
     'getPoolBalance' in sorobanService &&
     typeof (sorobanService as unknown as { getPoolBalance?: () => Promise<number> })
       .getPoolBalance === 'function'

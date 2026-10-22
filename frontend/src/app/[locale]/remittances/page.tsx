@@ -101,7 +101,7 @@ export default function RemittancesPage() {
     { enabled: isConnected },
   );
 
-  const remittances = remittancesPage?.items ?? [];
+  const remittances = useMemo(() => remittancesPage?.items ?? [], [remittancesPage?.items]);
   const totalPages = Math.max(
     page,
     remittancesPage?.pageInfo.hasNext

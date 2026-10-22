@@ -4,7 +4,7 @@ use soroban_sdk::testutils::{Address as _, Events as _, Ledger as _};
 use soroban_sdk::token::Client as TokenClient;
 use soroban_sdk::token::StellarAssetClient;
 use soroban_sdk::xdr::ToXdr;
-use soroban_sdk::{Address, BytesN, Env, FromVal, IntoVal, Symbol, TryFromVal, Vec};
+use soroban_sdk::{Address, BytesN, Env, FromVal, IntoVal, Symbol, TryFromVal, Val, Vec};
 
 fn create_token_contract<'a>(
     env: &Env,
@@ -31,9 +31,8 @@ fn deploy_circuit_breaker(env: &Env) -> (Address, CircuitBreakerClient, Address)
     signers.push_back(s1.clone());
     signers.push_back(s2);
     signers.push_back(s3);
-    let id = env.register(CircuitBreaker, ());
+    let id = env.register(CircuitBreaker, (&admin, signers.clone(), 1u32, 3_600u64));
     let client = CircuitBreakerClient::new(env, &id);
-    client.initialize(&admin, &signers, &1, &3_600);
     (id, client, s1)
 }
 
@@ -43,10 +42,9 @@ fn test_version_is_initialized() {
     env.mock_all_auths();
 
     let admin = Address::generate(&env);
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
 
-    pool_client.initialize(&admin);
     assert_eq!(pool_client.version(), 3);
 }
 
@@ -55,11 +53,10 @@ fn test_version_is_initialized() {
 fn test_upgrade_requires_admin_auth() {
     let env = Env::default();
     let admin = Address::generate(&env);
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
 
     env.mock_all_auths();
-    pool_client.initialize(&admin);
 
     env.mock_auths(&[]);
     pool_client.upgrade(&create_upgrade_hash(&env));
@@ -75,9 +72,8 @@ fn test_deposit_flow() {
     let token_admin = Address::generate(&env);
     let (token_id, stellar_asset_client, token_client) = create_token_contract(&env, &token_admin);
 
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&token_admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&token_admin);
     pool_client.set_withdrawal_cooldown(&0);
 
     let provider = Address::generate(&env);
@@ -106,9 +102,8 @@ fn test_negative_deposit_panic() {
     let (token_id, _stellar_asset_client, _token_client) =
         create_token_contract(&env, &token_admin);
 
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&token_admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&token_admin);
     pool_client.set_withdrawal_cooldown(&0);
 
     let provider = Address::generate(&env);
@@ -123,11 +118,10 @@ fn test_deposit_unauthorized() {
     let token_admin = Address::generate(&env);
     let (token_id, stellar_asset_client, _token_client) = create_token_contract(&env, &token_admin);
 
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&token_admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
 
     env.mock_all_auths();
-    pool_client.initialize(&token_admin);
     stellar_asset_client.mint(&Address::generate(&env), &5000);
 
     let provider = Address::generate(&env);
@@ -148,9 +142,8 @@ fn test_withdraw_flow() {
     let token_admin = Address::generate(&env);
     let (token_id, stellar_asset_client, token_client) = create_token_contract(&env, &token_admin);
 
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&token_admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&token_admin);
     assert_eq!(pool_client.get_withdrawal_cooldown(), 1_440);
     pool_client.set_withdrawal_cooldown(&0);
 
@@ -181,9 +174,8 @@ fn test_negative_withdraw_panic() {
     let (token_id, _stellar_asset_client, _token_client) =
         create_token_contract(&env, &token_admin);
 
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&token_admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&token_admin);
     pool_client.set_withdrawal_cooldown(&0);
 
     let provider = Address::generate(&env);
@@ -199,9 +191,8 @@ fn test_insufficient_balance_withdraw_panic() {
     let token_admin = Address::generate(&env);
     let (token_id, stellar_asset_client, _token_client) = create_token_contract(&env, &token_admin);
 
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&token_admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&token_admin);
     pool_client.set_withdrawal_cooldown(&0);
 
     let provider = Address::generate(&env);
@@ -221,9 +212,8 @@ fn test_immediate_withdraw_panics_when_cooldown_active() {
     let token_admin = Address::generate(&env);
     let (token_id, stellar_asset_client, _token_client) = create_token_contract(&env, &token_admin);
 
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&token_admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&token_admin);
 
     let provider = Address::generate(&env);
     stellar_asset_client.mint(&provider, &5_000);
@@ -240,9 +230,8 @@ fn test_withdraw_succeeds_after_cooldown() {
     let token_admin = Address::generate(&env);
     let (token_id, stellar_asset_client, token_client) = create_token_contract(&env, &token_admin);
 
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&token_admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&token_admin);
     pool_client.set_withdrawal_cooldown(&5);
     assert_eq!(pool_client.get_withdrawal_cooldown(), 5);
 
@@ -263,9 +252,8 @@ fn test_set_withdrawal_cooldown_rejects_values_above_maximum() {
     env.mock_all_auths();
 
     let token_admin = Address::generate(&env);
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&token_admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&token_admin);
 
     let result = pool_client.try_set_withdrawal_cooldown(&(17_280 * 30 + 1));
     assert_eq!(result, Err(Ok(crate::PoolError::CooldownTooLong)));
@@ -282,9 +270,8 @@ fn test_get_withdrawal_available_at_fresh_deposit() {
     let token_admin = Address::generate(&env);
     let (token_id, stellar_asset_client, _token_client) = create_token_contract(&env, &token_admin);
 
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&token_admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&token_admin);
     pool_client.set_withdrawal_cooldown(&5);
     assert_eq!(pool_client.get_withdrawal_cooldown(), 5);
 
@@ -313,9 +300,8 @@ fn test_get_withdrawal_available_at_after_cooldown() {
     let token_admin = Address::generate(&env);
     let (token_id, stellar_asset_client, _token_client) = create_token_contract(&env, &token_admin);
 
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&token_admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&token_admin);
     pool_client.set_withdrawal_cooldown(&5);
     assert_eq!(pool_client.get_withdrawal_cooldown(), 5);
 
@@ -347,9 +333,8 @@ fn test_get_withdrawal_available_at_no_deposit() {
     let (token_id, _stellar_asset_client, _token_client) =
         create_token_contract(&env, &token_admin);
 
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&token_admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&token_admin);
 
     let provider = Address::generate(&env);
     assert_eq!(
@@ -370,9 +355,8 @@ fn test_get_withdrawal_available_at_cooldown_disabled() {
     let token_admin = Address::generate(&env);
     let (token_id, stellar_asset_client, _token_client) = create_token_contract(&env, &token_admin);
 
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&token_admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&token_admin);
     pool_client.set_withdrawal_cooldown(&0);
     assert_eq!(pool_client.get_withdrawal_cooldown(), 0);
 
@@ -399,9 +383,8 @@ fn test_emergency_withdraw_bypasses_pause_and_cooldown() {
     let token_admin = Address::generate(&env);
     let (token_id, stellar_asset_client, token_client) = create_token_contract(&env, &token_admin);
 
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&token_admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&token_admin);
     pool_client.set_withdrawal_cooldown(&100);
 
     let provider = Address::generate(&env);
@@ -430,9 +413,8 @@ fn test_emergency_withdraw_blocked_by_global_pause() {
     let token_admin = Address::generate(&env);
     let (token_id, stellar_asset_client, token_client) = create_token_contract(&env, &token_admin);
 
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&token_admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&token_admin);
 
     let (breaker_id, breaker_client, signer) = deploy_circuit_breaker(&env);
     pool_client.set_circuit_breaker(&Some(breaker_id));
@@ -459,9 +441,8 @@ fn test_emergency_withdraw_blocked_by_contract_pause() {
     let token_admin = Address::generate(&env);
     let (token_id, stellar_asset_client, _token_client) = create_token_contract(&env, &token_admin);
 
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&token_admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&token_admin);
 
     let (breaker_id, breaker_client, signer) = deploy_circuit_breaker(&env);
     pool_client.set_circuit_breaker(&Some(breaker_id));
@@ -485,9 +466,8 @@ fn test_emergency_withdraw_blocked_by_function_pause() {
     let token_admin = Address::generate(&env);
     let (token_id, stellar_asset_client, _token_client) = create_token_contract(&env, &token_admin);
 
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&token_admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&token_admin);
 
     let (breaker_id, breaker_client, signer) = deploy_circuit_breaker(&env);
     pool_client.set_circuit_breaker(&Some(breaker_id));
@@ -511,9 +491,8 @@ fn test_emergency_withdraw_allowed_when_unrelated_function_paused() {
     let token_admin = Address::generate(&env);
     let (token_id, stellar_asset_client, token_client) = create_token_contract(&env, &token_admin);
 
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&token_admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&token_admin);
 
     let (breaker_id, breaker_client, signer) = deploy_circuit_breaker(&env);
     pool_client.set_circuit_breaker(&Some(breaker_id));
@@ -551,9 +530,8 @@ fn test_deposit_withdraw_invariants() {
         let (token_id, stellar_asset_client, _token_client) =
             create_token_contract(&env, &token_admin);
 
-        let pool_id = env.register(LendingPool, ());
+        let pool_id = env.register(LendingPool, (&token_admin,));
         let pool_client = LendingPoolClient::new(&env, &pool_id);
-        pool_client.initialize(&token_admin);
         pool_client.set_withdrawal_cooldown(&0);
 
         let provider = Address::generate(&env);
@@ -587,9 +565,8 @@ fn test_share_price_increases_when_interest_arrives() {
     let token_admin = Address::generate(&env);
     let (token_id, stellar_asset_client, _token_client) = create_token_contract(&env, &token_admin);
 
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&token_admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&token_admin);
     pool_client.set_withdrawal_cooldown(&0);
 
     let provider = Address::generate(&env);
@@ -616,9 +593,8 @@ fn test_yield_distributed_event_updates_total_yield_distributed() {
 
     let admin = Address::generate(&env);
     let (token_id, _stellar_asset_client, _token_client) = create_token_contract(&env, &admin);
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&admin);
 
     assert_eq!(pool_client.get_total_yield_distributed(&token_id), 0);
 
@@ -646,9 +622,8 @@ fn test_withdraw_returns_principal_plus_interest() {
     let token_admin = Address::generate(&env);
     let (token_id, stellar_asset_client, token_client) = create_token_contract(&env, &token_admin);
 
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&token_admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&token_admin);
     pool_client.set_withdrawal_cooldown(&0);
 
     let provider = Address::generate(&env);
@@ -679,9 +654,8 @@ fn test_pro_rata_yield_distribution_on_withdrawal() {
     let token_admin = Address::generate(&env);
     let (token_id, stellar_asset_client, token_client) = create_token_contract(&env, &token_admin);
 
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&token_admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&token_admin);
     pool_client.set_withdrawal_cooldown(&0);
 
     let provider_a = Address::generate(&env);
@@ -727,9 +701,8 @@ fn test_subsequent_depositor_does_not_dilute_existing_holders() {
     let token_admin = Address::generate(&env);
     let (token_id, stellar_asset_client, token_client) = create_token_contract(&env, &token_admin);
 
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&token_admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&token_admin);
     pool_client.set_withdrawal_cooldown(&0);
 
     let provider_a = Address::generate(&env);
@@ -777,9 +750,8 @@ fn test_full_loan_cycle_with_interest() {
     let token_admin = Address::generate(&env);
     let (token_id, stellar_asset_client, token_client) = create_token_contract(&env, &token_admin);
 
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&token_admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&token_admin);
     pool_client.set_withdrawal_cooldown(&0);
 
     let provider = Address::generate(&env);
@@ -821,9 +793,8 @@ fn test_pool_stats_reflect_funds_allocated_and_returned() {
     let token_admin = Address::generate(&env);
     let (token_id, stellar_asset_client, token_client) = create_token_contract(&env, &token_admin);
 
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&token_admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&token_admin);
     pool_client.set_withdrawal_cooldown(&0);
 
     let provider = Address::generate(&env);
@@ -860,9 +831,8 @@ fn test_many_depositors_receive_proportional_yield() {
     let token_admin = Address::generate(&env);
     let (token_id, stellar_asset_client, token_client) = create_token_contract(&env, &token_admin);
 
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&token_admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&token_admin);
     pool_client.set_withdrawal_cooldown(&0);
 
     let depositors = [
@@ -901,9 +871,8 @@ fn test_admin_transfer_flow() {
     env.mock_all_auths();
 
     let token_admin = Address::generate(&env);
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&token_admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&token_admin);
     pool_client.set_withdrawal_cooldown(&0);
 
     let new_admin = Address::generate(&env);
@@ -927,9 +896,8 @@ fn test_set_admin_updates_admin_immediately() {
     env.mock_all_auths();
 
     let admin = Address::generate(&env);
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&admin);
 
     let new_admin = Address::generate(&env);
     pool_client.set_admin(&new_admin);
@@ -951,9 +919,8 @@ fn test_get_proposed_admin_returns_none_when_no_proposal() {
     env.mock_all_auths();
 
     let admin = Address::generate(&env);
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&admin);
 
     assert_eq!(pool_client.get_proposed_admin(), None);
 }
@@ -964,9 +931,8 @@ fn test_get_proposed_admin_returns_proposed_admin() {
     env.mock_all_auths();
 
     let admin = Address::generate(&env);
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&admin);
 
     let new_admin = Address::generate(&env);
     pool_client.propose_admin(&new_admin);
@@ -980,9 +946,8 @@ fn test_get_proposed_admin_returns_none_after_accept() {
     env.mock_all_auths();
 
     let admin = Address::generate(&env);
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&admin);
 
     let new_admin = Address::generate(&env);
     pool_client.propose_admin(&new_admin);
@@ -1003,9 +968,8 @@ fn test_set_and_get_max_pool_size() {
     let (token_id, _stellar_asset_client, _token_client) =
         create_token_contract(&env, &token_admin);
 
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&token_admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&token_admin);
     pool_client.set_withdrawal_cooldown(&0);
 
     assert_eq!(pool_client.get_max_pool_size(&token_id), 0);
@@ -1022,9 +986,8 @@ fn test_deposit_within_cap_succeeds() {
     let token_admin = Address::generate(&env);
     let (token_id, stellar_asset_client, _token_client) = create_token_contract(&env, &token_admin);
 
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&token_admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&token_admin);
     pool_client.set_withdrawal_cooldown(&0);
     pool_client.set_max_pool_size(&token_id, &5_000);
 
@@ -1045,9 +1008,8 @@ fn test_deposit_exceeds_cap_panics() {
     let token_admin = Address::generate(&env);
     let (token_id, stellar_asset_client, _token_client) = create_token_contract(&env, &token_admin);
 
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&token_admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&token_admin);
     pool_client.set_max_pool_size(&token_id, &1_000);
 
     let provider = Address::generate(&env);
@@ -1064,9 +1026,8 @@ fn test_withdraw_reduces_total_deposits() {
     let token_admin = Address::generate(&env);
     let (token_id, stellar_asset_client, _token_client) = create_token_contract(&env, &token_admin);
 
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&token_admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&token_admin);
     pool_client.set_max_pool_size(&token_id, &5_000);
     pool_client.set_withdrawal_cooldown(&0);
 
@@ -1088,9 +1049,8 @@ fn test_deposit_after_withdraw_frees_cap_space() {
     let token_admin = Address::generate(&env);
     let (token_id, stellar_asset_client, _token_client) = create_token_contract(&env, &token_admin);
 
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&token_admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&token_admin);
     pool_client.set_max_pool_size(&token_id, &3_000);
     pool_client.set_withdrawal_cooldown(&0);
 
@@ -1114,9 +1074,8 @@ fn test_no_cap_allows_unlimited_deposits() {
     let token_admin = Address::generate(&env);
     let (token_id, stellar_asset_client, _token_client) = create_token_contract(&env, &token_admin);
 
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&token_admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&token_admin);
     pool_client.set_withdrawal_cooldown(&0);
 
     let provider = Address::generate(&env);
@@ -1135,9 +1094,8 @@ fn test_set_negative_max_pool_size_panics() {
     let (token_id, _stellar_asset_client, _token_client) =
         create_token_contract(&env, &token_admin);
 
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&token_admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&token_admin);
 
     pool_client.set_max_pool_size(&token_id, &-1);
 }
@@ -1152,9 +1110,8 @@ fn test_pool_stats() {
     let token_admin = Address::generate(&env);
     let (token_id, stellar_asset_client, _token_client) = create_token_contract(&env, &token_admin);
 
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&token_admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&token_admin);
     pool_client.set_withdrawal_cooldown(&0);
 
     let provider1 = Address::generate(&env);
@@ -1228,28 +1185,13 @@ fn test_pool_stats() {
 // ── Additional coverage tests ─────────────────────────────────────────────────
 
 #[test]
-fn test_double_initialize_returns_error() {
-    let env = Env::default();
-    env.mock_all_auths();
-
-    let admin = Address::generate(&env);
-    let pool_id = env.register(LendingPool, ());
-    let pool_client = LendingPoolClient::new(&env, &pool_id);
-
-    pool_client.initialize(&admin);
-    let result = pool_client.try_initialize(&admin);
-    assert!(result.is_err());
-}
-
-#[test]
 fn test_accept_admin_with_no_proposed_returns_error() {
     let env = Env::default();
     env.mock_all_auths();
 
     let admin = Address::generate(&env);
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&admin);
 
     let result = pool_client.try_accept_admin();
     assert!(result.is_err());
@@ -1263,9 +1205,8 @@ fn test_deposit_blocked_when_paused() {
     let token_admin = Address::generate(&env);
     let (token_id, stellar_asset_client, _token_client) = create_token_contract(&env, &token_admin);
 
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&token_admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&token_admin);
 
     let provider = Address::generate(&env);
     stellar_asset_client.mint(&provider, &1_000);
@@ -1288,9 +1229,8 @@ fn test_withdraw_blocked_when_paused() {
     let token_admin = Address::generate(&env);
     let (token_id, stellar_asset_client, _token_client) = create_token_contract(&env, &token_admin);
 
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&token_admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&token_admin);
     pool_client.set_withdrawal_cooldown(&0);
 
     let provider = Address::generate(&env);
@@ -1308,9 +1248,8 @@ fn test_get_admin_returns_initialized_admin() {
     env.mock_all_auths();
 
     let admin = Address::generate(&env);
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&admin);
 
     assert_eq!(pool_client.get_admin(), admin);
 }
@@ -1322,9 +1261,8 @@ fn test_get_depositor_yield_no_deposit() {
 
     let admin = Address::generate(&env);
     let (token_id, _, _) = create_token_contract(&env, &admin);
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&admin);
 
     let provider = Address::generate(&env);
     assert_eq!(
@@ -1340,9 +1278,8 @@ fn test_get_depositor_yield_reflects_accrued_interest() {
 
     let admin = Address::generate(&env);
     let (token_id, stellar_asset_client, _) = create_token_contract(&env, &admin);
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&admin);
     pool_client.set_withdrawal_cooldown(&0);
 
     let provider = Address::generate(&env);
@@ -1375,9 +1312,8 @@ fn test_multiple_tokens_independence() {
     let (token1_id, stellar1, _) = create_token_contract(&env, &admin);
     let (token2_id, stellar2, _) = create_token_contract(&env, &admin);
 
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&admin);
     pool_client.set_withdrawal_cooldown(&0);
 
     let provider = Address::generate(&env);
@@ -1407,9 +1343,8 @@ fn test_set_max_pool_size_unauthorized() {
     let user = Address::generate(&env);
     let (token_id, _, _) = create_token_contract(&env, &admin);
 
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&admin);
 
     env.mock_auths(&[soroban_sdk::testutils::MockAuth {
         address: &user,
@@ -1431,9 +1366,8 @@ fn test_accept_admin_flow() {
     let admin = Address::generate(&env);
     let new_admin = Address::generate(&env);
 
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&admin);
 
     pool_client.propose_admin(&new_admin);
 
@@ -1473,9 +1407,8 @@ fn test_withdrawal_with_utilization() {
     let admin = Address::generate(&env);
     let (token_id, stellar, token_client) = create_token_contract(&env, &admin);
 
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&admin);
     pool_client.set_withdrawal_cooldown(&0);
 
     let provider = Address::generate(&env);
@@ -1512,9 +1445,8 @@ fn test_deposit_at_max_cap_edge_cases() {
     let admin = Address::generate(&env);
     let (token_id, stellar, _) = create_token_contract(&env, &admin);
 
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&admin);
     pool_client.set_max_pool_size(&token_id, &1000);
 
     let provider = Address::generate(&env);
@@ -1535,9 +1467,8 @@ fn test_unauthorized_admin_actions() {
     let admin = Address::generate(&env);
     let user = Address::generate(&env);
 
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&admin);
 
     // Mock auth as non-admin user
     env.mock_auths(&[soroban_sdk::testutils::MockAuth {
@@ -1593,9 +1524,8 @@ fn test_deposit_event_emission() {
     let admin = Address::generate(&env);
     let (token_id, stellar, _) = create_token_contract(&env, &admin);
 
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&admin);
     pool_client.set_withdrawal_cooldown(&0);
 
     let provider = Address::generate(&env);
@@ -1633,9 +1563,8 @@ fn test_share_price_is_one_to_one_before_any_yield() {
     let token_admin = Address::generate(&env);
     let (token_id, stellar_asset_client, _token_client) = create_token_contract(&env, &token_admin);
 
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&token_admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&token_admin);
     pool_client.set_withdrawal_cooldown(&0);
 
     let provider = Address::generate(&env);
@@ -1662,9 +1591,8 @@ fn test_share_price_rises_proportionally_with_yield() {
     let token_admin = Address::generate(&env);
     let (token_id, stellar_asset_client, token_client) = create_token_contract(&env, &token_admin);
 
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&token_admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&token_admin);
     pool_client.set_withdrawal_cooldown(&0);
 
     let provider = Address::generate(&env);
@@ -1697,9 +1625,8 @@ fn test_multiple_depositors_share_yield_proportionally_and_total_shares_track_co
     let token_admin = Address::generate(&env);
     let (token_id, stellar_asset_client, token_client) = create_token_contract(&env, &token_admin);
 
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&token_admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&token_admin);
     pool_client.set_withdrawal_cooldown(&0);
 
     let p1 = Address::generate(&env);
@@ -1753,9 +1680,8 @@ fn test_adjust_outstanding_positive_delta_increases_total() {
 
     let admin = Address::generate(&env);
     let token = Address::generate(&env);
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&admin);
 
     assert_eq!(pool_client.get_total_outstanding(&token), 0);
 
@@ -1773,9 +1699,8 @@ fn test_adjust_outstanding_negative_delta_decreases_total() {
 
     let admin = Address::generate(&env);
     let token = Address::generate(&env);
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&admin);
 
     pool_client.adjust_outstanding(&token, &2_000);
     assert_eq!(pool_client.get_total_outstanding(&token), 2_000);
@@ -1792,9 +1717,8 @@ fn test_adjust_outstanding_zero_delta_is_a_no_op() {
 
     let admin = Address::generate(&env);
     let token = Address::generate(&env);
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&admin);
 
     pool_client.adjust_outstanding(&token, &1_000);
     pool_client.adjust_outstanding(&token, &0);
@@ -1811,9 +1735,8 @@ fn test_adjust_outstanding_blocked_during_circuit_breaker_pause() {
 
     let admin = Address::generate(&env);
     let token = Address::generate(&env);
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&admin);
 
     let (breaker_id, breaker_client, signer) = deploy_circuit_breaker(&env);
     pool_client.set_circuit_breaker(&Some(breaker_id));
@@ -1849,9 +1772,8 @@ fn test_donation_to_pool_address_does_not_move_share_price() {
 
     let admin = Address::generate(&env);
     let (token_id, stellar, token_client) = create_token_contract(&env, &admin);
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&admin);
     pool_client.set_withdrawal_cooldown(&0);
 
     let attacker = Address::generate(&env);
@@ -1951,9 +1873,8 @@ fn test_deposit_rejects_when_below_min_shares_out() {
 
     let admin = Address::generate(&env);
     let (token_id, stellar, token_client) = create_token_contract(&env, &admin);
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&admin);
 
     let provider = Address::generate(&env);
     stellar.mint(&provider, &1_000);
@@ -1976,9 +1897,8 @@ fn test_deposit_succeeds_when_min_shares_out_is_met() {
 
     let admin = Address::generate(&env);
     let (token_id, stellar, _) = create_token_contract(&env, &admin);
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&admin);
 
     let provider = Address::generate(&env);
     stellar.mint(&provider, &1_000);
@@ -1994,9 +1914,8 @@ fn test_withdraw_rejects_when_below_min_assets_out() {
 
     let admin = Address::generate(&env);
     let (token_id, stellar, token_client) = create_token_contract(&env, &admin);
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&admin);
     pool_client.set_withdrawal_cooldown(&0);
 
     let provider = Address::generate(&env);
@@ -2019,9 +1938,8 @@ fn test_distribute_yield_requires_source_authorization() {
 
     let admin = Address::generate(&env);
     let (token_id, stellar, _) = create_token_contract(&env, &admin);
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&admin);
 
     let source = Address::generate(&env);
     stellar.mint(&source, &100);
@@ -2042,9 +1960,8 @@ fn test_preview_deposit_and_preview_redeem_match_settlement() {
 
     let admin = Address::generate(&env);
     let (token_id, stellar, _) = create_token_contract(&env, &admin);
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&admin);
     pool_client.set_withdrawal_cooldown(&0);
 
     let provider = Address::generate(&env);
@@ -2092,9 +2009,8 @@ fn test_round_trip_deposit_then_redeem_is_never_profitable() {
 
     let admin = Address::generate(&env);
     let (token_id, stellar, _) = create_token_contract(&env, &admin);
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&admin);
     pool_client.set_withdrawal_cooldown(&0);
 
     let mut rng_state: u64 = 0x1234_5678_9abc_def1;
@@ -2144,9 +2060,8 @@ fn test_mev_commit_reveal_workflow() {
     let settler = Address::generate(&env);
     let (token_id, _, _) = create_token_contract(&env, &admin);
 
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&admin);
 
     let amount: i128 = 50_000;
     let nonce = BytesN::from_array(&env, &[42u8; 32]);
@@ -2178,9 +2093,8 @@ fn test_mev_reveal_without_delay_panics() {
     let settler = Address::generate(&env);
     let (token_id, _, _) = create_token_contract(&env, &admin);
 
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&admin);
 
     let amount: i128 = 50_000;
     let nonce = BytesN::from_array(&env, &[42u8; 32]);
@@ -2196,6 +2110,22 @@ fn test_mev_reveal_without_delay_panics() {
     pool_client.reveal_settlement(&settler, &token_id, &amount, &nonce);
 }
 
+#[test]
+fn test_reentrancy_lock_controls_are_not_public() {
+    // Anyone could set the lock through these and freeze the pool (#683).
+    let env = Env::default();
+    let admin = Address::generate(&env);
+    let pool_id = env.register(LendingPool, (&admin,));
+    for name in ["enter_cross_contract_call", "exit_cross_contract_call"] {
+        let result = env.try_invoke_contract::<Val, Val>(
+            &pool_id,
+            &Symbol::new(&env, name),
+            Vec::<Val>::new(&env),
+        );
+        assert!(result.is_err(), "{name} is still callable");
+    }
+}
+
 // ── Reentrancy Guard & Fuzz Tests ──────────────────────────────────────────
 
 #[test]
@@ -2205,9 +2135,8 @@ fn test_reentrancy_guard_blocks_reentrant_withdraw() {
 
     let admin = Address::generate(&env);
     let (token_id, stellar, _) = create_token_contract(&env, &admin);
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&admin);
     pool_client.set_withdrawal_cooldown(&0);
 
     let provider = Address::generate(&env);
@@ -2245,9 +2174,8 @@ fn test_loan_manager_yield_and_loss_update_share_nav() {
     let admin = Address::generate(&env);
     let manager = Address::generate(&env);
     let (token, stellar, _) = create_token_contract(&env, &admin);
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&admin,));
     let pool = LendingPoolClient::new(&env, &pool_id);
-    pool.initialize(&admin);
     pool.set_loan_manager(&manager);
 
     let provider = Address::generate(&env);
@@ -2270,9 +2198,8 @@ fn test_only_configured_loan_manager_can_report_yield() {
     let admin = Address::generate(&env);
     let manager = Address::generate(&env);
     let (token, _, _) = create_token_contract(&env, &admin);
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&admin,));
     let pool = LendingPoolClient::new(&env, &pool_id);
-    pool.initialize(&admin);
     pool.set_loan_manager(&manager);
 
     // Drop the permissive test authorizer: only the configured manager may
@@ -2289,9 +2216,8 @@ fn test_reentrancy_guard_blocks_reentrant_deposit() {
 
     let admin = Address::generate(&env);
     let (token_id, stellar, _) = create_token_contract(&env, &admin);
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&admin);
 
     let provider = Address::generate(&env);
     stellar.mint(&provider, &1000);
@@ -2313,9 +2239,8 @@ fn test_reentrancy_guard_allows_sequential_calls() {
 
     let admin = Address::generate(&env);
     let (token_id, stellar, _) = create_token_contract(&env, &admin);
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&admin);
     pool_client.set_withdrawal_cooldown(&0);
 
     let p = Address::generate(&env);
@@ -2341,9 +2266,8 @@ fn test_fuzz_reentrancy_random_sequence() {
 
     let admin = Address::generate(&env);
     let (token_id, stellar, _) = create_token_contract(&env, &admin);
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&admin);
     pool_client.set_withdrawal_cooldown(&0);
 
     let mut rng: u64 = 0xDEAD_BEEF_CAFE_1234;
@@ -2394,9 +2318,8 @@ fn test_cei_ordering_withdraw_does_not_lose_funds_on_reentrancy_attempt() {
 
     let admin = Address::generate(&env);
     let (token_id, stellar, token_client) = create_token_contract(&env, &admin);
-    let pool_id = env.register(LendingPool, ());
+    let pool_id = env.register(LendingPool, (&admin,));
     let pool_client = LendingPoolClient::new(&env, &pool_id);
-    pool_client.initialize(&admin);
     pool_client.set_withdrawal_cooldown(&0);
 
     let provider = Address::generate(&env);
@@ -2409,4 +2332,55 @@ fn test_cei_ordering_withdraw_does_not_lose_funds_on_reentrancy_attempt() {
     let bal_after = token_client.balance(&pool_id);
     assert_eq!(bal_after, bal_before - 400);
     assert_eq!(pool_client.get_shares(&provider, &token_id), 600);
+}
+
+#[test]
+fn test_no_callable_initializer_after_deploy() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let pool_id = env.register(LendingPool, (&admin,));
+    let result = env.try_invoke_contract::<Val, Val>(
+        &pool_id,
+        &Symbol::new(&env, "initialize"),
+        (admin,).into_val(&env),
+    );
+    assert!(
+        result.is_err(),
+        "old initialize entrypoint is still callable"
+    );
+}
+
+#[soroban_sdk::contract]
+struct MockBreaker;
+
+#[soroban_sdk::contractimpl]
+impl MockBreaker {
+    pub fn is_blocked(_env: Env, _contract: Address, _function: soroban_sdk::Symbol) -> bool {
+        true
+    }
+}
+
+#[test]
+fn test_circuit_breaker_tripped_blocks_deposit() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let pool_id = env.register(LendingPool, (&admin,));
+    let pool_client = LendingPoolClient::new(&env, &pool_id);
+
+    let token_admin = Address::generate(&env);
+    let (token_id, stellar_client, _) = create_token_contract(&env, &token_admin);
+
+    let breaker_id = env.register(MockBreaker, ());
+    pool_client.set_circuit_breaker(&Some(breaker_id));
+
+    let user = Address::generate(&env);
+    stellar_client.mint(&user, &1000);
+
+    assert_eq!(
+        pool_client.try_deposit(&user, &token_id, &1000, &0),
+        Err(Ok(crate::PoolError::CircuitBreakerTripped))
+    );
 }

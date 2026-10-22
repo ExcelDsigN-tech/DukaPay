@@ -21,13 +21,11 @@ Set the following environment variable in the backend:
 
 ### Scope
 
-The files `backend/src/utils/demo.ts` and `backend/src/utils/demo-rate-limit.ts`
-are standalone demonstration scripts that illustrate how limit capping and rate
-limiting work.  They are not middleware themselves, but they document the
-patterns used by the sandbox middleware that activates when `DEMO_MODE=true`.
-
 Routes that check `DEMO_MODE` respond with mock data and are subject to a
-stricter rate limit (10 requests/minute/IP) to prevent abuse.
+stricter rate limit (10 requests/minute/IP) to prevent abuse.  The sandbox
+middleware that activates when `DEMO_MODE=true` implements limit capping
+(`backend/src/utils/queryHelpers.ts`) and rate limiting
+(`backend/src/services/rateLimitService.ts`).
 
 ---
 
@@ -159,7 +157,8 @@ AML values below are still placeholders that require compliance sign-off. All va
 
 | Variable                           | Dev | Staging | Prod | Default                                   | Description                                            | Source                                      |
 | ---------------------------------- | --- | ------- | ---- | ----------------------------------------- | ------------------------------------------------------ | ------------------------------------------- |
-| `NEXT_PUBLIC_API_URL`              | ✓   | ✓       | ✓    | `http://localhost:3001`                   | Backend API base URL                                   | `frontend/src/app/hooks/useApi.ts`          |
+| `NEXT_PUBLIC_API_URL`              | ✓   | ✓       | ✓    | `http://localhost:3001`                   | Backend API base URL                                   | `frontend/src/app/lib/apiConfig.ts`        |
+| `API_URL`                          | ✓   | ✓       | ✓    | `http://localhost:3001`                   | Server-side backend API base URL                       | `frontend/src/app/lib/apiConfig.ts`        |
 | `NEXT_PUBLIC_APP_URL`              | ✓   | ✓       | ✓    | `https://app.your-domain.example`         | Public-facing app URL used for absolute links          | `frontend/src/lib/canonicalUrl.ts`          |
 | `NEXT_PUBLIC_SENTRY_DSN`           | —   | ✓       | ✓    | —                                         | Sentry DSN for frontend error tracking                 | `frontend/src/sentry.client.config.ts`      |
 | `SENTRY_DSN`                       | —   | ✓       | ✓    | —                                         | Sentry DSN server-side                                 | `frontend/src/sentry.server.config.ts`      |

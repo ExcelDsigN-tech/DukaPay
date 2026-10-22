@@ -1,13 +1,14 @@
 import request from 'supertest';
 import { jest } from '@jest/globals';
+import { Keypair } from '@stellar/stellar-sdk';
 import { generateJwtToken } from '../services/authService.js';
 
 type MockQueryResult = { rows: unknown[]; rowCount?: number };
 
 const VALID_API_KEY = 'test-internal-key';
 const ADMIN_WALLET = 'GADMIN123456789AGENT';
-const AGENT_A = 'GAGENTA123456789000000000000000000000000000000000001';
-const AGENT_B = 'GAGENTB123456789000000000000000000000000000000000002';
+const AGENT_A = Keypair.random().publicKey();
+const AGENT_B = Keypair.random().publicKey();
 
 process.env.JWT_SECRET = 'test-jwt-secret-min-32-chars-long!!';
 process.env.INTERNAL_API_KEY = VALID_API_KEY;
@@ -16,13 +17,25 @@ process.env.ADMIN_WALLETS = ADMIN_WALLET;
 const mockQuery: jest.MockedFunction<
   (text: string, params?: unknown[]) => Promise<MockQueryResult>
 > = jest.fn();
+const mockBuildTransferToAgentTx = jest.fn();
+const mockValidateTransferToAgentTx = jest.fn();
+const mockSubmitSignedTx = jest.fn();
 
 jest.unstable_mockModule('../db/connection.js', () => ({
   default: { query: mockQuery },
   query: mockQuery,
   getClient: jest.fn(),
   closePool: jest.fn(),
-  withTransaction: jest.fn(),
+  withTransaction: (fn: (client: { query: typeof mockQuery }) => unknown) =>
+    fn({ query: mockQuery }),
+}));
+
+jest.unstable_mockModule('../services/sorobanService.js', () => ({
+  sorobanService: {
+    buildTransferToAgentTx: mockBuildTransferToAgentTx,
+    validateTransferToAgentTx: mockValidateTransferToAgentTx,
+    submitSignedTx: mockSubmitSignedTx,
+  },
 }));
 
 await import('../db/connection.js');
@@ -34,6 +47,7 @@ const bearer = (publicKey: string) => ({
 
 afterEach(() => {
   jest.clearAllMocks();
+  delete process.env.AGENT_VAULT_CONTRACT_ID;
 });
 
 afterAll(() => {
@@ -60,6 +74,8 @@ describe('Agent Float Transfer API (/api/agents/float-transfer)', () => {
     });
 
     it('successfully initiates a float transfer request with 1st approval', async () => {
+      // Per-pair advisory lock
+      mockQuery.mockResolvedValueOnce({ rows: [] });
       // Pair limits lookup
       mockQuery.mockResolvedValueOnce({ rows: [] });
       // Daily sum check
@@ -131,6 +147,8 @@ describe('Agent Float Transfer API (/api/agents/float-transfer)', () => {
     });
 
     it('rejects transfer exceeding pair daily limit', async () => {
+      // Per-pair advisory lock
+      mockQuery.mockResolvedValueOnce({ rows: [] });
       // Pair limits lookup (default 100000 daily)
       mockQuery.mockResolvedValueOnce({ rows: [] });
       // Daily sum check returning 95000
@@ -151,7 +169,9 @@ describe('Agent Float Transfer API (/api/agents/float-transfer)', () => {
   });
 
   describe('POST /api/agents/float-transfer/:id/approve (2-of-3 Workflow)', () => {
-    it('successfully approves a pending transfer and completes it upon reaching 2-of-3 threshold', async () => {
+    it('returns an unsigned transaction and awaits signatures at the 2-of-3 threshold', async () => {
+      process.env.AGENT_VAULT_CONTRACT_ID = 'C123456789AGENTVAULT';
+      mockBuildTransferToAgentTx.mockResolvedValueOnce({ unsignedTxXdr: 'AAAA...XDR' });
       // SELECT transfer
       mockQuery.mockResolvedValueOnce({
         rows: [
@@ -171,9 +191,13 @@ describe('Agent Float Transfer API (/api/agents/float-transfer)', () => {
       mockQuery.mockResolvedValueOnce({ rows: [] });
       // INSERT approval
       mockQuery.mockResolvedValueOnce({ rows: [] });
+      // UPDATE approval_count
+      mockQuery.mockResolvedValueOnce({ rows: [{ approval_count: 2 }] });
+      // Claim execution
+      mockQuery.mockResolvedValueOnce({ rows: [{ id: 'ft_12345' }] });
       // INSERT audit_log for approval
       mockQuery.mockResolvedValueOnce({ rows: [] });
-      // UPDATE transfer to COMPLETED
+      // UPDATE transfer to AWAITING_SIGNATURE
       mockQuery.mockResolvedValueOnce({
         rows: [
           {
@@ -181,13 +205,13 @@ describe('Agent Float Transfer API (/api/agents/float-transfer)', () => {
             from_agent: AGENT_A,
             to_agent: AGENT_B,
             amount: '5000',
-            status: 'COMPLETED',
+            status: 'AWAITING_SIGNATURE',
             required_approvals: 2,
             approval_count: 2,
           },
         ],
       });
-      // INSERT audit_log for execution
+      // INSERT audit_log for awaiting signature
       mockQuery.mockResolvedValueOnce({ rows: [] });
       // SELECT all approvals
       mockQuery.mockResolvedValueOnce({
@@ -204,7 +228,9 @@ describe('Agent Float Transfer API (/api/agents/float-transfer)', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
-      expect(response.body.data.transfer.status).toBe('COMPLETED');
+      expect(response.body.data.transfer.status).toBe('AWAITING_SIGNATURE');
+      expect(response.body.data.executedOnChain).toBe(false);
+      expect(response.body.data.unsignedTxXdr).toBe('AAAA...XDR');
       expect(response.body.data.approvals.length).toBe(2);
     });
 
@@ -263,6 +289,52 @@ describe('Agent Float Transfer API (/api/agents/float-transfer)', () => {
       expect(response.status).toBe(403);
       expect(response.body.error.message).toMatch(
         /must be either the initiating agent, recipient agent, or an admin/i,
+      );
+    });
+  });
+
+  describe('POST /api/agents/float-transfer/:id/submit', () => {
+    it('marks a transfer completed only after Stellar confirms SUCCESS', async () => {
+      process.env.AGENT_VAULT_CONTRACT_ID = 'C123456789AGENTVAULT';
+      mockQuery.mockResolvedValueOnce({
+        rows: [
+          {
+            id: 'ft_12345',
+            from_agent: AGENT_A,
+            to_agent: AGENT_B,
+            amount: '5000',
+            status: 'AWAITING_SIGNATURE',
+            required_approvals: 2,
+            approval_count: 2,
+          },
+        ],
+      });
+      mockSubmitSignedTx.mockResolvedValueOnce({ txHash: 'confirmed-hash', status: 'SUCCESS' });
+      mockQuery.mockResolvedValueOnce({
+        rows: [
+          {
+            id: 'ft_12345',
+            status: 'COMPLETED',
+            tx_hash: 'confirmed-hash',
+          },
+        ],
+      });
+      mockQuery.mockResolvedValueOnce({ rows: [] });
+
+      const response = await request(app)
+        .post('/api/agents/float-transfer/ft_12345/submit')
+        .set(bearer(AGENT_B))
+        .send({ signedTxXdr: 'c2lnbmVkLXhkcg==' });
+
+      expect(response.status).toBe(200);
+      expect(response.body.data.transfer.status).toBe('COMPLETED');
+      expect(response.body.data.executedOnChain).toBe(true);
+      expect(response.body.data.txHash).toBe('confirmed-hash');
+      expect(mockValidateTransferToAgentTx).toHaveBeenCalledWith(
+        'c2lnbmVkLXhkcg==',
+        AGENT_A,
+        AGENT_B,
+        50_000_000_000n,
       );
     });
   });

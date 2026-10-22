@@ -28,7 +28,6 @@ import {
 } from "../../stores/useWalletStore";
 import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
-import { COPY_FEEDBACK_RESET_MS } from "../../components/ui";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

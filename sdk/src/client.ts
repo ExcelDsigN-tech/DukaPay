@@ -1,5 +1,6 @@
 import { HttpClient, type HttpClientOptions } from './http.js';
 import {
+  AgentsResource,
   AuthResource,
   LoansResource,
   PoolResource,
@@ -42,6 +43,7 @@ export class DukaPayClient {
   readonly pool: PoolResource;
   readonly scores: ScoresResource;
   readonly remittance: RemittanceResource;
+  readonly agents: AgentsResource;
 
   private session: Session | null = null;
   private wallet?: WalletAdapter;
@@ -54,6 +56,18 @@ export class DukaPayClient {
     this.http = new HttpClient({
       baseUrl: opts.baseUrl,
       token: () => this.session?.token,
+      onUnauthorized: async () => {
+        if (!this.session?.refreshToken) return null;
+        try {
+          const newSession = await this.auth.refresh(this.session.refreshToken);
+          this.setSession(newSession);
+          return newSession;
+        } catch (err) {
+          // A failed refresh ends the session rather than leaving a dead token.
+          this.setSession(null);
+          throw err;
+        }
+      },
       ...opts.http,
     });
     if (opts.token) this.session = { token: opts.token } as Session;
@@ -63,6 +77,7 @@ export class DukaPayClient {
     this.pool = new PoolResource(this.http);
     this.scores = new ScoresResource(this.http);
     this.remittance = new RemittanceResource(this.http);
+    this.agents = new AgentsResource(this.http);
   }
 
   // ── Session ────────────────────────────────────────────────────────────────

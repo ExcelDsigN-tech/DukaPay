@@ -52,7 +52,6 @@ pub trait BreakerInterface {
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum LoanError {
-    AlreadyInitialized = 1,
     NotInitialized = 2,
     LoanNotFound = 3,
     InsufficientScore = 4,
@@ -191,9 +190,15 @@ impl LoanManager {
     const LATE_REPAYMENT_SCORE_PENALTY: i32 = 10;
     const DEFAULT_SCORE_PENALTY_POINTS: u32 = 50;
     const NFT_MAX_SCORE: u32 = 850;
-    /// In stroops. Also the dust threshold: a remaining debt at or below this is
-    /// closed by any payment (see repay), so it must stay tiny. Not scaled to USDC.
-    const DEFAULT_MIN_REPAYMENT_AMOUNT: i128 = 100;
+    /// In stroops. A remaining debt at or below this is rounding dust: any payment
+    /// closes the loan and forgives the rest (see repay). Fixed, not admin-settable,
+    /// so raising the minimum repayment can't raise what gets forgiven.
+    const DUST_THRESHOLD: i128 = 100;
+    /// Minimum partial repayment, in stroops: 1 USDC. A payment that clears the
+    /// whole remaining debt is always accepted, even below this.
+    const DEFAULT_MIN_REPAYMENT_AMOUNT: i128 = money::STROOP_SCALE;
+    /// Upper bound for set_min_repayment_amount: 10 USDC.
+    const MAX_MIN_REPAYMENT_AMOUNT: i128 = 10 * money::STROOP_SCALE;
     /// Repayment, in stroops, that earns one credit-score point: 100 USDC.
     const STROOPS_PER_SCORE_POINT: i128 = 100 * money::STROOP_SCALE;
     const MAX_EXTENSIONS: u32 = 3;
@@ -974,20 +979,23 @@ impl LoanManager {
         events::collateral_liquidated(env, loan_id, collateral);
     }
 
-    pub fn initialize(
+    pub fn __constructor(
         env: Env,
         nft_contract: Address,
         lending_pool: Address,
         token: Address,
         admin: Address,
         governance_contract: Address,
-    ) -> Result<(), LoanError> {
-        if env.storage().instance().has(&DataKey::Admin) {
-            return Err(LoanError::AlreadyInitialized);
+    ) {
+        if Self::validate_late_fee_rate(Self::DEFAULT_LATE_FEE_RATE_BPS).is_err() {
+            panic!("invalid late fee rate");
         }
-        Self::validate_late_fee_rate(Self::DEFAULT_LATE_FEE_RATE_BPS)?;
-        Self::validate_liquidation_threshold(Self::DEFAULT_LIQUIDATION_THRESHOLD_BPS)?;
-        Self::validate_liquidation_bonus_bps(Self::DEFAULT_LIQUIDATION_BONUS_BPS)?;
+        if Self::validate_liquidation_threshold(Self::DEFAULT_LIQUIDATION_THRESHOLD_BPS).is_err() {
+            panic!("invalid liquidation threshold");
+        }
+        if Self::validate_liquidation_bonus_bps(Self::DEFAULT_LIQUIDATION_BONUS_BPS).is_err() {
+            panic!("invalid liquidation bonus");
+        }
         env.storage()
             .instance()
             .set(&DataKey::NftContract, &nft_contract);
@@ -1004,11 +1012,6 @@ impl LoanManager {
         env.storage()
             .instance()
             .set(&DataKey::CircuitBreaker, &None::<Address>);
-
-        let nft_client = NftClient::new(&env, &nft_contract);
-        if !nft_client.is_authorized_minter(&env.current_contract_address()) {
-            panic!("LoanManager must be authorized minter on NFT contract");
-        }
         env.storage()
             .instance()
             .set(&DataKey::Version, &Self::CURRENT_VERSION);
@@ -1045,7 +1048,6 @@ impl LoanManager {
             .instance()
             .set(&DataKey::MaxRateBps, &Self::MAX_RATE_BPS);
         Self::bump_instance_ttl(&env);
-        Ok(())
     }
 
     pub fn version(env: Env) -> u32 {
@@ -1449,7 +1451,7 @@ impl LoanManager {
 
         // Allow below-minimum repayment only when it fully clears the remaining debt
         // or when the remaining debt itself is just small rounding dust.
-        let is_rounding_dust_forgiveness = total_debt <= min_repayment_amount;
+        let is_rounding_dust_forgiveness = total_debt <= Self::DUST_THRESHOLD;
 
         if amount < total_debt && amount < min_repayment_amount && !is_rounding_dust_forgiveness {
             panic!("repayment amount below minimum");
@@ -2370,7 +2372,7 @@ impl LoanManager {
     }
 
     pub fn set_min_repayment_amount(env: Env, amount: i128) -> Result<(), LoanError> {
-        if amount < 0 {
+        if amount <= Self::DUST_THRESHOLD || amount > Self::MAX_MIN_REPAYMENT_AMOUNT {
             return Err(LoanError::InvalidAmount);
         }
 

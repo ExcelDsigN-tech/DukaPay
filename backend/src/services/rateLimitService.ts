@@ -1,8 +1,6 @@
-import { createClient, type RedisClientType } from 'redis';
 import crypto from 'node:crypto';
+import { getRedisClient, type RedisClientType } from './redisClient.js';
 import logger from '../utils/logger.js';
-
-const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
 
 export enum RateLimitTier {
   ANONYMOUS = 'anonymous',
@@ -81,21 +79,17 @@ end
   private inMemoryWindows = new Map<string, number[]>();
 
   constructor() {
-    this.client = createClient({ url: REDIS_URL });
-    this.client.on('error', (error) => {
-      this.isConnected = false;
-      if (process.env.NODE_ENV !== 'test') {
-        logger.withContext().error('Rate limit Redis client error', { error });
-      }
-    });
-    this.client.on('connect', () => {
-      this.isConnected = true;
-    });
+    this.client = getRedisClient();
   }
 
   private async ensureConnected(): Promise<void> {
+    if (this.client.isOpen) {
+      this.isConnected = true;
+      return;
+    }
     if (!this.isConnected) {
       await this.client.connect();
+      this.isConnected = true;
     }
   }
 

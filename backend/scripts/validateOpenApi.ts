@@ -23,6 +23,7 @@ import transactionRoutes from '../src/routes/transactionRoutes.js';
 import privacyRoutes from '../src/routes/privacyRoutes.js';
 import auditRoutes from '../src/routes/auditRoutes.js';
 import agentRoutes from '../src/routes/agentRoutes.js';
+import agentFloatRoutes from '../src/routes/agentFloatRoutes.js';
 
 export const OPENAPI_ARTIFACT = 'openapi.json';
 
@@ -52,6 +53,7 @@ const MOUNTS: Array<[specBasePath: string, router: Router]> = [
   ['/audit', auditRoutes],
   ['/user', userRoutes],
   ['/agents', agentRoutes],
+  ['/agents', agentFloatRoutes],
 ];
 
 interface LayerLike {

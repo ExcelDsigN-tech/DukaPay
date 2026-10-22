@@ -5,18 +5,20 @@ their responsibilities, and the invariants that must hold at all times.
 
 ## Core Contracts
 
-| Contract | Purpose |
-|----------|---------|
-| `agent_vault` | Agent float/collateral vault with solvency invariant |
-| `agent_registry` | Agent onboarding, KYC, bond management |
-| `loan_manager` | Loan lifecycle management |
-| `lending_pool` | Pool deposits, withdrawals, yield |
-| `remittance_nft` | Remittance NFT issuance & credit scores |
-| `multisig_governance` | Multi-signature governance |
-| `audit_anchor` | Tamper-evident Merkle-anchored audit epochs |
-| `oracle` | Price feeds for collateral valuation |
-| `circuit_breaker` | Emergency kill-switch: global / contract / function pause with 72h auto-expiry and 3-of-5 governance override (wired into `lending_pool`, `loan_manager`, `agent_vault` via `set_circuit_breaker` / `is_blocked`) |
-| `money` | Shared monetary policy/constants |
+| Contract              | Purpose                                                                                                                                                                                                           |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `agent_vault`         | Agent float/collateral vault with solvency invariant                                                                                                                                                              |
+| `agent_registry`      | Agent onboarding, KYC, bond management                                                                                                                                                                            |
+| `loan_manager`        | Loan lifecycle management                                                                                                                                                                                         |
+| `lending_pool`        | Pool deposits, withdrawals, yield                                                                                                                                                                                 |
+| `remittance_nft`      | Remittance NFT issuance & credit scores                                                                                                                                                                           |
+| `multisig_governance` | Multi-signature governance                                                                                                                                                                                        |
+| `circuit_breaker`     | Emergency kill-switch: global / contract / function pause with 72h auto-expiry and 3-of-5 governance override (wired into `lending_pool`, `loan_manager`, `agent_vault` via `set_circuit_breaker` / `is_blocked`) |
+| `oracle`              | Multi-source price feed with collateral valuation                                                                                                                                                                 |
+| `audit_anchor`        | Tamper-evident Merkle-anchored audit epochs                                                                                                                                                                       |
+| `money`               | Shared monetary policy/constants                                                                                                                                                                                  |
+
+All contracts utilize Soroban `__constructor` functions for atomic initialization during deployment, eliminating front-runnable initialization windows.
 
 ---
 
@@ -36,15 +38,15 @@ what their posted collateral can back, adjusted for the haircut ratio.
 
 The invariant is checked at **every state-mutating operation**:
 
-| Function | Invariant Check |
-|----------|----------------|
-| `deposit_collateral` | Always holds (float unchanged, collateral increases) |
-| `withdraw_collateral` | Verified after reducing collateral |
-| `mint_float` | Verified before increasing float |
-| `burn_float` | Always holds (float decreases, collateral unchanged) |
-| `transfer_float` | Verified on recipient's vault |
-| `settle_net` | Verified for each entry in the batch |
-| `set_haircut` | Verified with new haircut ratio |
+| Function              | Invariant Check                                      |
+| --------------------- | ---------------------------------------------------- |
+| `deposit_collateral`  | Always holds (float unchanged, collateral increases) |
+| `withdraw_collateral` | Verified after reducing collateral                   |
+| `mint_float`          | Verified before increasing float                     |
+| `burn_float`          | Always holds (float decreases, collateral unchanged) |
+| `transfer_float`      | Verified on recipient's vault                        |
+| `settle_net`          | Verified for each entry in the batch                 |
+| `set_haircut`         | Verified with new haircut ratio                      |
 
 ### View Functions for Off-Chain Verification
 
@@ -85,14 +87,14 @@ is planned for parameter changes.
 Every WASM upgrade of a DukaPay contract flows through the
 `multisig_governance` contract's **upgrade timelock** (`src/upgrade_timelock.rs`):
 
-| Step | Function | Who |
-|------|----------|-----|
-| Configure quorum (once) | `configure_upgrade_signers(signers, threshold)` | admin |
-| Queue an upgrade | `queue_upgrade(proposer, target, new_wasm_hash)` | any signer / admin |
-| Approve | `approve_upgrade(signer)` | configured signer (idempotent) |
-| Execute after timelock | `execute_upgrade(caller)` | anyone |
-| Abort | `cancel_upgrade(caller)` | any signer / admin |
-| Circuit breaker | `emergency_pause(caller)` / `emergency_unpause()` | pause: any signer • unpause: admin only |
+| Step                    | Function                                          | Who                                     |
+| ----------------------- | ------------------------------------------------- | --------------------------------------- |
+| Configure quorum (once) | `configure_upgrade_signers(signers, threshold)`   | admin                                   |
+| Queue an upgrade        | `queue_upgrade(proposer, target, new_wasm_hash)`  | any signer / admin                      |
+| Approve                 | `approve_upgrade(signer)`                         | configured signer (idempotent)          |
+| Execute after timelock  | `execute_upgrade(caller)`                         | anyone                                  |
+| Abort                   | `cancel_upgrade(caller)`                          | any signer / admin                      |
+| Circuit breaker         | `emergency_pause(caller)` / `emergency_unpause()` | pause: any signer • unpause: admin only |
 
 Enforced **on-chain**:
 
@@ -102,7 +104,7 @@ Enforced **on-chain**:
   with `threshold = 3`.
 - **14-day TTL**: a queued-but-unexecuted upgrade expires and can be replaced.
 - **Single in-flight upgrade**: a new one cannot be queued while one is pending.
-- **Emergency pause** halts *all* `execute_upgrade` calls immediately; any single
+- **Emergency pause** halts _all_ `execute_upgrade` calls immediately; any single
   signer can trip it, only the admin can lift it.
 
 `execute_upgrade` performs a cross-contract call to `target.upgrade(new_wasm_hash)`.
@@ -116,8 +118,8 @@ its **owner** (the vault's admin role; the operator cannot upgrade). It keeps
 all storage in place, bumps `version()` (1 for a new or pre-versioning vault,
 +1 per upgrade), and emits `ContractUpgraded (old_version, new_version)` like the
 other contracts. The vault has no owner-transfer function, so to put it under
-the timelock, initialise it (`init`) with the `multisig_governance` contract
-address as `owner`; an already-initialised vault keeps its current owner.
+the timelock, deploy it with the `multisig_governance` contract address as the
+`__constructor` `owner`; an already-deployed vault keeps its current owner.
 
 ---
 

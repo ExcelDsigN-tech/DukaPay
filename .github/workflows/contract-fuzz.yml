@@ -1,0 +1,84 @@
+name: Contract Fuzzing
+
+# Runs every cargo-fuzz target in contracts/fuzz for a fixed time, starting
+# from a cached corpus. A crash, OOM or timeout fails the run and its
+# reproducer is uploaded as an artifact; nothing is committed back.
+on:
+  schedule:
+    - cron: '30 1 * * *' # nightly at 01:30 UTC
+  workflow_dispatch:
+    inputs:
+      max_total_time:
+        description: Seconds to fuzz each target
+        type: number
+        default: 600
+
+permissions:
+  contents: read
+
+concurrency:
+  group: contract-fuzz-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  targets:
+    runs-on: ubuntu-latest
+    outputs:
+      targets: ${{ steps.list.outputs.targets }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: List fuzz targets
+        id: list
+        # Every [[bin]] in the fuzz crate is a target, so a new target is
+        # fuzzed without editing this workflow.
+        run: |
+          targets=$(cargo metadata --no-deps --format-version 1 --manifest-path contracts/fuzz/Cargo.toml \
+            | jq -c '[.packages[].targets[] | select(.kind | index("bin")) | .name]')
+          echo "targets=$targets" >> "$GITHUB_OUTPUT"
+        env:
+          # Only reads manifests; skip installing contracts/rust-toolchain.toml.
+          RUSTUP_TOOLCHAIN: stable
+
+  fuzz:
+    needs: targets
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJSON(needs.targets.outputs.targets) }}
+    env:
+      # cargo-fuzz needs nightly for its sanitizer flags; this overrides
+      # contracts/rust-toolchain.toml.
+      RUSTUP_TOOLCHAIN: nightly
+      CARGO_FUZZ_VERSION: 0.13.2
+      TARGET: ${{ matrix.target }}
+      MAX_TOTAL_TIME: ${{ inputs.max_total_time || 600 }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Install nightly Rust
+        run: rustup toolchain install nightly --profile minimal
+      - name: Cache build and cargo-fuzz
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: contracts/fuzz -> target
+          shared-key: contract-fuzz
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --version "$CARGO_FUZZ_VERSION" --locked
+      - name: Restore corpus
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: contracts/fuzz/corpus/${{ matrix.target }}
+          key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
+          restore-keys: fuzz-corpus-${{ matrix.target }}-
+      - name: Fuzz
+        working-directory: contracts
+        run: cargo fuzz run "$TARGET" -- -max_total_time="$MAX_TOTAL_TIME"
+      - name: Upload crash reproducers
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: fuzz-crash-${{ matrix.target }}
+          path: contracts/fuzz/artifacts/${{ matrix.target }}/
+          if-no-files-found: warn
+          retention-days: 30

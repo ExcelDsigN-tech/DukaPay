@@ -1,48 +1,30 @@
-import { createClient, type RedisClientType } from 'redis';
+import { getRedisClient, type RedisClientType } from './redisClient.js';
 import logger from '../utils/logger.js';
-
-const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
+import { env } from '../config/env.js';
 
 class CacheService {
   private client: RedisClientType | undefined;
   private isConnected: boolean = false;
 
   constructor() {
-    this.client = createClient({
-      url: REDIS_URL,
-    });
-
-    this.client.on('error', (err) => {
-      // In tests, we don't want to spam the console with ECONNREFUSED if Redis isn't running
-      if (process.env.NODE_ENV !== 'test' || err.code !== 'ECONNREFUSED') {
-        logger.withContext().error('Redis Client Error', err);
-      }
-      this.isConnected = false;
-    });
-
-    this.client.on('connect', () => {
-      logger.withContext().info('Redis Client Connected');
-      this.isConnected = true;
-    });
-
-    this.client.on('reconnecting', () => {
-      // Only log reconnecting in non-test environments to keep test output clean
-      if (process.env.NODE_ENV !== 'test') {
-        logger.withContext().info('Redis Client Reconnecting');
-      }
-    });
-
-    // Connection is now lazy-loaded on first request to avoid side effects on import.
+    this.client = getRedisClient();
+    // Connection is lazy-loaded on first request to avoid side effects on import.
   }
 
   private async ensureConnected() {
+    // The client is shared (redisClient.ts): another service may already
+    // have opened it, and a second connect() throws "Socket already opened".
+    if (this.client!.isOpen) {
+      this.isConnected = true;
+      return;
+    }
     if (!this.isConnected) {
       try {
         await this.client!.connect();
         this.isConnected = true;
       } catch (err) {
         // Silently fail in tests if connection fails, but log in production
-        if (process.env.NODE_ENV !== 'test') {
+        if (env.NODE_ENV !== 'test') {
           logger.withContext().error('Failed to connect to Redis', err);
         }
         throw err;
@@ -62,7 +44,7 @@ class CacheService {
       const stringValue = JSON.stringify(value);
       await this.client!.setEx(key, ttlSeconds, stringValue);
     } catch (error) {
-      if (process.env.NODE_ENV !== 'test') {
+      if (env.NODE_ENV !== 'test') {
         logger.withContext().error(`Error setting cache for key ${key}`, { error });
       }
     }
@@ -88,7 +70,7 @@ class CacheService {
 
       return JSON.parse(value) as T;
     } catch (error) {
-      if (process.env.NODE_ENV !== 'test') {
+      if (env.NODE_ENV !== 'test') {
         logger.withContext().error(`Error getting cache for key ${key}`, { error });
       }
       return null;
@@ -144,7 +126,7 @@ class CacheService {
       await this.ensureConnected();
       await this.client!.del(key);
     } catch (error) {
-      if (process.env.NODE_ENV !== 'test') {
+      if (env.NODE_ENV !== 'test') {
         logger.withContext().error(`Error deleting cache for key ${key}`, { error });
       }
     }
@@ -183,7 +165,7 @@ return 0
       });
       return result === 1;
     } catch (error) {
-      if (process.env.NODE_ENV !== 'test') {
+      if (env.NODE_ENV !== 'test') {
         logger.withContext().error(`Error in deleteIfMatch for key ${key}`, { error });
       }
       return false;
@@ -202,7 +184,7 @@ return 0
         await this.client!.del(keys);
       }
     } catch (error) {
-      if (process.env.NODE_ENV !== 'test') {
+      if (env.NODE_ENV !== 'test') {
         logger.withContext().error(`Error invalidating pattern ${pattern}`, { error });
       }
     }

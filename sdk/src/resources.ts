@@ -1,30 +1,57 @@
 import type { HttpClient } from './http.js';
 import type {
+  AgentAssignmentsResponse,
+  AgentDashboard,
+  AgentPairLimitsResponse,
+  AmortizationPreview,
+  AmortizationSchedule,
+  ApproveFloatTransferResponse,
+  AssignBorrowerResponse,
   BorrowerLoanStatus,
   BorrowerLoans,
   Challenge,
   DepositorPortfolio,
+  InitiateFloatTransferResponse,
   Loan,
   LoanConfig,
+  LoanEvents,
   PoolAnalyticsResponse,
   PoolStats,
+  RejectFloatTransferResponse,
   RemittanceCreated,
   RemittanceEnvelope,
   RemittanceList,
   RemittanceSubmitResult,
+  RemoveBorrowerResponse,
+  RepaymentPreview,
   RepayTransaction,
   Score,
+  ScoreBreakdown,
+  ScoreHistory,
+  ScoreNFT,
   Session,
+  SetAgentPairLimitsResponse,
+  SubmitFloatTransferResponse,
   UnsignedTransaction,
   YieldHistoryPoint,
 } from './types.js';
 import { ValidationError } from './errors.js';
 import {
   validateStellarAddress,
+  validateContractAddress,
   validateAmount,
   validatePositiveInt,
   validateTokenAmount,
 } from './validation.js';
+
+/** Matches the backend's float transfer ID format, so the ID is safe to put in a path. */
+function validateTransferId(value: unknown, fieldName: string): asserts value is string {
+  if (typeof value !== 'string' || !/^[A-Za-z0-9_-]{3,128}$/.test(value)) {
+    throw new ValidationError(
+      `Invalid ${fieldName}: must be 3-128 letters, digits, underscores or hyphens`,
+    );
+  }
+}
 
 export class AuthResource {
   constructor(private http: HttpClient) {}
@@ -53,6 +80,38 @@ export class AuthResource {
 
   logout(): Promise<void> {
     return this.http.post('/auth/logout');
+  }
+
+  refresh(refreshToken: string): Promise<Session> {
+    if (!refreshToken || typeof refreshToken !== 'string') {
+      throw new ValidationError('Invalid refreshToken: must be a non-empty string');
+    }
+    // Anonymous: a 401 here must not trigger another refresh and wait on itself.
+    return this.http.post('/auth/refresh', { refreshToken }, { anonymous: true });
+  }
+
+  logoutAll(): Promise<void> {
+    return this.http.post('/auth/logout-all');
+  }
+
+  submitKyc(params: {
+    firstName: string;
+    lastName: string;
+    /** ISO date, YYYY-MM-DD. */
+    dateOfBirth?: string;
+    /** ISO 3166-1 alpha-2 country code. */
+    countryCode: string;
+  }): Promise<{ success: boolean; kycId: string }> {
+    if (!params.firstName || typeof params.firstName !== 'string') {
+      throw new ValidationError('Invalid firstName: must be a non-empty string');
+    }
+    if (!params.lastName || typeof params.lastName !== 'string') {
+      throw new ValidationError('Invalid lastName: must be a non-empty string');
+    }
+    if (typeof params.countryCode !== 'string' || params.countryCode.trim().length !== 2) {
+      throw new ValidationError('Invalid countryCode: must be a 2-letter country code');
+    }
+    return this.http.post('/auth/kyc', params);
   }
 }
 
@@ -117,9 +176,169 @@ export class LoansResource {
     return this.http.post(`/loans/${loanId}/build-cancel`);
   }
 
+  /**
+   * Requests a new loan and returns the unsigned transaction XDR for signing
+   * and submission.
+   *
+   * `amount` is in whole tokens (e.g. `250.5` USDC, up to 7 decimal places);
+   * the API converts it to stroops. `termLedgers` is the loan term in ledgers.
+   * `borrowerPublicKey` must match the authenticated wallet.
+   */
+  requestLoan(
+    amount: number,
+    borrowerPublicKey: string,
+    termLedgers: number,
+  ): Promise<UnsignedTransaction> {
+    validateTokenAmount(amount, 'amount');
+    validateStellarAddress(borrowerPublicKey, 'borrowerPublicKey');
+    validatePositiveInt(termLedgers, 'termLedgers');
+    return this.http.post(`/loans/request`, { amount, borrowerPublicKey, termLedgers });
+  }
+
+  /**
+   * Builds the deposit collateral transaction for a loan and returns the
+   * unsigned XDR for signing.
+   *
+   * `amount` is in whole tokens (e.g. `250.5` USDC, up to 7 decimal places);
+   * the API converts it to stroops. `borrowerPublicKey` must match the
+   * authenticated wallet.
+   */
+  buildDepositCollateral(
+    loanId: number | string,
+    amount: number,
+    borrowerPublicKey: string,
+  ): Promise<UnsignedTransaction> {
+    validatePositiveInt(loanId, 'loanId');
+    validateTokenAmount(amount, 'amount');
+    validateStellarAddress(borrowerPublicKey, 'borrowerPublicKey');
+    return this.http.post(`/loans/${loanId}/build-deposit-collateral`, {
+      amount,
+      borrowerPublicKey,
+    });
+  }
+
+  /**
+   * Builds the release collateral transaction for a loan and returns the
+   * unsigned XDR for signing.
+   *
+   * `borrowerPublicKey` must match the authenticated wallet.
+   */
+  buildReleaseCollateral(
+    loanId: number | string,
+    borrowerPublicKey: string,
+  ): Promise<UnsignedTransaction> {
+    validatePositiveInt(loanId, 'loanId');
+    validateStellarAddress(borrowerPublicKey, 'borrowerPublicKey');
+    return this.http.post(`/loans/${loanId}/build-release-collateral`, {
+      borrowerPublicKey,
+    });
+  }
+
+  /**
+   * Builds the refinance transaction for a loan and returns the unsigned XDR
+   * for signing.
+   *
+   * `newAmount` is in whole tokens (e.g. `250.5` USDC, up to 7 decimal places);
+   * the API converts it to stroops. `newTerm` is the new loan term in ledgers.
+   * `borrowerPublicKey` must match the authenticated wallet.
+   */
+  buildRefinance(
+    loanId: number | string,
+    newAmount: number,
+    newTerm: number,
+    borrowerPublicKey: string,
+  ): Promise<UnsignedTransaction> {
+    validatePositiveInt(loanId, 'loanId');
+    validateTokenAmount(newAmount, 'newAmount');
+    validatePositiveInt(newTerm, 'newTerm');
+    validateStellarAddress(borrowerPublicKey, 'borrowerPublicKey');
+    return this.http.post(`/loans/${loanId}/build-refinance`, {
+      newAmount,
+      newTerm,
+      borrowerPublicKey,
+    });
+  }
+
+  /**
+   * Builds the extend transaction for a loan and returns the unsigned XDR
+   * for signing.
+   *
+   * `extraLedgers` is the number of additional ledgers to extend the loan
+   * term. `borrowerPublicKey` must match the authenticated wallet.
+   */
+  buildExtend(
+    loanId: number | string,
+    extraLedgers: number,
+    borrowerPublicKey: string,
+  ): Promise<UnsignedTransaction> {
+    validatePositiveInt(loanId, 'loanId');
+    validatePositiveInt(extraLedgers, 'extraLedgers');
+    validateStellarAddress(borrowerPublicKey, 'borrowerPublicKey');
+    return this.http.post(`/loans/${loanId}/build-extend`, {
+      extraLedgers,
+      borrowerPublicKey,
+    });
+  }
+
+  /**
+   * Builds the contest default transaction for a loan and returns the unsigned
+   * XDR for signing.
+   *
+   * `reason` must be at least 5 characters and at most 500 characters.
+   * `borrowerPublicKey` must match the authenticated wallet.
+   */
+  contestDefault(
+    loanId: number | string,
+    reason: string,
+    borrowerPublicKey: string,
+  ): Promise<UnsignedTransaction> {
+    validatePositiveInt(loanId, 'loanId');
+    if (typeof reason !== 'string' || reason.length < 5 || reason.length > 500) {
+      throw new ValidationError(
+        `Invalid reason: must be between 5 and 500 characters`,
+      );
+    }
+    validateStellarAddress(borrowerPublicKey, 'borrowerPublicKey');
+    return this.http.post(`/loans/${loanId}/contest-default`, {
+      reason,
+      borrowerPublicKey,
+    });
+  }
+
   /** Submit a wallet-signed XDR for on-chain execution. */
   submit(loanId: number | string, signedXdr: string): Promise<Loan> {
     return this.http.post(`/loans/${loanId}/submit`, { signedXdr });
+  }
+
+  /**
+   * Compute an amortization preview for a loan before applying.
+   * Amounts are in whole tokens.
+   */
+  amortizationPreview(params: { amount: number; termDays: 30 | 60 | 90 }): Promise<AmortizationPreview> {
+    validateTokenAmount(params.amount, 'amount');
+    if (![30, 60, 90].includes(params.termDays)) {
+      throw new ValidationError('Invalid termDays: must be 30, 60 or 90');
+    }
+    return this.http.post('/loans/amortization-preview', params);
+  }
+
+  amortizationSchedule(loanId: number | string): Promise<AmortizationSchedule> {
+    validatePositiveInt(loanId, 'loanId');
+    return this.http.get(`/loans/${loanId}/amortization-schedule`);
+  }
+
+  /**
+   * Returns the current repayment preview for an active loan.
+   * Amounts are in whole tokens.
+   */
+  repaymentPreview(loanId: number | string): Promise<RepaymentPreview> {
+    validatePositiveInt(loanId, 'loanId');
+    return this.http.get(`/loans/${loanId}/repayment-preview`);
+  }
+
+  events(loanId: number | string): Promise<LoanEvents> {
+    validatePositiveInt(loanId, 'loanId');
+    return this.http.get(`/loans/${loanId}/events`);
   }
 }
 
@@ -166,6 +385,25 @@ export class PoolResource {
     validateStellarAddress(params.from, 'from');
     return this.http.post('/pool/build-withdraw', params);
   }
+
+  /**
+   * Builds the emergency withdraw transaction for a depositor and returns the
+   * unsigned XDR for signing.
+   *
+   * `shares` is in whole tokens (up to 7 decimal places); the API converts it
+   * to stroops. `token` is the pool token's contract address (C...).
+   * `depositorPublicKey` must match the authenticated wallet.
+   */
+  buildEmergencyWithdraw(params: {
+    depositorPublicKey: string;
+    token: string;
+    shares: number;
+  }): Promise<UnsignedTransaction> {
+    validateStellarAddress(params.depositorPublicKey, 'depositorPublicKey');
+    validateContractAddress(params.token, 'token');
+    validateTokenAmount(params.shares, 'shares');
+    return this.http.post('/pool/build-emergency-withdraw', params);
+  }
 }
 
 export class ScoresResource {
@@ -178,6 +416,21 @@ export class ScoresResource {
   get(address: string): Promise<Score> {
     validateStellarAddress(address, 'address');
     return this.http.get(`/score/${address}`);
+  }
+
+  history(address: string): Promise<ScoreHistory> {
+    validateStellarAddress(address, 'address');
+    return this.http.get(`/score/${address}/history`);
+  }
+
+  nft(address: string): Promise<ScoreNFT> {
+    validateStellarAddress(address, 'address');
+    return this.http.get(`/score/${address}/nft`);
+  }
+
+  breakdown(userId: string): Promise<ScoreBreakdown> {
+    validateStellarAddress(userId, 'userId');
+    return this.http.get(`/score/${userId}/breakdown`);
   }
 }
 
@@ -236,3 +489,135 @@ export class RemittanceResource {
     return this.http.post(`/remittances/${id}/submit`, { signedXdr });
   }
 }
+
+export class AgentsResource {
+  constructor(private http: HttpClient) {}
+
+  /** Lists borrower wallets assigned to the authenticated agent (`GET /agents/my-assignments`). */
+  myAssignments(): Promise<AgentAssignmentsResponse> {
+    return this.http.get('/agents/my-assignments');
+  }
+
+  /** Assigns a borrower wallet to an agent (`POST /agents/{agentPublicKey}/assignees`, admin only). */
+  assignBorrower(params: {
+    agentPublicKey: string;
+    borrowerPublicKey: string;
+  }): Promise<AssignBorrowerResponse> {
+    validateStellarAddress(params.agentPublicKey, 'agentPublicKey');
+    validateStellarAddress(params.borrowerPublicKey, 'borrowerPublicKey');
+    if (params.agentPublicKey === params.borrowerPublicKey) {
+      throw new ValidationError('agentPublicKey and borrowerPublicKey must be different');
+    }
+    return this.http.post(`/agents/${params.agentPublicKey}/assignees`, {
+      borrowerPublicKey: params.borrowerPublicKey,
+    });
+  }
+
+  /** Revokes a borrower assignment from an agent (`DELETE /agents/{agentPublicKey}/assignees/{borrowerPublicKey}`, admin only). */
+  removeBorrower(params: {
+    agentPublicKey: string;
+    borrowerPublicKey: string;
+  }): Promise<RemoveBorrowerResponse> {
+    validateStellarAddress(params.agentPublicKey, 'agentPublicKey');
+    validateStellarAddress(params.borrowerPublicKey, 'borrowerPublicKey');
+    return this.http.delete(
+      `/agents/${params.agentPublicKey}/assignees/${params.borrowerPublicKey}`,
+    );
+  }
+
+  /** Fetches agent dashboard metrics (`GET /agents/dashboard`). */
+  dashboard(): Promise<AgentDashboard> {
+    return this.http.get('/agents/dashboard');
+  }
+
+  /** Clears the cached agent dashboard snapshot (`DELETE /agents/dashboard/cache`). */
+  clearDashboardCache(): Promise<{ success: boolean; message: string }> {
+    return this.http.delete('/agents/dashboard/cache');
+  }
+
+  /** Initiates an agent-to-agent float transfer (`POST /agents/float-transfer`). */
+  initiateFloatTransfer(params: {
+    fromAgent: string;
+    toAgent: string;
+    /** Whole tokens (e.g. 250.5 USDC), up to 7 decimal places. */
+    amount: number;
+    reason?: string;
+  }): Promise<InitiateFloatTransferResponse> {
+    validateStellarAddress(params.fromAgent, 'fromAgent');
+    validateStellarAddress(params.toAgent, 'toAgent');
+    if (params.fromAgent === params.toAgent) {
+      throw new ValidationError('fromAgent and toAgent must be different');
+    }
+    validateTokenAmount(params.amount, 'amount');
+    return this.http.post('/agents/float-transfer', {
+      fromAgent: params.fromAgent,
+      toAgent: params.toAgent,
+      amount: params.amount,
+      ...(params.reason !== undefined ? { reason: params.reason } : {}),
+    });
+  }
+
+  /** Approves a pending agent float transfer (`POST /agents/float-transfer/{id}/approve`). */
+  approveFloatTransfer(transferId: string): Promise<ApproveFloatTransferResponse> {
+    validateTransferId(transferId, 'transferId');
+    return this.http.post(`/agents/float-transfer/${transferId}/approve`);
+  }
+
+  /** Submits the fully signed float transfer for Stellar confirmation. */
+  submitFloatTransfer(
+    transferId: string,
+    signedTxXdr: string,
+  ): Promise<SubmitFloatTransferResponse> {
+    validateTransferId(transferId, 'transferId');
+    if (typeof signedTxXdr !== 'string' || signedTxXdr.trim().length === 0) {
+      throw new ValidationError('signedTxXdr is required');
+    }
+    return this.http.post(`/agents/float-transfer/${transferId}/submit`, { signedTxXdr });
+  }
+
+  /** Rejects a pending agent float transfer (`POST /agents/float-transfer/{id}/reject`). */
+  rejectFloatTransfer(transferId: string): Promise<RejectFloatTransferResponse> {
+    validateTransferId(transferId, 'transferId');
+    return this.http.post(`/agents/float-transfer/${transferId}/reject`);
+  }
+
+  /** Retrieves daily and weekly float transfer limits for an agent pair (`GET /agents/float-transfer/limits`). */
+  getPairLimits(params: {
+    fromAgent: string;
+    toAgent: string;
+  }): Promise<AgentPairLimitsResponse> {
+    validateStellarAddress(params.fromAgent, 'fromAgent');
+    validateStellarAddress(params.toAgent, 'toAgent');
+    return this.http.get('/agents/float-transfer/limits', {
+      query: {
+        fromAgent: params.fromAgent,
+        toAgent: params.toAgent,
+      },
+    });
+  }
+
+  /** Updates daily and weekly float transfer limits for an agent pair (`PUT /agents/float-transfer/limits`, admin only). */
+  setPairLimits(params: {
+    fromAgent: string;
+    toAgent: string;
+    /** Whole tokens (e.g. 250.5 USDC), up to 7 decimal places. */
+    dailyLimit: number;
+    /** Whole tokens (e.g. 250.5 USDC), up to 7 decimal places. */
+    weeklyLimit: number;
+  }): Promise<SetAgentPairLimitsResponse> {
+    validateStellarAddress(params.fromAgent, 'fromAgent');
+    validateStellarAddress(params.toAgent, 'toAgent');
+    if (params.fromAgent === params.toAgent) {
+      throw new ValidationError('fromAgent and toAgent must be different');
+    }
+    validateTokenAmount(params.dailyLimit, 'dailyLimit');
+    validateTokenAmount(params.weeklyLimit, 'weeklyLimit');
+    return this.http.put('/agents/float-transfer/limits', {
+      fromAgent: params.fromAgent,
+      toAgent: params.toAgent,
+      dailyLimit: params.dailyLimit,
+      weeklyLimit: params.weeklyLimit,
+    });
+  }
+}
+

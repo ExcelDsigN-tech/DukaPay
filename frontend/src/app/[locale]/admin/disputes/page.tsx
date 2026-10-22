@@ -14,8 +14,7 @@ import {
 } from "../../../hooks/useApi";
 import { useSSE } from "../../../hooks/useSSE";
 import { useUserStore } from "../../../stores/useUserStore";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+import { NEXT_PUBLIC_API_URL } from "../../../lib/apiConfig";
 
 function summarize(reason: string) {
   return reason.length > 120 ? `${reason.slice(0, 117)}...` : reason;
@@ -118,7 +117,7 @@ export default function AdminDisputesPage() {
   const disputesQuery = useAdminDisputes({ enabled: isAdmin });
 
   useSSE<{ eventType?: string; type?: string }>({
-    url: isAdmin ? `${API_URL}/api/events/stream` : null,
+    url: isAdmin ? `${NEXT_PUBLIC_API_URL}/api/events/stream` : null,
     onMessage: (event) => {
       const eventType = event.eventType ?? event.type ?? "";
       if (/dispute|default/i.test(eventType)) {

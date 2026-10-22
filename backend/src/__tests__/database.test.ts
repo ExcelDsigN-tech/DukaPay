@@ -1,32 +1,14 @@
-import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
+import { it, expect, beforeAll, afterAll } from '@jest/globals';
 import {
   UserProfileService,
   LoanHistoryService,
   IndexedEventsService,
   DatabaseService,
 } from '../services/databaseService.js';
-import { query } from '../db/connection.js';
+import { query, closePool } from '../db/connection.js';
+import { describeIfDb } from './helpers/dbProbe.js';
 
-let databaseAvailable = false;
-
-beforeAll(async () => {
-  try {
-    await query('SELECT 1');
-    databaseAvailable = true;
-  } catch {
-    databaseAvailable = false;
-  }
-});
-
-const describeIf = (name: string, fn: () => void) => {
-  if (databaseAvailable) {
-    describe(name, fn);
-  } else {
-    describe.skip(`${name} (skipped: no database)`, fn);
-  }
-};
-
-describeIf('Database Services', () => {
+describeIfDb('Database Services', () => {
   beforeAll(async () => {
     try {
       await query(`
@@ -87,12 +69,13 @@ describeIf('Database Services', () => {
 
   afterAll(async () => {
     try {
-      await query('DROP TABLE IF EXISTS user_profiles');
-      await query('DROP TABLE IF EXISTS loan_history');
-      await query('DROP TABLE IF EXISTS indexed_events');
+      await query('DELETE FROM user_profiles WHERE public_key LIKE $1', ['G_TEST%']);
+      await query('DELETE FROM loan_history WHERE borrower_public_key LIKE $1', ['G_BORROWER%']);
+      await query('DELETE FROM indexed_events WHERE event_id LIKE $1', ['event_%']);
     } catch (error) {
       console.error('Cleanup error:', error);
     }
+    await closePool();
   });
 
   describe('UserProfileService', () => {

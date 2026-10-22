@@ -69,7 +69,9 @@ export class SoundManager {
    *
    * The frequency and duration parameters are currently unused.
    */
-  private generateTone(_frequencies: number[], _duration: number): string {
+  private generateTone(frequencies: number[], durationMs: number): string {
+    void frequencies;
+    void durationMs;
     return "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
   }
 

@@ -78,10 +78,12 @@
             "type": "object",
             "properties": {
               "totalFloat": {
-                "type": "number"
+                "type": "number",
+                "description": "Whole tokens, up to 7 decimal places."
               },
               "allocated": {
-                "type": "number"
+                "type": "number",
+                "description": "Whole tokens, up to 7 decimal places."
               },
               "utilizationPct": {
                 "type": "number"
@@ -92,16 +94,20 @@
             "type": "object",
             "properties": {
               "daily": {
-                "type": "number"
+                "type": "number",
+                "description": "Whole tokens, up to 7 decimal places."
               },
               "weekly": {
-                "type": "number"
+                "type": "number",
+                "description": "Whole tokens, up to 7 decimal places."
               },
               "monthly": {
-                "type": "number"
+                "type": "number",
+                "description": "Whole tokens, up to 7 decimal places."
               },
               "total": {
-                "type": "number"
+                "type": "number",
+                "description": "Whole tokens, up to 7 decimal places."
               }
             }
           },
@@ -118,7 +124,8 @@
                 "type": "integer"
               },
               "totalOutstanding": {
-                "type": "number"
+                "type": "number",
+                "description": "Whole tokens, up to 7 decimal places."
               },
               "byStatus": {
                 "type": "object",
@@ -135,7 +142,8 @@
                 "type": "integer"
               },
               "totalValue": {
-                "type": "number"
+                "type": "number",
+                "description": "Whole tokens, up to 7 decimal places."
               }
             }
           },
@@ -143,10 +151,12 @@
             "type": "object",
             "properties": {
               "totalCollateral": {
-                "type": "number"
+                "type": "number",
+                "description": "Whole tokens, up to 7 decimal places."
               },
               "totalDebt": {
-                "type": "number"
+                "type": "number",
+                "description": "Whole tokens, up to 7 decimal places."
               },
               "ratio": {
                 "type": "number"
@@ -3217,28 +3227,122 @@
         }
       }
     },
-    "/agents/solvency": {
-      "get": {
-        "summary": "Get the public solvency projection for active agents",
-        "tags": [
-          "Agents"
-        ],
-        "responses": {
-          "200": {
-            "description": "Solvency projection"
-          }
-        }
-      }
-    },
-    "/agents/submit": {
+    "/agents/float-transfer": {
       "post": {
-        "summary": "Submit a wallet-signed agent transaction",
+        "summary": "Initiate a new agent-to-agent float transfer",
         "tags": [
           "Agents"
         ],
         "security": [
           {
             "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "fromAgent",
+                  "toAgent",
+                  "amount"
+                ],
+                "properties": {
+                  "fromAgent": {
+                    "type": "string"
+                  },
+                  "toAgent": {
+                    "type": "string"
+                  },
+                  "amount": {
+                    "type": "number",
+                    "description": "Transfer amount in whole tokens (e.g. USDC), up to 7 decimal places"
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Float transfer initiated."
+          },
+          "400": {
+            "description": "Invalid request parameters."
+          },
+          "401": {
+            "description": "Unauthorized."
+          },
+          "403": {
+            "description": "Forbidden."
+          }
+        }
+      }
+    },
+    "/agents/float-transfer/{id}/approve": {
+      "post": {
+        "summary": "Approve a pending float transfer",
+        "tags": [
+          "Agents"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Float transfer approved."
+          },
+          "400": {
+            "description": "Invalid transfer status or duplicate approval."
+          },
+          "401": {
+            "description": "Unauthorized."
+          },
+          "403": {
+            "description": "Forbidden."
+          },
+          "404": {
+            "description": "Transfer not found."
+          }
+        }
+      }
+    },
+    "/agents/float-transfer/{id}/submit": {
+      "post": {
+        "summary": "Submit a signed float transfer transaction",
+        "tags": [
+          "Agents"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -3252,7 +3356,8 @@
                 ],
                 "properties": {
                   "signedTxXdr": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "byte"
                   }
                 }
               }
@@ -3261,17 +3366,109 @@
         },
         "responses": {
           "200": {
-            "description": "Transaction submitted"
+            "description": "Float transfer confirmed on the Stellar network."
           },
           "400": {
-            "description": "Invalid transaction or failed submission"
+            "description": "Invalid transfer status or signed transaction."
+          },
+          "401": {
+            "description": "Unauthorized."
+          },
+          "403": {
+            "description": "Forbidden."
+          },
+          "404": {
+            "description": "Transfer not found."
           }
         }
       }
     },
-    "/agents/register": {
+    "/agents/float-transfer/{id}/reject": {
       "post": {
-        "summary": "Build an agent registration transaction",
+        "summary": "Reject a pending float transfer",
+        "tags": [
+          "Agents"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Float transfer rejected."
+          },
+          "400": {
+            "description": "Invalid transfer status."
+          },
+          "401": {
+            "description": "Unauthorized."
+          },
+          "403": {
+            "description": "Forbidden."
+          },
+          "404": {
+            "description": "Transfer not found."
+          }
+        }
+      }
+    },
+    "/agents/float-transfer/limits": {
+      "get": {
+        "summary": "Get pair limits for an agent pair",
+        "tags": [
+          "Agents"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "fromAgent",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "toAgent",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Pair limits retrieved."
+          },
+          "400": {
+            "description": "Invalid query parameters."
+          },
+          "401": {
+            "description": "Unauthorized."
+          },
+          "403": {
+            "description": "Forbidden."
+          }
+        }
+      },
+      "put": {
+        "summary": "Set or update pair limits (admin only)",
         "tags": [
           "Agents"
         ],
@@ -3287,30 +3484,25 @@
               "schema": {
                 "type": "object",
                 "required": [
-                  "agentPublicKey",
-                  "kycRef",
-                  "region",
-                  "bond",
-                  "licenseExpiry"
+                  "fromAgent",
+                  "toAgent",
+                  "dailyLimit",
+                  "weeklyLimit"
                 ],
                 "properties": {
-                  "agentPublicKey": {
+                  "fromAgent": {
                     "type": "string"
                   },
-                  "kycRef": {
-                    "type": "string",
-                    "maxLength": 32
-                  },
-                  "region": {
-                    "type": "string",
-                    "maxLength": 16
-                  },
-                  "bond": {
+                  "toAgent": {
                     "type": "string"
                   },
-                  "licenseExpiry": {
-                    "type": "integer",
-                    "format": "int64"
+                  "dailyLimit": {
+                    "type": "number",
+                    "description": "Daily limit in whole tokens (e.g. USDC), up to 7 decimal places"
+                  },
+                  "weeklyLimit": {
+                    "type": "number",
+                    "description": "Weekly limit in whole tokens (e.g. USDC), up to 7 decimal places"
                   }
                 }
               }
@@ -3319,165 +3511,16 @@
         },
         "responses": {
           "200": {
-            "description": "Unsigned registration transaction"
+            "description": "Pair limits updated."
           },
           "400": {
-            "description": "Invalid registration data"
-          }
-        }
-      }
-    },
-    "/agents/{agentPublicKey}/activate": {
-      "post": {
-        "summary": "Build an operator-signed activation transaction",
-        "tags": [
-          "Agents"
-        ],
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "in": "path",
-            "name": "agentPublicKey",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Unsigned activation transaction"
+            "description": "Invalid request parameters."
+          },
+          "401": {
+            "description": "Unauthorized."
           },
           "403": {
-            "description": "Configured operator required"
-          }
-        }
-      }
-    },
-    "/agents/{agentPublicKey}/top-up-bond": {
-      "post": {
-        "summary": "Build an operator-signed bond top-up transaction",
-        "tags": [
-          "Agents"
-        ],
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "in": "path",
-            "name": "agentPublicKey",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "amount"
-                ],
-                "properties": {
-                  "amount": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Unsigned bond top-up transaction"
-          },
-          "403": {
-            "description": "Configured operator required"
-          }
-        }
-      }
-    },
-    "/agents/vault/deposit-collateral": {
-      "post": {
-        "summary": "Build a collateral deposit transaction",
-        "tags": [
-          "Agents"
-        ],
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Unsigned transaction"
-          }
-        }
-      }
-    },
-    "/agents/vault/withdraw-collateral": {
-      "post": {
-        "summary": "Build a collateral withdrawal transaction",
-        "tags": [
-          "Agents"
-        ],
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Unsigned transaction"
-          }
-        }
-      }
-    },
-    "/agents/vault/mint-float": {
-      "post": {
-        "summary": "Build an operator-signed cash-in transaction",
-        "tags": [
-          "Agents"
-        ],
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Unsigned transaction"
-          },
-          "403": {
-            "description": "Configured operator required"
-          }
-        }
-      }
-    },
-    "/agents/vault/burn-float": {
-      "post": {
-        "summary": "Build a cash-out transaction",
-        "tags": [
-          "Agents"
-        ],
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Unsigned transaction"
+            "description": "Requires the admin role."
           }
         }
       }
@@ -6141,10 +6184,12 @@
                           "type": "string"
                         },
                         "floatBalance": {
-                          "type": "number"
+                          "type": "number",
+                          "description": "Whole-token units (not stroops), matching the convention of getPoolStats."
                         },
                         "collateralBalance": {
-                          "type": "number"
+                          "type": "number",
+                          "description": "Whole-token units (not stroops), matching the convention of getPoolStats."
                         },
                         "isActive": {
                           "type": "boolean"
@@ -7708,6 +7753,7 @@
             "name": "page",
             "schema": {
               "type": "integer",
+              "minimum": 1,
               "default": 1
             }
           },
@@ -7716,9 +7762,18 @@
             "name": "limit",
             "schema": {
               "type": "integer",
+              "minimum": 1,
               "default": 20,
-              "maximum": 100
+              "maximum": 500
             }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Optional positive integer cursor for cursor-based pagination"
           }
         ],
         "responses": {
@@ -7819,6 +7874,9 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "Invalid pagination query parameters."
           },
           "401": {
             "description": "Missing or invalid Bearer token."

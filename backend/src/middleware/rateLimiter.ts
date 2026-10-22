@@ -1,4 +1,5 @@
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
+import { env } from '../config/env.js';
 
 export const createRateLimiter = (max: number, windowMinutes: number = 15) =>
   rateLimit({
@@ -90,7 +91,7 @@ export const simulationRateLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  skip: () => process.env.NODE_ENV === 'test',
+  skip: () => env.NODE_ENV === 'test',
   handler: (_req, res, _next, options) => {
     res.setHeader('Retry-After', Math.ceil(options.windowMs / 1000));
     res.status(429).json(options.message);

@@ -45,6 +45,10 @@ const MAX_SIGNERS: u32 = 32;
 pub const CONTRACT_WILDCARD: &str = "__all__";
 
 const CURRENT_VERSION: u32 = 1;
+/// TTL constants mirroring agent_vault's bump pattern (#790). All state here
+/// lives in instance storage.
+const INSTANCE_TTL_THRESHOLD: u32 = 17_280;
+const INSTANCE_TTL_BUMP: u32 = 518_400;
 
 // ─── Storage keys ─────────────────────────────────────────────────────────────
 
@@ -64,7 +68,6 @@ const KEY_OVERRIDE_COUNT: Symbol = symbol_short!("OCNT");
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum CircuitBreakerError {
-    AlreadyInitialized = 5001,
     NotInitialized = 5002,
     Unauthorized = 5003,
     SignerNotAllowed = 5004,
@@ -201,7 +204,7 @@ pub struct CircuitBreaker;
 impl CircuitBreaker {
     // ── Initialization ────────────────────────────────────────────────────────
 
-    /// Initialize the circuit breaker.
+    /// Constructor.
     ///
     /// `admin`:    protocol admin (may rotate signers, threshold, timelock,
     ///              cancel proposals). Need not be a signer.
@@ -209,38 +212,35 @@ impl CircuitBreaker {
     /// `threshold`: approvals required to execute an override (default 3).
     /// `override_timelock`: seconds the override must wait before executing
     ///              (default 24h, minimum 1h).
-    pub fn initialize(
+    pub fn __constructor(
         env: Env,
         admin: Address,
         signers: Vec<Address>,
         threshold: u32,
         override_timelock: u64,
-    ) -> Result<(), CircuitBreakerError> {
-        if env.storage().instance().has(&KEY_ADMIN) {
-            return Err(CircuitBreakerError::AlreadyInitialized);
-        }
+    ) {
         if signers.is_empty() {
-            return Err(CircuitBreakerError::EmptySignerList);
+            panic!("empty signer list");
         }
         if signers.len() > MAX_SIGNERS {
-            return Err(CircuitBreakerError::TooManySigners);
+            panic!("too many signers");
         }
         // Reject duplicate signers so a key cannot double-count toward quorum.
         let mut seen: Vec<Address> = Vec::new(&env);
         for s in signers.iter() {
             if seen.iter().any(|x| x == s) {
-                return Err(CircuitBreakerError::DuplicateSigner);
+                panic!("duplicate signer");
             }
             seen.push_back(s);
         }
         if threshold < 1 {
-            return Err(CircuitBreakerError::ThresholdTooLow);
+            panic!("threshold too low");
         }
         if threshold > signers.len() {
-            return Err(CircuitBreakerError::ThresholdExceedsSigners);
+            panic!("threshold exceeds signers");
         }
         if override_timelock < MIN_OVERRIDE_TIMELOCK {
-            return Err(CircuitBreakerError::TimelockTooShort);
+            panic!("timelock too short");
         }
 
         env.storage().instance().set(&KEY_ADMIN, &admin);
@@ -254,12 +254,14 @@ impl CircuitBreaker {
         let empty_state: Map<Address, Map<Symbol, u64>> = Map::new(&env);
         env.storage().instance().set(&KEY_STATE, &empty_state);
         // No global pause on init.
+        // Without this, the instance could archive before is_blocked is ever
+        // called even once, which would brick every entry point (#790).
+        Self::bump_instance_ttl(&env);
 
         env.events().publish(
             (Symbol::new(&env, "BreakerInit"),),
             (admin, signers.len(), threshold, override_timelock),
         );
-        Ok(())
     }
 
     pub fn version(env: Env) -> u32 {
@@ -275,6 +277,7 @@ impl CircuitBreaker {
     ) -> Result<(), CircuitBreakerError> {
         caller.require_auth();
         Self::read_admin(&env)?.require_auth();
+        Self::bump_instance_ttl(&env);
         env.storage().instance().set(&KEY_ADMIN, &new_admin);
         env.events()
             .publish((Symbol::new(&env, "BreakerAdmin"),), (caller, new_admin));
@@ -308,6 +311,7 @@ impl CircuitBreaker {
         if threshold > signers.len() {
             return Err(CircuitBreakerError::ThresholdExceedsSigners);
         }
+        Self::bump_instance_ttl(&env);
         env.storage().instance().set(&KEY_SIGNERS, &signers);
         env.storage().instance().set(&KEY_THRESHOLD, &threshold);
         Ok(())
@@ -323,6 +327,7 @@ impl CircuitBreaker {
         if override_timelock < MIN_OVERRIDE_TIMELOCK {
             return Err(CircuitBreakerError::TimelockTooShort);
         }
+        Self::bump_instance_ttl(&env);
         env.storage()
             .instance()
             .set(&KEY_TIMELOCK, &override_timelock);
@@ -432,6 +437,7 @@ impl CircuitBreaker {
             .get(&KEY_OVERRIDE_COUNT)
             .unwrap_or(0);
         let id = count + 1;
+        Self::bump_instance_ttl(&env);
         env.storage().instance().set(&KEY_OVERRIDE_COUNT, &id);
 
         let proposal = OverrideProposal {
@@ -480,6 +486,7 @@ impl CircuitBreaker {
         proposal.approvals.set(signer.clone(), true);
         let approvals_so_far = proposal.approvals.len();
         let threshold: u32 = env.storage().instance().get(&KEY_THRESHOLD).unwrap_or(0);
+        Self::bump_instance_ttl(&env);
         Self::write_proposal(&env, &proposal);
 
         env.events().publish(
@@ -530,6 +537,7 @@ impl CircuitBreaker {
         Self::apply_override(&env, &proposal.target);
 
         proposal.status = OverrideStatus::Executed;
+        Self::bump_instance_ttl(&env);
         Self::write_proposal(&env, &proposal);
 
         let (scope, contract, function) = Self::describe_target(&env, &proposal.target);
@@ -560,6 +568,7 @@ impl CircuitBreaker {
             return Err(CircuitBreakerError::ProposalNotActive);
         }
         proposal.status = OverrideStatus::Cancelled;
+        Self::bump_instance_ttl(&env);
         Self::write_proposal(&env, &proposal);
         env.events().publish(
             (Symbol::new(&env, "OverrideCanc"), proposal_id),
@@ -580,6 +589,7 @@ impl CircuitBreaker {
     /// Guarded contracts call this at the top of sensitive entry points.
     /// Performs lazy cleanup of expired pause entries to prevent unbounded storage growth.
     pub fn is_blocked(env: Env, contract: Address, function: Symbol) -> bool {
+        Self::bump_instance_ttl(&env);
         let now = env.ledger().timestamp();
 
         // Global pause cleanup: remove if expired.
@@ -768,6 +778,12 @@ impl CircuitBreaker {
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
+
+    fn bump_instance_ttl(env: &Env) {
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_BUMP);
+    }
 
     fn wildcard(env: &Env) -> Symbol {
         Symbol::new(env, CONTRACT_WILDCARD)

@@ -9,6 +9,7 @@ import {
   deserializeEncryptedField,
   decryptField,
 } from './piiCrypto.js';
+import { env } from '../config/env.js';
 
 // Private, loopback, link-local, carrier-grade NAT and unspecified ranges.
 // BlockList also matches IPv4-mapped IPv6 (e.g. ::ffff:127.0.0.1).
@@ -175,6 +176,15 @@ export const SUPPORTED_WEBHOOK_EVENT_TYPES = [
   'GovCncl',
   'GovEmerg',
   'GovExp',
+  // Agent registry / agent vault events (Issue #774).
+  'AgentRegistered',
+  'AgentStatusChanged',
+  'BondUpdated',
+  'CollateralWithdrawn',
+  'FloatMinted',
+  'FloatBurned',
+  'FloatTransferred',
+  'VaultSettled',
 ] as const;
 
 export type WebhookEventType = (typeof SUPPORTED_WEBHOOK_EVENT_TYPES)[number];
@@ -337,28 +347,19 @@ export function parseWebhookTimestamp(header: string | undefined): number | unde
 // appended so that consumers who are in the middle of a key rotation can
 // still verify deliveries signed with a previous secret.
 export function getWebhookCandidateSecrets(): string[] {
-  const primary = process.env.WEBHOOK_SECRET?.trim();
-  const rotationRaw = process.env.WEBHOOK_ROTATION_SECRETS?.trim() ?? '';
-  const rotation = rotationRaw
-    .split(',')
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0);
+  const primary = env.WEBHOOK_SECRET?.trim();
+  const rotation = env.WEBHOOK_ROTATION_SECRETS;
 
   const secrets = primary ? [primary, ...rotation] : rotation;
   return secrets.length > 0 ? secrets : [''];
 }
 
-function parsePositiveInt(value: string | undefined, fallback: number): number {
-  const parsed = Number.parseInt(value ?? '', 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
-
 function getWebhookRequestTimeoutMs(): number {
-  return parsePositiveInt(process.env.WEBHOOK_REQUEST_TIMEOUT_MS, 30 * 1000);
+  return env.WEBHOOK_REQUEST_TIMEOUT_MS;
 }
 
 function getWebhookMaxPayloadBytes(): number {
-  return parsePositiveInt(process.env.WEBHOOK_MAX_PAYLOAD_BYTES, 64 * 1024);
+  return env.WEBHOOK_MAX_PAYLOAD_BYTES;
 }
 
 function summarizeOversizedPayload(

@@ -1,28 +1,10 @@
-import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
+import { it, expect, beforeAll, afterAll } from '@jest/globals';
 import request from 'supertest';
 import type { Express } from 'express';
-import { query, getClient } from '../../db/connection.js';
+import { query, getClient, closePool } from '../../db/connection.js';
 import { generateJwtToken } from '../../services/authService.js';
 import type { PoolClient } from 'pg';
-
-let dbAvailable = false;
-
-beforeAll(async () => {
-  try {
-    await query('SELECT 1');
-    dbAvailable = true;
-  } catch {
-    dbAvailable = false;
-  }
-});
-
-const describeIfDb = (name: string, fn: () => void) => {
-  if (dbAvailable || process.env.INTEGRATION_TESTS === 'true') {
-    describe(name, fn);
-  } else {
-    describe.skip(`${name} (skipped: no database)`, fn);
-  }
-};
+import { describeIfDb } from '../helpers/dbProbe.js';
 
 describeIfDb('Integration: Scores API against real schema', () => {
   let app: Express;
@@ -50,6 +32,7 @@ describeIfDb('Integration: Scores API against real schema', () => {
     if (client) {
       client.release();
     }
+    await closePool();
   });
 
   it('queries scores with real borrower and score columns', async () => {

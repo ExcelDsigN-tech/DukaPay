@@ -147,5 +147,6 @@ inconsistency). A crash is a reproducible counterexample and must block merge.
 
 - [ ] Mechanical proofs of INV-1 / INV-3 / INV-6 in the **K framework** for
       Rust (or `creusot` / `kani` for the arithmetic-critical functions).
-- [ ] Continuous fuzzing in CI (nightly job) uploading corpus + crash reports.
+- [x] Continuous fuzzing in CI: `.github/workflows/contract-fuzz.yml` runs every target nightly
+      from a cached corpus and uploads crash reproducers.
 - [ ] A CVL-style dashboard auto-generated from `invariants_fuzz.rs` findings.

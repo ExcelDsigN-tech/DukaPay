@@ -43,5 +43,16 @@ export const listAuditLogsSchema = z.object({
   query: listAuditLogsQuerySchema,
 });
 
+export const auditProofParamsSchema = z
+  .object({
+    logId: z.string().regex(/^[1-9]\d*$/, 'Log ID must be a positive integer'),
+  })
+  .strict();
+
+export const auditProofQuerySchema = z.object({}).strict();
+
+export const auditProofBodySchema = z.object({}).strict().optional();
+
 export type ListAuditLogsQuery = z.infer<typeof listAuditLogsQuerySchema>;
 export type ListAuditLogsInput = z.infer<typeof listAuditLogsSchema>;
+export type AuditProofParams = z.infer<typeof auditProofParamsSchema>;

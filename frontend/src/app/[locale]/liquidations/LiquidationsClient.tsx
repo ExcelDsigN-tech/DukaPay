@@ -112,7 +112,6 @@ function LiquidationsTable({
 
 export default function LiquidationsClient() {
   const t = useTranslations("Liquidations");
-  const locale = useLocale();
   const address = useWalletStore(selectWalletAddress);
   const { signTransaction } = useWallet();
   const toast = useContractToast();

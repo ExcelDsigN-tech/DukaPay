@@ -13,6 +13,7 @@ import {
 import logger from '../utils/logger.js';
 import { amountToStroops, stroopsToAmount } from '../money/decimal.js';
 import { invalidateOnDeposit, invalidateOnWithdraw } from '../utils/cacheKeys.js';
+import { env } from '../config/env.js';
 
 /**
  * The on-chain share price is scaled by SHARE_PRICE_SCALE (1,000,000 = 1.0).
@@ -79,7 +80,7 @@ export const getPoolStats = asyncHandler(async (_req: Request, res: Response) =>
       utilizationRate: parseFloat(utilizationRate.toFixed(4)),
       apy: ANNUAL_APY,
       activeLoansCount,
-      poolTokenAddress: process.env.POOL_TOKEN_ADDRESS,
+      poolTokenAddress: env.POOL_TOKEN_ADDRESS,
       withdrawalCooldownLedgers,
     },
   });
@@ -137,7 +138,11 @@ export const getDepositorPortfolio = asyncHandler(async (req: Request, res: Resp
       address,
       depositAmount,
       sharePercent: parseFloat(sharePercent.toFixed(6)),
-      estimatedYield: parseFloat(estimatedYield.toFixed(7)),
+      // estimatedYield is a derived display estimate (not a stored money
+      // column), so a plain Number() round-trip is fine here; see
+      // src/money/AGENTS.md: the parseFloat ban targets chain/DB-sourced
+      // stroop values, which this isn't.
+      estimatedYield: Number(estimatedYield.toFixed(7)),
       apy: ANNUAL_APY,
       firstDepositAt,
       lastDepositAt,
@@ -155,7 +160,7 @@ export const getDepositorYieldHistory = asyncHandler(async (req: Request, res: R
   const token =
     typeof req.query.token === 'string' && req.query.token.length > 0
       ? req.query.token
-      : process.env.POOL_TOKEN_ADDRESS;
+      : env.POOL_TOKEN_ADDRESS;
 
   if (!token) {
     throw AppError.internal('POOL_TOKEN_ADDRESS is not configured');
@@ -498,8 +503,8 @@ export const getAgentDashboard = asyncHandler(async (req: Request, res: Response
   };
   const dashboardData = {
     agentAddress,
-    floatBalance: safeFloat(vault.float_balance),
-    collateralBalance: safeFloat(vault.collateral_balance),
+    floatBalance: stroopsToAmount(vault.float_balance),
+    collateralBalance: stroopsToAmount(vault.collateral_balance),
     isActive: Boolean(vault.is_active),
     activeLoans: parseInt(loansResult.rows[0]?.active_loans || '0', 10),
     updatedAt: new Date().toISOString(),

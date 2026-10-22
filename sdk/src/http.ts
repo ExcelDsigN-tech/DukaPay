@@ -15,6 +15,8 @@ export interface HttpClientOptions {
   timeoutMs?: number;
   /** Injectable fetch, for tests / non-browser runtimes. */
   fetch?: typeof fetch;
+  /** Called on 401 to attempt token refresh. Should return new session or throw. */
+  onUnauthorized?: () => Promise<{ token: string; refreshToken?: string } | null>;
 }
 
 export interface RequestOptions {
@@ -36,6 +38,8 @@ export class HttpClient {
   private readonly timeoutMs: number;
   private readonly fetchImpl: typeof fetch;
   private token: HttpClientOptions['token'];
+  private readonly onUnauthorized?: () => Promise<{ token: string; refreshToken?: string } | null>;
+  private refreshPromise: Promise<void> | null = null;
 
   constructor(options: HttpClientOptions) {
     const fetchImpl = options.fetch ?? globalThis.fetch;
@@ -49,6 +53,7 @@ export class HttpClient {
     this.retryBackoffMs = options.retryBackoffMs ?? 300;
     this.timeoutMs = options.timeoutMs ?? 30_000;
     this.token = options.token;
+    this.onUnauthorized = options.onUnauthorized;
   }
 
   setToken(token: HttpClientOptions['token']): void {
@@ -62,6 +67,15 @@ export class HttpClient {
   }
 
   async request<T>(method: string, path: string, options: RequestOptions = {}): Promise<T> {
+    return this._request(method, path, options, false);
+  }
+
+  private async _request<T>(
+    method: string,
+    path: string,
+    options: RequestOptions,
+    isRetryAfter401: boolean,
+  ): Promise<T> {
     const url = new URL(this.baseUrl + (path.startsWith('/') ? path : `/${path}`));
     for (const [k, v] of Object.entries(options.query ?? {})) {
       if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
@@ -97,6 +111,25 @@ export class HttpClient {
         });
         const parsed = await parseBody(res);
         if (res.ok) return parsed as T;
+
+        if (res.status === 401 && !isRetryAfter401 && this.onUnauthorized && !options.anonymous) {
+          clearTimeout(timer);
+          options.signal?.removeEventListener('abort', onExternalAbort);
+          
+          if (!this.refreshPromise) {
+            this.refreshPromise = this.onUnauthorized()
+              .then(() => {
+                this.refreshPromise = null;
+              })
+              .catch((err) => {
+                this.refreshPromise = null;
+                throw err;
+              });
+          }
+          
+          await this.refreshPromise;
+          return this._request(method, path, options, true);
+        }
 
         const err = toError(res, parsed);
         if (!err.isRetryable || attempt === attempts - 1) throw err;

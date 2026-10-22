@@ -13,7 +13,6 @@ cd "$(dirname "${BASH_SOURCE[0]}")"
 export FUZZ_TIME="${FUZZ_TIME:-300}"
 
 TARGETS=(
-  fuzz_target_1
   lending_pool_fuzz
   loan_manager_fuzz
   remittance_nft_fuzz
