@@ -58,9 +58,15 @@ export class DukaPayClient {
       token: () => this.session?.token,
       onUnauthorized: async () => {
         if (!this.session?.refreshToken) return null;
-        const newSession = await this.auth.refresh(this.session.refreshToken);
-        this.setSession(newSession);
-        return newSession;
+        try {
+          const newSession = await this.auth.refresh(this.session.refreshToken);
+          this.setSession(newSession);
+          return newSession;
+        } catch (err) {
+          // A failed refresh ends the session rather than leaving a dead token.
+          this.setSession(null);
+          throw err;
+        }
       },
       ...opts.http,
     });

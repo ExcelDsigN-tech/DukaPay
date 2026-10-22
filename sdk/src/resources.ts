@@ -85,7 +85,8 @@ export class AuthResource {
     if (!refreshToken || typeof refreshToken !== 'string') {
       throw new ValidationError('Invalid refreshToken: must be a non-empty string');
     }
-    return this.http.post('/auth/refresh', { refreshToken });
+    // Anonymous: a 401 here must not trigger another refresh and wait on itself.
+    return this.http.post('/auth/refresh', { refreshToken }, { anonymous: true });
   }
 
   logoutAll(): Promise<void> {
@@ -93,27 +94,21 @@ export class AuthResource {
   }
 
   submitKyc(params: {
-    fullName: string;
-    dateOfBirth: string;
-    address: string;
-    idType: string;
-    idNumber: string;
-    idDocument?: string;
+    firstName: string;
+    lastName: string;
+    /** ISO date, YYYY-MM-DD. */
+    dateOfBirth?: string;
+    /** ISO 3166-1 alpha-2 country code. */
+    countryCode: string;
   }): Promise<{ success: boolean; kycId: string }> {
-    if (!params.fullName || typeof params.fullName !== 'string') {
-      throw new ValidationError('Invalid fullName: must be a non-empty string');
+    if (!params.firstName || typeof params.firstName !== 'string') {
+      throw new ValidationError('Invalid firstName: must be a non-empty string');
     }
-    if (!params.dateOfBirth || typeof params.dateOfBirth !== 'string') {
-      throw new ValidationError('Invalid dateOfBirth: must be a non-empty string');
+    if (!params.lastName || typeof params.lastName !== 'string') {
+      throw new ValidationError('Invalid lastName: must be a non-empty string');
     }
-    if (!params.address || typeof params.address !== 'string') {
-      throw new ValidationError('Invalid address: must be a non-empty string');
-    }
-    if (!params.idType || typeof params.idType !== 'string') {
-      throw new ValidationError('Invalid idType: must be a non-empty string');
-    }
-    if (!params.idNumber || typeof params.idNumber !== 'string') {
-      throw new ValidationError('Invalid idNumber: must be a non-empty string');
+    if (typeof params.countryCode !== 'string' || params.countryCode.trim().length !== 2) {
+      throw new ValidationError('Invalid countryCode: must be a 2-letter country code');
     }
     return this.http.post('/auth/kyc', params);
   }
@@ -189,14 +184,11 @@ export class LoansResource {
    * Compute an amortization preview for a loan before applying.
    * Amounts are in whole tokens.
    */
-  amortizationPreview(params: {
-    principal: number;
-    interestRateBps: number;
-    termMonths: number;
-  }): Promise<AmortizationPreview> {
-    validateTokenAmount(params.principal, 'principal');
-    validatePositiveInt(params.interestRateBps, 'interestRateBps');
-    validatePositiveInt(params.termMonths, 'termMonths');
+  amortizationPreview(params: { amount: number; termDays: 30 | 60 | 90 }): Promise<AmortizationPreview> {
+    validateTokenAmount(params.amount, 'amount');
+    if (![30, 60, 90].includes(params.termDays)) {
+      throw new ValidationError('Invalid termDays: must be 30, 60 or 90');
+    }
     return this.http.post('/loans/amortization-preview', params);
   }
 
