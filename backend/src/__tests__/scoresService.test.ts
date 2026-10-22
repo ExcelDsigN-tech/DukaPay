@@ -1,30 +1,9 @@
-import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
-import { query } from '../db/connection.js';
+import { it, expect, beforeAll, afterAll } from '@jest/globals';
+import { query, closePool } from '../db/connection.js';
 import { updateUserScoresBulk } from '../services/scoresService.js';
+import { describeIfDb } from './helpers/dbProbe.js';
 
-let __scoresService_dbAvailable = false;
-
-beforeAll(async () => {
-  try {
-    await query('SELECT 1');
-    __scoresService_dbAvailable = true;
-  } catch {
-    __scoresService_dbAvailable = false;
-  }
-});
-
-const describeIf_scoresService = (name: string, fn: () => void) => {
-  if (__scoresService_dbAvailable) {
-    describe(name, fn);
-  } else {
-    // Ensure at least one skipped test exists so Jest considers the suite valid
-    describe.skip(name, () => {
-      it.skip('skipped: no database', () => {});
-    });
-  }
-};
-
-describeIf_scoresService('Scores Service - bulk updates', () => {
+describeIfDb('Scores Service - bulk updates', () => {
   const userA = 'G_TEST_USER_A';
   const userB = 'G_TEST_USER_B';
 
@@ -41,6 +20,7 @@ describeIf_scoresService('Scores Service - bulk updates', () => {
 
   afterAll(async () => {
     await query('DELETE FROM scores WHERE borrower LIKE $1', ['G_TEST_%']);
+    await closePool();
   });
 
   it('applies multiple deltas in a single operation and initializes new rows', async () => {

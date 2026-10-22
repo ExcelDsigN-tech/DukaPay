@@ -1,42 +1,23 @@
-import { createClient, type RedisClientType } from 'redis';
+import { getRedisClient, type RedisClientType } from './redisClient.js';
 import logger from '../utils/logger.js';
 import { env } from '../config/env.js';
-
-const REDIS_URL = env.REDIS_URL;
 
 class CacheService {
   private client: RedisClientType | undefined;
   private isConnected: boolean = false;
 
   constructor() {
-    this.client = createClient({
-      url: REDIS_URL,
-    });
-
-    this.client.on('error', (err) => {
-      // In tests, we don't want to spam the console with ECONNREFUSED if Redis isn't running
-      if (env.NODE_ENV !== 'test' || err.code !== 'ECONNREFUSED') {
-        logger.withContext().error('Redis Client Error', err);
-      }
-      this.isConnected = false;
-    });
-
-    this.client.on('connect', () => {
-      logger.withContext().info('Redis Client Connected');
-      this.isConnected = true;
-    });
-
-    this.client.on('reconnecting', () => {
-      // Only log reconnecting in non-test environments to keep test output clean
-      if (env.NODE_ENV !== 'test') {
-        logger.withContext().info('Redis Client Reconnecting');
-      }
-    });
-
-    // Connection is now lazy-loaded on first request to avoid side effects on import.
+    this.client = getRedisClient();
+    // Connection is lazy-loaded on first request to avoid side effects on import.
   }
 
   private async ensureConnected() {
+    // The client is shared (redisClient.ts): another service may already
+    // have opened it, and a second connect() throws "Socket already opened".
+    if (this.client!.isOpen) {
+      this.isConnected = true;
+      return;
+    }
     if (!this.isConnected) {
       try {
         await this.client!.connect();

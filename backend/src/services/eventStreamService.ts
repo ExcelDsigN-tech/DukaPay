@@ -234,10 +234,31 @@ class EventStreamService {
 
   /**
    * Broadcasts a loan event to relevant SSE clients:
-   * - Borrower-specific clients for that borrower (with user identity verification)
-   * - All admin clients
+   * - PoolPaused / PoolUnpaused: to all connected clients (borrowers + admins)
+   * - Address-specific events: to borrower-specific clients for that borrower (with user identity verification)
+   * - All events: to admin clients
    */
   broadcast(event: LoanEventPayload): void {
+    const isPauseEvent = event.eventType === 'PoolPaused' || event.eventType === 'PoolUnpaused';
+
+    if (isPauseEvent) {
+      // Deliver pause/unpause events to all connected clients (borrowers and admins)
+      const allClients = this.collectAllClients();
+      for (const clientInfo of allClients) {
+        try {
+          this.sendEvent(clientInfo.res, event);
+        } catch (err) {
+          logger.withContext().error('SSE write error (pause event)', {
+            userKey: clientInfo.userKey,
+            eventType: event.eventType,
+            err,
+          });
+          this.removeClient(clientInfo);
+        }
+      }
+      return;
+    }
+
     // Push to address-specific clients with user identity verification
     if (event.address) {
       const clients = borrowerClients.get(event.address);
