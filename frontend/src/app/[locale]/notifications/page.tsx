@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import React, { useMemo } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AlertTriangle, Bell, Check, CheckCheck, Clock, Filter, TrendingUp } from "lucide-react";
@@ -70,7 +70,7 @@ function NotificationRow({
   markReadLabel: string;
   locale: string;
 }) {
-  const Icon = notificationIcon(notification.type);
+  const icon = notificationIcon(notification.type);
 
   return (
     <article
@@ -83,7 +83,7 @@ function NotificationRow({
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-zinc-100 text-indigo-600 dark:bg-zinc-900 dark:text-indigo-300">
-            <Icon className="h-5 w-5" />
+            {React.createElement(icon, { className: "h-5 w-5" })}
           </div>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">

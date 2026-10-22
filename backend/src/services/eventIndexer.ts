@@ -1147,6 +1147,14 @@ export class EventIndexer {
     // withTransaction commits here; any error triggers automatic ROLLBACK
 
     for (const event of insertedEvents) {
+      // Handle pause/unpause events to update global pause state before broadcasting
+      // so any refetch triggered by the pause event reads the new state
+      if (event.eventType === 'PoolPaused') {
+        await setPauseState(true, [event.contractId], 'Emergency pause triggered by contract');
+      } else if (event.eventType === 'PoolUnpaused') {
+        await setPauseState(false, [], 'Contract pause lifted');
+      }
+
       webhookService.dispatch(event).catch((error) => {
         logger.withContext().error('Webhook dispatch failed', {
           eventId: event.eventId,
@@ -1195,13 +1203,6 @@ export class EventIndexer {
           error,
         });
       });
-
-      // Handle pause/unpause events to update global pause state
-      if (event.eventType === 'PoolPaused') {
-        await setPauseState(true, [event.contractId], 'Emergency pause triggered by contract');
-      } else if (event.eventType === 'PoolUnpaused') {
-        await setPauseState(false, [], 'Contract pause lifted');
-      }
     }
 
     return {

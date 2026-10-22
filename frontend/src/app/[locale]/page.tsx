@@ -17,7 +17,7 @@ import { CreditScoreGauge } from "../components/ui/CreditScoreGauge";
 import { EmptyState } from "../components/ui/EmptyState";
 import { ErrorBoundary } from "../components/global_ui/ErrorBoundary";
 import { Tooltip } from "../components/ui/Tooltip";
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState } from "react";
 import type { BorrowerLoan } from "../hooks/useApi";
 import { formatCurrency } from "../utils/formatLocale";
 
@@ -28,18 +28,24 @@ function getLoanDueDate(loan: BorrowerLoan): Date {
   return new Date(loan.nextPaymentDeadline);
 }
 
-function useRepaymentReminder(loans: BorrowerLoan[] | undefined) {
-  const [dismissed, setDismissed] = useState(false);
+const emptySubscribe = () => () => {};
 
-  useEffect(() => {
-    if (typeof window !== "undefined" && sessionStorage.getItem(SESSION_BANNER_KEY) === "true") {
-      setDismissed(true);
+function useRepaymentReminder(loans: BorrowerLoan[] | undefined) {
+  const [dismissed, setDismissed] = useState(() => {
+    if (typeof window !== "undefined") {
+      return sessionStorage.getItem(SESSION_BANNER_KEY) === "true";
     }
-  }, []);
+    return false;
+  });
+
+  const now = React.useSyncExternalStore(
+    emptySubscribe,
+    () => Date.now(),
+    () => 0,
+  );
 
   const urgentLoans = useMemo(() => {
-    if (!loans) return [];
-    const now = Date.now();
+    if (!loans || !now) return [];
     return loans
       .filter((l) => {
         if (l.status !== "active") return false;
@@ -47,22 +53,24 @@ function useRepaymentReminder(loans: BorrowerLoan[] | undefined) {
         return due > now && due - now <= SEVENTY_TWO_HOURS_MS;
       })
       .sort((a, b) => getLoanDueDate(a).getTime() - getLoanDueDate(b).getTime());
-  }, [loans]);
+  }, [loans, now]);
 
   const dismiss = () => {
     sessionStorage.setItem(SESSION_BANNER_KEY, "true");
     setDismissed(true);
   };
 
-  return { urgentLoans, dismissed, dismiss };
+  return { urgentLoans, dismissed, dismiss, now };
 }
 
 function RepaymentReminderBanner({
   urgentLoans,
   onDismiss,
+  now,
 }: {
   urgentLoans: BorrowerLoan[];
   onDismiss: () => void;
+  now: number;
 }) {
   const router = useRouter();
   const t = useTranslations("HomePage");
@@ -71,7 +79,8 @@ function RepaymentReminderBanner({
   if (!mostUrgent) return null;
 
   const dueDate = getLoanDueDate(mostUrgent);
-  const hoursLeft = Math.max(0, Math.floor((dueDate.getTime() - Date.now()) / (60 * 60 * 1000)));
+  const currentTime = now || dueDate.getTime();
+  const hoursLeft = Math.max(0, Math.floor((dueDate.getTime() - currentTime) / (60 * 60 * 1000)));
 
   return (
     <div
@@ -146,7 +155,7 @@ export default function Home() {
 
   const isLoading = (loansLoading || remittancesLoading) && isConnected;
 
-  const { urgentLoans, dismissed, dismiss } = useRepaymentReminder(loans);
+  const { urgentLoans, dismissed, dismiss, now } = useRepaymentReminder(loans);
 
   const currentCreditScore = useMemo(() => {
     if (!creditHistory || creditHistory.length === 0) return null;
@@ -255,7 +264,7 @@ export default function Home() {
       </header>
 
       {!dismissed && urgentLoans.length > 0 && (
-        <RepaymentReminderBanner urgentLoans={urgentLoans} onDismiss={dismiss} />
+        <RepaymentReminderBanner urgentLoans={urgentLoans} onDismiss={dismiss} now={now} />
       )}
 
       <ErrorBoundary scope="dashboard summary" variant="section">

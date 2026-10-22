@@ -4,6 +4,11 @@ import nextTypescript from "eslint-config-next/typescript";
 import { noHardcodedStrings } from "./eslint.i18n.config.mjs";
 
 export default defineConfig([
+  {
+    linterOptions: {
+      reportUnusedDisableDirectives: "error",
+    },
+  },
   ...nextVitals,
   ...nextTypescript,
   noHardcodedStrings,

@@ -114,7 +114,7 @@ export default function ActivityPage() {
     // Sort by timestamp descending; undated items (still indexing) are newest.
     const time = (ts: string) => new Date(ts).getTime() || Number.MAX_SAFE_INTEGER;
     return combined.sort((a, b) => time(b.timestamp) - time(a.timestamp));
-  }, [loans, remittances, filterType]);
+  }, [loans, remittances, filterType, locale]);
 
   const totalPages = Math.ceil(allActivity.length / ITEMS_PER_PAGE);
   const startIdx = (currentPage - 1) * ITEMS_PER_PAGE;
