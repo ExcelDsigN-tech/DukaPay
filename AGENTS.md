@@ -36,3 +36,5 @@ Major versions; exact pins live in `package.json` / `Cargo.toml`. Write code for
 - One API prefix: every backend router mounts under `/api`. Don't add a second tree.
 
 Folders that move money or hold user data have their own stricter `AGENTS.md`. Read it before editing there.
+
+Reviewing or merging a Stellar Drip Wave contributor PR: follow `.claude/skills/drip-wave/SKILL.md` (malware screen first, then the merge rule).
