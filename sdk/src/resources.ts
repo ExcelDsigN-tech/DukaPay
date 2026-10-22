@@ -3,6 +3,8 @@ import type {
   AgentAssignmentsResponse,
   AgentDashboard,
   AgentPairLimitsResponse,
+  AmortizationPreview,
+  AmortizationSchedule,
   ApproveFloatTransferResponse,
   AssignBorrowerResponse,
   BorrowerLoanStatus,
@@ -12,6 +14,7 @@ import type {
   InitiateFloatTransferResponse,
   Loan,
   LoanConfig,
+  LoanEvents,
   PoolAnalyticsResponse,
   PoolStats,
   RejectFloatTransferResponse,
@@ -20,8 +23,12 @@ import type {
   RemittanceList,
   RemittanceSubmitResult,
   RemoveBorrowerResponse,
+  RepaymentPreview,
   RepayTransaction,
   Score,
+  ScoreBreakdown,
+  ScoreHistory,
+  ScoreNFT,
   Session,
   SetAgentPairLimitsResponse,
   SubmitFloatTransferResponse,
@@ -72,6 +79,38 @@ export class AuthResource {
 
   logout(): Promise<void> {
     return this.http.post('/auth/logout');
+  }
+
+  refresh(refreshToken: string): Promise<Session> {
+    if (!refreshToken || typeof refreshToken !== 'string') {
+      throw new ValidationError('Invalid refreshToken: must be a non-empty string');
+    }
+    // Anonymous: a 401 here must not trigger another refresh and wait on itself.
+    return this.http.post('/auth/refresh', { refreshToken }, { anonymous: true });
+  }
+
+  logoutAll(): Promise<void> {
+    return this.http.post('/auth/logout-all');
+  }
+
+  submitKyc(params: {
+    firstName: string;
+    lastName: string;
+    /** ISO date, YYYY-MM-DD. */
+    dateOfBirth?: string;
+    /** ISO 3166-1 alpha-2 country code. */
+    countryCode: string;
+  }): Promise<{ success: boolean; kycId: string }> {
+    if (!params.firstName || typeof params.firstName !== 'string') {
+      throw new ValidationError('Invalid firstName: must be a non-empty string');
+    }
+    if (!params.lastName || typeof params.lastName !== 'string') {
+      throw new ValidationError('Invalid lastName: must be a non-empty string');
+    }
+    if (typeof params.countryCode !== 'string' || params.countryCode.trim().length !== 2) {
+      throw new ValidationError('Invalid countryCode: must be a 2-letter country code');
+    }
+    return this.http.post('/auth/kyc', params);
   }
 }
 
@@ -140,6 +179,37 @@ export class LoansResource {
   submit(loanId: number | string, signedXdr: string): Promise<Loan> {
     return this.http.post(`/loans/${loanId}/submit`, { signedXdr });
   }
+
+  /**
+   * Compute an amortization preview for a loan before applying.
+   * Amounts are in whole tokens.
+   */
+  amortizationPreview(params: { amount: number; termDays: 30 | 60 | 90 }): Promise<AmortizationPreview> {
+    validateTokenAmount(params.amount, 'amount');
+    if (![30, 60, 90].includes(params.termDays)) {
+      throw new ValidationError('Invalid termDays: must be 30, 60 or 90');
+    }
+    return this.http.post('/loans/amortization-preview', params);
+  }
+
+  amortizationSchedule(loanId: number | string): Promise<AmortizationSchedule> {
+    validatePositiveInt(loanId, 'loanId');
+    return this.http.get(`/loans/${loanId}/amortization-schedule`);
+  }
+
+  /**
+   * Returns the current repayment preview for an active loan.
+   * Amounts are in whole tokens.
+   */
+  repaymentPreview(loanId: number | string): Promise<RepaymentPreview> {
+    validatePositiveInt(loanId, 'loanId');
+    return this.http.get(`/loans/${loanId}/repayment-preview`);
+  }
+
+  events(loanId: number | string): Promise<LoanEvents> {
+    validatePositiveInt(loanId, 'loanId');
+    return this.http.get(`/loans/${loanId}/events`);
+  }
 }
 
 export class PoolResource {
@@ -197,6 +267,21 @@ export class ScoresResource {
   get(address: string): Promise<Score> {
     validateStellarAddress(address, 'address');
     return this.http.get(`/score/${address}`);
+  }
+
+  history(address: string): Promise<ScoreHistory> {
+    validateStellarAddress(address, 'address');
+    return this.http.get(`/score/${address}/history`);
+  }
+
+  nft(address: string): Promise<ScoreNFT> {
+    validateStellarAddress(address, 'address');
+    return this.http.get(`/score/${address}/nft`);
+  }
+
+  breakdown(userId: string): Promise<ScoreBreakdown> {
+    validateStellarAddress(userId, 'userId');
+    return this.http.get(`/score/${userId}/breakdown`);
   }
 }
 
