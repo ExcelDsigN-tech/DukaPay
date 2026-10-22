@@ -101,7 +101,6 @@ The `fuzz_campaign.sh` script can be customized:
 ./fuzz_campaign.sh 300
 
 # Results are saved to:
-# - fuzz/reports/ - Summary reports
 # - fuzz/artifacts/ - Crash artifacts
 # - fuzz/corpus/ - Input corpus
 ```
@@ -177,15 +176,10 @@ enum FuzzAction {
 
 ### Continuous Integration
 
-The fuzzing setup is designed for CI integration:
-
-```yaml
-# Example GitHub Actions workflow
-- name: Run Fuzz Tests
-  run: |
-    cd contracts
-    ./fuzz_campaign.sh 60
-```
+`.github/workflows/contract-fuzz.yml` runs every target in `fuzz/Cargo.toml` nightly (and on
+manual dispatch) for a fixed time, starting from a cached corpus. A crash, OOM or timeout fails
+the run and uploads the reproducer as the `fuzz-crash-<target>` artifact. Reports are not
+committed; the workflow run and its artifacts are the record.
 
 ## Best Practices
 
@@ -218,7 +212,8 @@ The fuzzing setup is designed for CI integration:
 
 1. Use `RUST_BACKTRACE=1` for detailed error information
 2. Check crash artifacts in `fuzz/artifacts/` directory
-3. Review logs in `fuzz/reports/` for detailed analysis
+3. For a CI crash, download the `fuzz-crash-<target>` artifact and replay it locally with
+   `cargo +nightly fuzz run <target> <artifact-file>`
 
 ## Future Enhancements
 
