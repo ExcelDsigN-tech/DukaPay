@@ -12,6 +12,12 @@ class CacheService {
   }
 
   private async ensureConnected() {
+    // The client is shared (redisClient.ts): another service may already
+    // have opened it, and a second connect() throws "Socket already opened".
+    if (this.client!.isOpen) {
+      this.isConnected = true;
+      return;
+    }
     if (!this.isConnected) {
       try {
         await this.client!.connect();

@@ -46,7 +46,7 @@ describe("PauseBanner", () => {
       expect(global.fetch).toHaveBeenCalledTimes(1);
     });
 
-    expect(screen.queryByText(/operations temporarily paused/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/contract operations paused/i)).not.toBeInTheDocument();
 
     // Deliver pause event via stream
     await act(async () => {
@@ -58,7 +58,7 @@ describe("PauseBanner", () => {
       });
     });
 
-    expect(screen.getByText(/operations temporarily paused/i)).toBeInTheDocument();
+    expect(screen.getByText(/contract operations paused/i)).toBeInTheDocument();
     expect(screen.getByText(/emergency exploit pause/i)).toBeInTheDocument();
 
     // Deliver unpause event via stream
@@ -71,7 +71,7 @@ describe("PauseBanner", () => {
       });
     });
 
-    expect(screen.queryByText(/operations temporarily paused/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/contract operations paused/i)).not.toBeInTheDocument();
   });
 
   it("polls only while the stream is down", async () => {
@@ -118,6 +118,6 @@ describe("PauseBanner", () => {
     });
 
     expect(global.fetch).toHaveBeenCalledTimes(1);
-    expect(screen.getByText(/operations temporarily paused/i)).toBeInTheDocument();
+    expect(screen.getByText(/contract operations paused/i)).toBeInTheDocument();
   });
 });

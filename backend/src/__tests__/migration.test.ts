@@ -21,6 +21,7 @@ describeIfDb('Migrations', () => {
   const runMigrations = async (direction: 'up' | 'down') => {
     await migrate({
       dbClient: client,
+      migrationsTable: 'pgmigrations',
       dir: 'migrations/*.cjs',
       useGlob: true,
       direction,
