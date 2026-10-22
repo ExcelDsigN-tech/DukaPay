@@ -6,21 +6,7 @@
  * on all mutating requests (POST, PUT, PATCH, DELETE).
  */
 
-import { renderHook, waitFor } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { ReactNode } from "react";
 import { getCsrfToken, CSRF_COOKIE_NAME, CSRF_HEADER_NAME } from "./useApi";
-
-function createWrapper() {
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      mutations: { retry: false },
-    },
-  });
-  return function Wrapper({ children }: { children: ReactNode }) {
-    return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
-  };
-}
 
 function clearCsrfCookie() {
   // Assigning "" is a no-op in jsdom (as in real browsers); deleting a
