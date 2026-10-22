@@ -1,21 +1,22 @@
 import type { Request, Response, NextFunction } from 'express';
 import { AppError } from '../errors/AppError.js';
-import { resolveRoleForWallet, resolveScopesForRole, type UserRole } from '../auth/rbac.js';
+import { resolveRoleForWallet, resolveScopesForRole } from '../auth/rbac.js';
+import { requireRole, requireScopes } from './rbac.js';
 import {
   verifyJwtToken,
   extractBearerToken,
+  isFamilyRevoked,
   isTokenRevoked,
   type JwtPayload,
 } from '../services/authService.js';
-
-const DEFAULT_JWT_COOKIE_NAME = 'dukapay_jwt';
+import { env } from '../config/env.js';
 
 function extractCookieToken(cookieHeader: string | undefined): string | null {
   if (!cookieHeader) {
     return null;
   }
 
-  const cookieName = process.env.JWT_COOKIE_NAME ?? DEFAULT_JWT_COOKIE_NAME;
+  const cookieName = env.JWT_COOKIE_NAME;
   const cookiePairs = cookieHeader.split(';');
 
   for (const pair of cookiePairs) {
@@ -63,6 +64,20 @@ function capPayloadToCurrentRole(payload: JwtPayload): JwtPayload {
   return { ...payload, role: currentRole, scopes: cappedScopes };
 }
 
+/**
+ * Whether a verified token must be refused because it, or the session family it
+ * belongs to, has been revoked. A whole family is revoked when refresh-token
+ * replay is detected or on a bulk "log out everywhere", so any access token
+ * minted in that family must stop working immediately rather than at expiry.
+ * Shared by `requireJwtAuth` and `optionalJwtAuth` so the two cannot disagree.
+ */
+async function isSessionRevoked(payload: JwtPayload): Promise<boolean> {
+  if (payload.jti && (await isTokenRevoked(payload.jti))) {
+    return true;
+  }
+  return Boolean(payload.familyId && (await isFamilyRevoked(payload.familyId)));
+}
+
 export const requireJwtAuth = async (
   req: Request,
   _res: Response,
@@ -83,7 +98,7 @@ export const requireJwtAuth = async (
     throw AppError.unauthorized('Invalid or expired token');
   }
 
-  if (payload.jti && (await isTokenRevoked(payload.jti))) {
+  if (await isSessionRevoked(payload)) {
     throw AppError.unauthorized('Token has been revoked');
   }
 
@@ -104,7 +119,7 @@ export const optionalJwtAuth = async (
   }
 
   const payload = verifyJwtToken(token);
-  if (payload && !(payload.jti && (await isTokenRevoked(payload.jti)))) {
+  if (payload && !(await isSessionRevoked(payload))) {
     req.user = capPayloadToCurrentRole(payload);
   }
 
@@ -157,57 +172,16 @@ export const requireWalletParamMatchesJwt = (paramName: string) => {
   };
 };
 
-export const requireBorrower = (req: Request, _res: Response, next: NextFunction): void => {
-  if (!req.user?.publicKey) throw AppError.unauthorized('Authentication required');
-  if (req.user.role !== 'borrower' && req.user.role !== 'admin') {
-    throw AppError.forbidden('Borrower role required');
-  }
+export const requireBorrower = requireRole('borrower', 'admin');
 
-  next();
-};
+export const requireLender = requireRole('lender', 'agent', 'admin');
 
-export const requireLender = (req: Request, _res: Response, next: NextFunction): void => {
-  if (!req.user?.publicKey) throw AppError.unauthorized('Authentication required');
-  if (req.user.role !== 'lender' && req.user.role !== 'admin') {
-    throw AppError.forbidden('Lender role required');
-  }
+/**
+ * Restricts access to the given roles, delegating to the shared RBAC
+ * implementation in `middleware/rbac.ts` (single source of truth).
+ */
+export const requireRoles = requireRole;
 
-  next();
-};
-
-export const requireRoles = (...roles: UserRole[]) => {
-  return (req: Request, _res: Response, next: NextFunction): void => {
-    if (!req.user?.publicKey) {
-      throw AppError.unauthorized('Authentication required');
-    }
-
-    if (!roles.includes(req.user.role)) {
-      throw AppError.forbidden('Insufficient role permissions');
-    }
-
-    next();
-  };
-};
-
-export const requireScopes = (...requiredScopes: string[]) => {
-  return (req: Request, _res: Response, next: NextFunction): void => {
-    if (!req.user?.publicKey) {
-      throw AppError.unauthorized('Authentication required');
-    }
-
-    const grantedScopes = new Set(req.user.scopes ?? []);
-    if (grantedScopes.has('admin:all')) {
-      return next();
-    }
-
-    const missingScope = requiredScopes.find((scope) => !grantedScopes.has(scope));
-
-    if (missingScope) {
-      throw AppError.forbidden(`Missing required scope: ${missingScope}`);
-    }
-
-    next();
-  };
-};
+export { requireScopes };
 
 export { JwtPayload };

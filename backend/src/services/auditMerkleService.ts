@@ -9,6 +9,7 @@ import {
 import { query, withTransaction, type PoolClient } from '../db/connection.js';
 import { createSorobanRpcServer, getStellarNetworkPassphrase } from '../config/stellar.js';
 import logger from '../utils/logger.js';
+import { env } from '../config/env.js';
 
 export interface MerkleStep {
   position: 'left' | 'right';
@@ -130,9 +131,13 @@ async function createEpoch(client: PoolClient, start: Date, end: Date): Promise<
 }
 
 async function anchorEpoch(epoch: Record<string, unknown>): Promise<void> {
-  const contractId = process.env.AUDIT_ANCHOR_CONTRACT_ID;
-  const secret = process.env.AUDIT_ANCHOR_SOURCE_SECRET;
-  if (!contractId || !secret) return;
+  const contractId = env.AUDIT_ANCHOR_CONTRACT_ID;
+  const secret = env.AUDIT_ANCHOR_SOURCE_SECRET;
+  if (!contractId || !secret) {
+    throw new Error(
+      'AUDIT_ANCHOR_ENABLED is "true" but AUDIT_ANCHOR_CONTRACT_ID / AUDIT_ANCHOR_SOURCE_SECRET is missing; refusing to silently skip anchoring',
+    );
+  }
   const signer = Keypair.fromSecret(secret);
   const server = createSorobanRpcServer();
   if (epoch.stellar_tx_hash) {
@@ -203,6 +208,11 @@ export const auditMerkleService = {
       await withTransaction((client) => createEpoch(client, start, end));
     }
 
+    // Sealing is always safe; anchoring requires explicit opt-in + config.
+    // Without this guard, disabled anchoring would either silently no-op
+    // (old early-return) or now mark epochs failed on every run.
+    if (!env.AUDIT_ANCHOR_ENABLED) return;
+
     const pending = await query(
       `SELECT id, epoch_start, merkle_root, leaf_count, stellar_tx_hash FROM audit_epochs
        WHERE anchor_status IN ('pending', 'failed') ORDER BY epoch_start ASC LIMIT 24`,
@@ -257,7 +267,7 @@ export const auditMerkleService = {
       stellarTxHash: row.stellar_tx_hash ? String(row.stellar_tx_hash) : null,
       anchorStatus: String(row.anchor_status),
       entry,
-      anchorContractId: process.env.AUDIT_ANCHOR_CONTRACT_ID ?? null,
+      anchorContractId: env.AUDIT_ANCHOR_CONTRACT_ID ?? null,
     };
   },
 };

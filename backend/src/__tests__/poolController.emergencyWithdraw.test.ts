@@ -64,7 +64,11 @@ describe('emergencyWithdrawFromPool', () => {
     emergencyWithdrawFromPool(req, res, next as unknown as NextFunction);
     await flushAsync();
 
-    expect(mockBuildEmergencyWithdrawTx).toHaveBeenCalledWith('GDEPOSITOR123', 'GTOKEN456', 500);
+    expect(mockBuildEmergencyWithdrawTx).toHaveBeenCalledWith(
+      'GDEPOSITOR123',
+      'GTOKEN456',
+      5_000_000_000n, // 500 shares in stroops
+    );
     expect(res.json).toHaveBeenCalledWith({
       success: true,
       unsignedTxXdr: 'AAAAAgAAAAtlbWVyZ2VuY3lfd2l0aGRyYXc=',

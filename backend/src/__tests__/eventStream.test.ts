@@ -1,5 +1,6 @@
 import request from 'supertest';
 import { jest } from '@jest/globals';
+import { Keypair } from '@stellar/stellar-sdk';
 import { generateJwtToken } from '../services/authService.js';
 
 type MockQueryResult = { rows: unknown[]; rowCount?: number };
@@ -56,8 +57,8 @@ describe('GET /api/events/stream', () => {
 
   it('should reject borrower stream access for a different wallet', async () => {
     const response = await request(app)
-      .get('/api/events/stream?borrower=GOTHERWALLET')
-      .set(bearer('GOWNERWALLET'));
+      .get(`/api/events/stream?borrower=${Keypair.random().publicKey()}`)
+      .set(bearer(Keypair.random().publicKey()));
 
     expect(response.status).toBe(403);
   });

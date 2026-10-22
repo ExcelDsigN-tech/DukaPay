@@ -78,8 +78,8 @@ interface SigningProvider {
 
 Two implementations are scaffolded:
 
-- `CloudHsmProvider` — talks to AWS CloudHSM via the PKCS#11 / KMS sign API.
-- `FireblocksProvider` — talks to the Fireblocks MPC API (transaction + raw
+- `CloudHsmProvider`: talks to AWS CloudHSM via the PKCS#11 / KMS sign API.
+- `FireblocksProvider`: talks to the Fireblocks MPC API (transaction + raw
   signing).
 
 Both take a **key reference** from the environment (e.g.

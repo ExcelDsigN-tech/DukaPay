@@ -65,6 +65,27 @@ describe("useUserStore", () => {
     expect(user?.sessionStartedAt).toBeDefined();
   });
 
+  it("persists the user without ever writing the JWT to localStorage", () => {
+    useUserStore.getState().setUser({
+      id: "u1",
+      email: "alice@example.com",
+      kycVerified: true,
+    });
+
+    // The token lives in an httpOnly cookie and must not exist on the store.
+    expect("authToken" in useUserStore.getState()).toBe(false);
+
+    const persisted = window.localStorage.getItem("dukapay-user");
+    expect(persisted).toBeTruthy();
+    expect(persisted).not.toContain("authToken");
+
+    const parsed = JSON.parse(persisted as string) as {
+      state: { user?: { id?: string }; isAuthenticated?: boolean };
+    };
+    expect(parsed.state.user?.id).toBe("u1");
+    expect(parsed.state.isAuthenticated).toBe(true);
+  });
+
   it("clearUser resets everything", () => {
     useUserStore.getState().setUser({ id: "u1", email: "a@a.com", kycVerified: false });
     useUserStore.getState().clearUser();
@@ -219,11 +240,11 @@ describe("useUIStore", () => {
 // ─── useThemeStore ───────────────────────────────────────────────────────────
 
 describe("useThemeStore", () => {
-  it("uses the system preference on first visit when nothing is stored", () => {
+  it("defaults to the dark (Cobalt) theme on first visit, whatever the OS prefers", () => {
     Object.defineProperty(window, "matchMedia", {
       writable: true,
       value: jest.fn().mockImplementation(() => ({
-        matches: true,
+        matches: false,
         media: "(prefers-color-scheme: dark)",
         onchange: null,
         addEventListener: jest.fn(),
@@ -254,15 +275,34 @@ describe("useThemeStore", () => {
     expect(document.documentElement.classList.contains("dark")).toBe(true);
   });
 
-  it("cycles through light → dark → system → light when toggled", () => {
+  it("toggles between dark and light only", () => {
+    useThemeStore.setState({ theme: "dark", hydrated: true });
+
+    useThemeStore.getState().toggleTheme();
+    expect(useThemeStore.getState().theme).toBe("light");
+    expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBe("light");
+    expect(document.documentElement.classList.contains("dark")).toBe(false);
+
+    useThemeStore.getState().toggleTheme();
+    expect(useThemeStore.getState().theme).toBe("dark");
+    expect(document.documentElement.classList.contains("dark")).toBe(true);
+  });
+
+  it("toggles to the opposite of what a system theme currently shows", () => {
+    Object.defineProperty(window, "matchMedia", {
+      writable: true,
+      value: jest.fn().mockImplementation(() => ({
+        matches: true,
+        media: "(prefers-color-scheme: dark)",
+        addEventListener: jest.fn(),
+        removeEventListener: jest.fn(),
+      })),
+    });
     useThemeStore.setState({ theme: "system", hydrated: true });
 
     useThemeStore.getState().toggleTheme();
 
-    const { theme } = useThemeStore.getState();
-    expect(theme).toBe("light");
-    expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBe("light");
-    expect(document.documentElement.classList.contains("dark")).toBe(false);
+    expect(useThemeStore.getState().theme).toBe("light");
   });
 });
 

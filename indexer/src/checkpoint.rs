@@ -153,3 +153,93 @@ impl AnyCheckpointStore {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::NamedTempFile;
+
+    // ── Round-trip ────────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn save_and_load_round_trip() {
+        let tmp = NamedTempFile::new().unwrap();
+        let path = tmp.path().to_str().unwrap().to_string();
+        // Remove the file first so `new()` starts empty.
+        drop(tmp);
+
+        let store = FileCheckpointStore::new(&path).await.unwrap();
+        store.save(0, "CABC", 1234).await.unwrap();
+        let loaded = store.load(0, "CABC").await.unwrap();
+        assert_eq!(loaded, Some(1234));
+    }
+
+    #[tokio::test]
+    async fn save_persists_across_store_instances() {
+        let tmp = NamedTempFile::new().unwrap();
+        let path = tmp.path().to_str().unwrap().to_string();
+        drop(tmp);
+
+        {
+            let store = FileCheckpointStore::new(&path).await.unwrap();
+            store.save(0, "CABC", 999).await.unwrap();
+        }
+
+        // New instance: reads the file written above.
+        let store2 = FileCheckpointStore::new(&path).await.unwrap();
+        assert_eq!(store2.load(0, "CABC").await.unwrap(), Some(999));
+    }
+
+    #[tokio::test]
+    async fn load_returns_none_for_unknown_contract() {
+        let tmp = NamedTempFile::new().unwrap();
+        let path = tmp.path().to_str().unwrap().to_string();
+        drop(tmp);
+
+        let store = FileCheckpointStore::new(&path).await.unwrap();
+        assert_eq!(store.load(0, "UNKNOWN").await.unwrap(), None);
+    }
+
+    // ── Missing file ──────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn new_with_missing_file_starts_empty() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("missing_checkpoint.json");
+        let path = path.to_str().unwrap().to_string();
+        // File doesn't exist yet: new() should start empty rather than error.
+
+        let store = FileCheckpointStore::new(&path).await.unwrap();
+        assert_eq!(store.load(0, "C1").await.unwrap(), None);
+    }
+
+    // ── Corrupt file ──────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn corrupt_file_falls_back_to_empty() {
+        let tmp = NamedTempFile::new().unwrap();
+        let path = tmp.path().to_str().unwrap().to_string();
+        tokio::fs::write(&path, b"not valid json!!!").await.unwrap();
+        drop(tmp);
+
+        // serde_json::from_slice fails → unwrap_or_default gives HashMap::new()
+        let store = FileCheckpointStore::new(&path).await.unwrap();
+        assert_eq!(store.load(0, "C1").await.unwrap(), None);
+    }
+
+    // ── Shard isolation ───────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn different_shards_are_independent() {
+        let tmp = NamedTempFile::new().unwrap();
+        let path = tmp.path().to_str().unwrap().to_string();
+        drop(tmp);
+
+        let store = FileCheckpointStore::new(&path).await.unwrap();
+        store.save(0, "CABC", 100).await.unwrap();
+        store.save(1, "CABC", 200).await.unwrap();
+
+        assert_eq!(store.load(0, "CABC").await.unwrap(), Some(100));
+        assert_eq!(store.load(1, "CABC").await.unwrap(), Some(200));
+    }
+}

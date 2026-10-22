@@ -9,10 +9,22 @@ import {
   deleteWebhookSubscription,
 } from '../controllers/indexerController.js';
 import { requireApiKey } from '../middleware/auth.js';
-import { requireJwtAuth, requireScopes, requireWalletOwnership } from '../middleware/jwtAuth.js';
+import { requireJwtAuth, requireScopes } from '../middleware/jwtAuth.js';
+import { requireTenantAccess } from '../middleware/rbac.js';
 import { requireLoanBorrowerAccess } from '../middleware/loanAccess.js';
 import { strictRateLimiter } from '../middleware/rateLimiter.js';
 import { auditLog } from '../middleware/auditLog.js';
+import { validateBody, validateParams, validateQuery } from '../middleware/validation.js';
+import {
+  borrowerEventsParamsSchema,
+  createWebhookSubscriptionBodySchema,
+  emptyIndexerBodySchema,
+  emptyIndexerParamsSchema,
+  emptyIndexerQuerySchema,
+  indexerEventsQuerySchema,
+  loanEventsParamsSchema,
+  webhookSubscriptionParamsSchema,
+} from '../schemas/indexerSchemas.js';
 
 const router = Router();
 
@@ -31,7 +43,13 @@ const router = Router();
  *             schema:
  *               $ref: '#/components/schemas/IndexerStatusResponse'
  */
-router.get('/status', getIndexerStatus);
+router.get(
+  '/status',
+  validateParams(emptyIndexerParamsSchema),
+  validateQuery(emptyIndexerQuerySchema),
+  validateBody(emptyIndexerBodySchema),
+  getIndexerStatus,
+);
 
 /**
  * @swagger
@@ -77,7 +95,10 @@ router.get(
   '/events/borrower/:borrower',
   requireJwtAuth,
   requireScopes('read:loans'),
-  requireWalletOwnership,
+  validateParams(borrowerEventsParamsSchema),
+  validateQuery(indexerEventsQuerySchema),
+  validateBody(emptyIndexerBodySchema),
+  requireTenantAccess,
   getBorrowerEvents,
 );
 
@@ -114,6 +135,9 @@ router.get(
   '/events/loan/:loanId',
   requireJwtAuth,
   requireScopes('read:loans'),
+  validateParams(loanEventsParamsSchema),
+  validateQuery(indexerEventsQuerySchema),
+  validateBody(emptyIndexerBodySchema),
   requireLoanBorrowerAccess,
   getLoanEvents,
 );
@@ -150,7 +174,14 @@ router.get(
  *       401:
  *         description: Missing or invalid API key
  */
-router.get('/events/recent', requireApiKey('admin:indexer'), getRecentEvents);
+router.get(
+  '/events/recent',
+  requireApiKey('admin:indexer'),
+  validateParams(emptyIndexerParamsSchema),
+  validateQuery(indexerEventsQuerySchema),
+  validateBody(emptyIndexerBodySchema),
+  getRecentEvents,
+);
 
 /**
  * @swagger
@@ -170,7 +201,14 @@ router.get('/events/recent', requireApiKey('admin:indexer'), getRecentEvents);
  *       401:
  *         description: Missing or invalid API key
  */
-router.get('/webhooks', requireApiKey('admin:webhooks'), listWebhookSubscriptions);
+router.get(
+  '/webhooks',
+  requireApiKey('admin:webhooks'),
+  validateParams(emptyIndexerParamsSchema),
+  validateQuery(emptyIndexerQuerySchema),
+  validateBody(emptyIndexerBodySchema),
+  listWebhookSubscriptions,
+);
 
 /**
  * @swagger
@@ -211,6 +249,9 @@ router.post(
   '/webhooks',
   requireApiKey('admin:webhooks'),
   strictRateLimiter,
+  validateParams(emptyIndexerParamsSchema),
+  validateQuery(emptyIndexerQuerySchema),
+  validateBody(createWebhookSubscriptionBodySchema),
   auditLog,
   createWebhookSubscription,
 );
@@ -243,6 +284,9 @@ router.delete(
   '/webhooks/:subscriptionId',
   requireApiKey('admin:webhooks'),
   strictRateLimiter,
+  validateParams(webhookSubscriptionParamsSchema),
+  validateQuery(emptyIndexerQuerySchema),
+  validateBody(emptyIndexerBodySchema),
   auditLog,
   deleteWebhookSubscription,
 );

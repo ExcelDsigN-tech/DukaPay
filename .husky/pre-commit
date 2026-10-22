@@ -1,31 +1,37 @@
 #!/bin/sh
+# Auto-fix staged files, then re-stage them. Only files you staged are re-added.
+# Install once with ./scripts/setup-hooks.sh
 
-STAGED_FILES=$(git diff --cached --name-only)
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACMR)
 
-# Frontend
+# Re-stage the staged files under a prefix that match an extension pattern.
+restage() {
+  echo "$STAGED_FILES" | grep -E "^$1/.*\.($2)$" | xargs -r git add
+}
+
+# Frontend: lint-staged fixes and re-stages on its own.
 if echo "$STAGED_FILES" | grep -q '^frontend/'; then
-  echo "Running frontend lint-staged..."
-  (
-    cd frontend
-    npx lint-staged
-  ) || exit 1
+  echo "Fixing frontend..."
+  (cd frontend && npx lint-staged) || exit 1
 fi
 
 # Backend
-if echo "$STAGED_FILES" | grep -q '^backend/'; then
-  echo "Running backend checks..."
+BACKEND_FILES=$(echo "$STAGED_FILES" | grep -E '^backend/.*\.(ts|js|cjs|mjs|json)$' | sed 's|^backend/||')
+if [ -n "$BACKEND_FILES" ]; then
+  echo "Fixing backend..."
   (
     cd backend
-    npm run lint:fix
-    npm run format
+    echo "$BACKEND_FILES" | grep -E '\.(ts|js|cjs|mjs)$' | xargs -r npx eslint --fix &&
+      echo "$BACKEND_FILES" | xargs npx prettier --write --ignore-unknown
   ) || exit 1
+  restage backend 'ts|js|cjs|mjs|json'
 fi
 
-# Contracts
-if echo "$STAGED_FILES" | grep -q '^contracts/'; then
-  echo "Running cargo fmt..."
-  (
-    cd contracts
-    cargo fmt --all --check
-  ) || exit 1
-fi
+# Rust
+for crate in contracts indexer; do
+  if echo "$STAGED_FILES" | grep -qE "^$crate/.*\.rs$"; then
+    echo "Running cargo fmt in $crate..."
+    (cd "$crate" && cargo fmt --all) || exit 1
+    restage "$crate" rs
+  fi
+done

@@ -19,11 +19,15 @@ use soroban_sdk::{
 /// Minimum timelock: 24 hours. Cannot be overridden by the proposing admin.
 const MIN_TIMELOCK_SECONDS: u64 = 86_400;
 
-/// Maximum signers in a quorum — keeps storage and iteration bounded.
+/// Maximum signers in a quorum; keeps storage and iteration bounded.
 const MAX_SIGNERS: u32 = 20;
 
 /// Time-to-live for proposals before they expire (7 days in seconds).
 const PROPOSAL_TTL_SECONDS: u64 = 604_800;
+
+/// TTL constants for instance storage, matching agent_vault pattern.
+const INSTANCE_TTL_THRESHOLD: u32 = 17_280;
+const INSTANCE_TTL_BUMP: u32 = 518_400;
 
 // ─── Storage keys ─────────────────────────────────────────────────────────────
 
@@ -42,7 +46,6 @@ const CURRENT_VERSION: u32 = 1;
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum GovernanceError {
-    AlreadyInitialized = 4001,
     NotInitialized = 4002,
     TargetNotSet = 4003,
     NoPendingTransfer = 4004,
@@ -73,6 +76,7 @@ pub enum GovernanceError {
     NotUpgradeSigner = 4037,
     InvalidUpgradeThreshold = 4038,
     TooManyUpgradeSigners = 4039,
+    InvalidUpgradeTarget = 4040,
 }
 
 /// Status of a pending admin transfer proposal.
@@ -172,25 +176,15 @@ pub struct GovernanceContract;
 
 #[contractimpl]
 impl GovernanceContract {
-    // ── Initialization ────────────────────────────────────────────────────────
-
-    /// Initialize the governance contract.
-    /// `admin`           — current DukaPay admin.
-    /// `target_contract` — the DukaPay contract whose admin will be updated
+    /// Constructor for the governance contract.
+    /// `admin`:           current DukaPay admin.
+    /// `target_contract`: the DukaPay contract whose admin will be updated
     ///                     when finalize_admin_transfer is called.
-    pub fn initialize(
-        env: Env,
-        admin: Address,
-        target_contract: Address,
-    ) -> Result<(), GovernanceError> {
-        if env.storage().instance().has(&KEY_ADMIN) {
-            return Err(GovernanceError::AlreadyInitialized);
-        }
+    pub fn __constructor(env: Env, admin: Address, target_contract: Address) {
         env.storage().instance().set(&KEY_ADMIN, &admin);
         env.storage().instance().set(&KEY_TARGET, &target_contract);
         env.storage().instance().set(&KEY_VERSION, &CURRENT_VERSION);
         env.storage().instance().set(&KEY_PROPOSAL_COUNT, &0u32);
-        Ok(())
     }
 
     pub fn version(env: Env) -> u32 {
@@ -291,6 +285,7 @@ impl GovernanceContract {
             .get(&KEY_PROPOSAL_COUNT)
             .unwrap_or(0);
         let proposal_id = proposal_count + 1;
+        Self::bump_instance_ttl(&env);
         env.storage()
             .instance()
             .set(&KEY_PROPOSAL_COUNT, &proposal_id);
@@ -327,7 +322,7 @@ impl GovernanceContract {
 
     /// Record an approval from a designated signer.
     ///
-    /// Idempotent — calling twice from the same signer records one approval.
+    /// Idempotent: calling twice from the same signer records one approval.
     /// Soroban's require_auth guarantees the caller genuinely controls `signer`.
     pub fn approve_transfer(env: Env, signer: Address) -> Result<(), GovernanceError> {
         signer.require_auth();
@@ -347,13 +342,14 @@ impl GovernanceContract {
             return Err(GovernanceError::SignerNotAllowed);
         }
 
-        // Map::set is idempotent — duplicate calls do not increment the count
+        // Map::set is idempotent; duplicate calls do not increment the count
         pending.approvals.set(signer.clone(), true);
 
         let approvals_so_far = pending.approvals.len();
         let threshold = pending.threshold;
         let proposal_id = pending.id;
 
+        Self::bump_instance_ttl(&env);
         env.storage().instance().set(&KEY_PENDING, &pending);
 
         env.events().publish(
@@ -432,6 +428,7 @@ impl GovernanceContract {
         );
 
         // 2. Effects: Clear pending transfer and update local admin state only after successful interaction.
+        Self::bump_instance_ttl(&env);
         env.storage().instance().remove(&KEY_PENDING);
         env.storage().instance().set(&KEY_ADMIN, &new_admin);
 
@@ -469,6 +466,7 @@ impl GovernanceContract {
         }
 
         pending.status = ProposalStatus::Cancelled;
+        Self::bump_instance_ttl(&env);
         env.storage().instance().set(&KEY_PENDING, &pending);
 
         env.storage()
@@ -510,6 +508,7 @@ impl GovernanceContract {
         }
 
         pending.status = ProposalStatus::Cancelled;
+        Self::bump_instance_ttl(&env);
         env.storage().instance().set(&KEY_PENDING, &pending);
 
         // We also set the cooldown for security, same as regular cancel.
@@ -555,6 +554,7 @@ impl GovernanceContract {
             return Err(GovernanceError::ProposalNotExpired);
         }
 
+        Self::bump_instance_ttl(&env);
         env.storage().instance().remove(&KEY_PENDING);
 
         env.events().publish(
@@ -669,6 +669,14 @@ impl GovernanceContract {
             .get(&KEY_PENDING)
             .ok_or(GovernanceError::NoPendingTransfer)?;
         Ok(pending.approvals.get(signer).unwrap_or(false))
+    }
+
+    // ── TTL helpers ───────────────────────────────────────────────────────────
+
+    fn bump_instance_ttl(env: &Env) {
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_BUMP);
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────

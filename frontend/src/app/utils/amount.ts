@@ -9,9 +9,10 @@ export const STROOP_SCALE = 10 ** STROOP_DECIMALS;
 // Asset-specific decimal precision
 export const ASSET_DECIMALS: Record<string, number> = {
   XLM: 7,
-  USDC: 2,
-  EURC: 2,
-  PHP: 2,
+  // Stellar USDC uses the standard 7-decimal on-chain precision.
+  USDC: 7,
+  EURC: 7,
+  PHP: 7,
 };
 
 export function getAssetDecimals(asset: string): number {
@@ -90,7 +91,7 @@ export function toStroops(value: string, decimals = STROOP_DECIMALS): bigint | n
 }
 
 /**
- * Format an exact stroop amount as a decimal string with no precision loss —
+ * Format an exact stroop amount as a decimal string with no precision loss:
  * the inverse of {@link toStroops}. Unlike `Number(stroops) / 1e7` followed
  * by `toFixed`, this never routes the value through a floating-point
  * `number`, so it agrees with the settlement amount at full precision.

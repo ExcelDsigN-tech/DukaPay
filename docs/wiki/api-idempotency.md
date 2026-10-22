@@ -30,7 +30,7 @@ const replayed = response.headers.get("X-Idempotent-Replayed") === "true";
 if (!replayed) {
   showSuccessToast("Repayment submitted");   // first execution
 } else {
-  // duplicate submission — silently ignore or show a softer message
+  // duplicate submission: silently ignore or show a softer message
 }
 ```
 
@@ -46,5 +46,5 @@ The idempotency cache entry expires after **24 hours**.
 ## Out of scope
 
 - Changing the cache backend or TTL (tracked separately).
-- Replaying side effects — the cache stores and replays the HTTP
+- Replaying side effects: the cache stores and replays the HTTP
   response only; the underlying transaction is not re-executed.

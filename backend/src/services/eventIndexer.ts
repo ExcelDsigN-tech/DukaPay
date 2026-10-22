@@ -18,6 +18,7 @@ import { AppError } from '../errors/AppError.js';
 import { recordIndexerLedgers } from '../middleware/metrics.js';
 import { setPauseState } from '../middleware/pauseGuard.js';
 import { fromStroops } from '../money/decimal.js';
+import { env } from '../config/env.js';
 
 const EVENT_TYPE_ALIASES: Record<string, WebhookEventType> = {
   Mint: 'NFTMinted',
@@ -76,6 +77,8 @@ interface ContractEvent extends IndexedLoanEvent {
   adminAddress?: string;
   /** Borrower refund amount decoded from a LoanLiquidated event value tuple (index 2). */
   borrowerRefund?: string;
+  /** Recipient address for FloatTransferred events (topic[2]). */
+  toAddress?: string;
   ledger: number;
   ledgerClosedAt: Date;
   txHash: string;
@@ -84,6 +87,20 @@ interface ContractEvent extends IndexedLoanEvent {
   value: string;
   interestRateBps?: number;
   termLedgers?: number;
+  /**
+   * Resulting agent_vaults projection update for agent_registry /
+   * agent_vault events (Issue #774). Carries the event's RESULTING balance
+   * fields (not deltas), applied directly to agent_vaults by storeEvents().
+   */
+  agentUpdate?: {
+    agentAddress: string;
+    status?: string;
+    bondAmount?: string;
+    region?: string;
+    licenseExpiry?: number;
+    floatBalance?: string;
+    collateralBalance?: string;
+  };
 }
 
 interface EventIndexerConfig {
@@ -91,6 +108,13 @@ interface EventIndexerConfig {
   contractId?: string;
   contractIds?: string[];
   contractConfigs?: Array<{ contractId: string }>;
+  /**
+   * Contract ids that are agent_vault contracts. Needed because
+   * agent_vault's CollateralDeposited event shares its name with the
+   * lending pool's own CollateralDeposited event but has a different
+   * topic/value shape.
+   */
+  agentVaultContractIds?: string[];
   pollIntervalMs?: number;
   batchSize?: number;
   finalityDepth?: number;
@@ -116,6 +140,7 @@ interface LedgerCheckpoint {
 export class EventIndexer {
   private readonly rpc: SorobanRpc.Server;
   private readonly contractIds: string[];
+  private readonly agentVaultContractIds: Set<string>;
   private readonly pollIntervalMs: number;
   private readonly batchSize: number;
   private readonly finalityDepth: number;
@@ -130,10 +155,8 @@ export class EventIndexer {
   constructor(config: EventIndexerConfig);
   constructor(rpcUrl: string, contractId: string);
   constructor(configOrRpcUrl: EventIndexerConfig | string, contractId?: string) {
-    const thresholdRaw = Number.parseInt(process.env.QUARANTINE_ALERT_THRESHOLD ?? '25', 10);
-    this.quarantineAlertThreshold =
-      Number.isFinite(thresholdRaw) && thresholdRaw > 0 ? thresholdRaw : 25;
-    const lagThresholdRaw = Number.parseInt(process.env.INDEXER_LAG_ALERT_THRESHOLD ?? '100', 10);
+    this.quarantineAlertThreshold = env.QUARANTINE_ALERT_THRESHOLD;
+    const lagThresholdRaw = env.INDEXER_LAG_ALERT_THRESHOLD;
     this.lagAlertThreshold =
       Number.isFinite(lagThresholdRaw) && lagThresholdRaw > 0 ? lagThresholdRaw : 100;
 
@@ -143,13 +166,15 @@ export class EventIndexer {
       }
       this.rpc = new SorobanRpc.Server(configOrRpcUrl);
       this.contractIds = [contractId];
+      this.agentVaultContractIds = new Set();
       this.pollIntervalMs = 30_000;
       this.batchSize = 100;
-      this.finalityDepth = this.parseNonNegativeInt(process.env.INDEXER_FINALITY_DEPTH, 0);
+      this.finalityDepth = this.envFinalityDepth();
       return;
     }
 
     this.rpc = new SorobanRpc.Server(configOrRpcUrl.rpcUrl);
+    this.agentVaultContractIds = new Set(configOrRpcUrl.agentVaultContractIds ?? []);
     const configuredIds = configOrRpcUrl.contractIds ?? [];
     const configuredFromObjects = (configOrRpcUrl.contractConfigs ?? []).map(
       (config) => config.contractId,
@@ -165,9 +190,7 @@ export class EventIndexer {
     this.contractIds = [...new Set(normalized)];
     this.pollIntervalMs = configOrRpcUrl.pollIntervalMs ?? 30_000;
     this.batchSize = configOrRpcUrl.batchSize ?? 100;
-    this.finalityDepth =
-      configOrRpcUrl.finalityDepth ??
-      this.parseNonNegativeInt(process.env.INDEXER_FINALITY_DEPTH, 0);
+    this.finalityDepth = configOrRpcUrl.finalityDepth ?? this.envFinalityDepth();
   }
 
   async ingestRawEvents(events: SorobanRawEvent[]): Promise<StoreEventsResult> {
@@ -364,11 +387,11 @@ export class EventIndexer {
   }
 
   /**
-   * Contiguous-cursor invariant (issue #1376): records the ledger range this
+   * Contiguous-cursor invariant: records the ledger range this
    * poll iteration just requested, and flags a gap when it doesn't
    * immediately follow the previously-recorded range for this contract.
    *
-   * This does NOT prove every ledger in `rangeStart..rangeEnd` was scanned —
+   * This does NOT prove every ledger in `rangeStart..rangeEnd` was scanned;
    * only that `processChunk` was invoked for that exact range and returned
    * without error. What it catches is the specific failure mode in the
    * issue: `fromLedger` being derived from a value that skips ahead of what
@@ -377,7 +400,7 @@ export class EventIndexer {
    * chunk, never compared it against the *previous* one.
    *
    * Reorg detection (re-reading a suspect/verified range and comparing a
-   * content digest) is intentionally out of scope here — see this change's
+   * content digest) is intentionally out of scope here; see this change's
    * PR description.
    */
   private async recordCheckpoint(
@@ -465,6 +488,17 @@ export class EventIndexer {
     };
   }
 
+  private static readonly AGENT_PROJECTION_EVENT_TYPES = new Set([
+    'AgentRegistered',
+    'AgentStatusChanged',
+    'BondUpdated',
+    'CollateralDeposited',
+    'CollateralWithdrawn',
+    'FloatMinted',
+    'FloatBurned',
+    'VaultSettled',
+  ]);
+
   private async rollbackFromLedger(ledger: number): Promise<void> {
     const contract = this.getContractId();
     await withTransaction(async (client: PoolClient) => {
@@ -476,6 +510,7 @@ export class EventIndexer {
       );
       const scoreRollbacks = new Map<string, number>();
       const { repaymentDelta, defaultPenalty } = sorobanService.getScoreConfig();
+      const affectedAgents = new Set<string>();
       for (const row of orphanedEvents.rows) {
         const address = typeof row.address === 'string' ? row.address : '';
         if (!address) continue;
@@ -486,12 +521,14 @@ export class EventIndexer {
           row.event_type === 'CollateralLiquidated'
         ) {
           scoreRollbacks.set(address, (scoreRollbacks.get(address) ?? 0) + defaultPenalty);
+        } else if (EventIndexer.AGENT_PROJECTION_EVENT_TYPES.has(row.event_type as string)) {
+          affectedAgents.add(address);
         }
       }
       await client.query(
         `INSERT INTO audit_logs (actor, action, target, payload, ip_address, status)
          SELECT 'SYSTEM', 'REORG_REVERSAL', target,
-                jsonb_build_object('reversedEventId', payload->>'eventId', 'rollbackLedger', $2),
+                jsonb_build_object('reversedEventId', payload->>'eventId', 'rollbackLedger', $2::int),
                 'internal-indexer', 200
          FROM audit_logs
          WHERE payload->>'eventId' IN (
@@ -505,6 +542,9 @@ export class EventIndexer {
         [this.contractIds, ledger],
       );
       if (scoreRollbacks.size > 0) await updateUserScoresBulk(scoreRollbacks, client);
+      for (const agentAddress of affectedAgents) {
+        await this.recomputeAgentVaultProjection(client, agentAddress);
+      }
       await client.query('DELETE FROM ledger_checkpoints WHERE contract = $1 AND range_end >= $2', [
         contract,
         ledger,
@@ -518,6 +558,135 @@ export class EventIndexer {
         [Math.max(ledger - 1, 0), contract],
       );
     });
+  }
+
+  /**
+   * Re-derives one agent's agent_vaults row from whatever contract_events
+   * rows survive a rollback, rather than undoing a delta, consistent with
+   * forward indexing using resulting balances, not running sums (Issue
+   * #774). If no AgentRegistered event survives, the agent never existed
+   * before the rollback point, so its projection row is deleted outright.
+   */
+  private async recomputeAgentVaultProjection(
+    client: PoolClient,
+    agentAddress: string,
+  ): Promise<void> {
+    const registered = await client.query(
+      `SELECT value FROM contract_events
+       WHERE address = $1 AND event_type = 'AgentRegistered'
+       ORDER BY ledger DESC LIMIT 1`,
+      [agentAddress],
+    );
+    if (registered.rows.length === 0) {
+      await client.query('DELETE FROM agent_vaults WHERE agent_address = $1', [agentAddress]);
+      return;
+    }
+    const registeredData = this.decodeStoredEventValue(registered.rows[0].value as string);
+    const region =
+      Array.isArray(registeredData) && typeof registeredData[2] === 'string'
+        ? registeredData[2]
+        : undefined;
+
+    const status = await this.latestAgentFieldValue(
+      client,
+      agentAddress,
+      ['AgentStatusChanged', 'AgentRegistered'],
+      (eventType, data) => {
+        if (eventType === 'AgentRegistered') return 'Pending';
+        return Array.isArray(data) ? this.decodeEnumTag(data[1]) : undefined;
+      },
+    );
+
+    const bondAmount = await this.latestAgentFieldValue(
+      client,
+      agentAddress,
+      ['BondUpdated', 'AgentRegistered'],
+      (eventType, data) => {
+        if (eventType === 'BondUpdated')
+          return typeof data === 'bigint' ? data.toString() : undefined;
+        return Array.isArray(data) && typeof data[1] === 'bigint' ? data[1].toString() : undefined;
+      },
+    );
+
+    const floatBalance = await this.latestAgentFieldValue(
+      client,
+      agentAddress,
+      ['FloatMinted', 'FloatBurned', 'VaultSettled'],
+      (_eventType, data) =>
+        Array.isArray(data) && typeof data[1] === 'bigint' ? data[1].toString() : undefined,
+    );
+
+    const collateralBalance = await this.latestAgentFieldValue(
+      client,
+      agentAddress,
+      ['CollateralDeposited', 'CollateralWithdrawn'],
+      (_eventType, data) =>
+        Array.isArray(data) && typeof data[1] === 'bigint' ? data[1].toString() : undefined,
+      this.agentVaultContractIds,
+    );
+
+    await client.query(
+      `INSERT INTO agent_vaults (
+         agent_address, status, bond_amount, region, license_expiry,
+         float_balance, collateral_balance, is_active, updated_at
+       ) VALUES ($1, $2, $3::numeric, $4, $5::bigint, $6::numeric, $7::numeric, $8, CURRENT_TIMESTAMP)
+       ON CONFLICT (agent_address) DO UPDATE SET
+         status = $2, bond_amount = $3::numeric, region = $4, license_expiry = $5::bigint,
+         float_balance = $6::numeric, collateral_balance = $7::numeric,
+         is_active = $8, updated_at = CURRENT_TIMESTAMP`,
+      [
+        agentAddress,
+        status ?? 'Pending',
+        bondAmount ?? '0',
+        region ?? null,
+        // No required event carries license_expiry; nothing to recompute it
+        // from, so it's intentionally reset rather than preserved: a stale
+        // post-rollback license_expiry would be worse than a missing one.
+        null,
+        floatBalance ?? '0',
+        collateralBalance ?? '0',
+        status === 'Active',
+      ],
+    );
+  }
+
+  /**
+   * Finds the most recent surviving event of the given types for `agentAddress`
+   * and extracts one field from its decoded value via `extract`. Optionally
+   * restricted to a set of contract ids, to disambiguate event names (e.g.
+   * agent_vault's CollateralDeposited) shared with other contracts.
+   */
+  private async latestAgentFieldValue(
+    client: PoolClient,
+    agentAddress: string,
+    eventTypes: string[],
+    extract: (eventType: string, data: unknown) => string | undefined,
+    contractIds?: Set<string>,
+  ): Promise<string | undefined> {
+    const contractFilter = contractIds && contractIds.size > 0 ? contractIds : undefined;
+    const result = await client.query(
+      contractFilter
+        ? `SELECT event_type, value FROM contract_events
+           WHERE address = $1 AND event_type = ANY($2::text[]) AND contract_id = ANY($3::text[])
+           ORDER BY ledger DESC LIMIT 1`
+        : `SELECT event_type, value FROM contract_events
+           WHERE address = $1 AND event_type = ANY($2::text[])
+           ORDER BY ledger DESC LIMIT 1`,
+      contractFilter ? [agentAddress, eventTypes, [...contractFilter]] : [agentAddress, eventTypes],
+    );
+    const row = result.rows[0];
+    if (!row) return undefined;
+    try {
+      const data = this.decodeStoredEventValue(row.value as string);
+      return extract(row.event_type as string, data);
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** Reconstructs a stored event's decoded value from its persisted base64 XDR. */
+  private decodeStoredEventValue(valueXdrBase64: string): unknown {
+    return scValToNative(xdr.ScVal.fromXDR(valueXdrBase64, 'base64'));
   }
 
   /**
@@ -580,9 +749,9 @@ export class EventIndexer {
     }
   }
 
-  private parseNonNegativeInt(value: string | undefined, fallback: number): number {
-    const parsed = Number.parseInt(value ?? '', 10);
-    return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+  private envFinalityDepth(): number {
+    const depth = env.INDEXER_FINALITY_DEPTH;
+    return depth !== undefined && depth >= 0 ? depth : 0;
   }
 
   private getContractId(): string {
@@ -718,32 +887,30 @@ export class EventIndexer {
     let cursor: string | undefined;
     let hasMorePages = true;
 
+    const filters = [{ type: 'contract', contractIds: this.contractIds }];
+
     while (hasMorePages) {
-      const response = (await this.rpc.getEvents({
-        startLedger,
-        endLedger,
-        cursor,
-        limit: this.batchSize,
-        filters: [
-          {
-            type: 'contract',
-            contractIds: this.contractIds,
-          },
-        ],
-      } as never)) as unknown as {
+      // RPC rejects a ledger range together with a cursor, so later pages send
+      // only the cursor and the range is enforced by the filter below.
+      const request = cursor
+        ? { cursor, limit: this.batchSize, filters }
+        : { startLedger, endLedger, limit: this.batchSize, filters };
+      const response = (await this.rpc.getEvents(request as never)) as unknown as {
         events?: SorobanRawEvent[];
         cursor?: string;
         nextCursor?: string;
       };
 
-      const events = (response.events ?? []).filter(
+      const pageEvents = response.events ?? [];
+      const events = pageEvents.filter(
         (event) => event.ledger >= startLedger && event.ledger <= endLedger,
       );
 
       result.push(...events);
 
+      const passedEnd = pageEvents.some((event) => event.ledger > endLedger);
       const nextCursor = response.nextCursor ?? response.cursor;
-      if (!nextCursor || nextCursor === cursor || events.length === 0) {
+      if (!nextCursor || nextCursor === cursor || events.length === 0 || passedEnd) {
         hasMorePages = false;
         continue;
       }
@@ -854,14 +1021,14 @@ export class EventIndexer {
           }
 
           /**
-           * LoanApprv audit row — records which admin approved a loan.
+           * LoanApprv audit row: records which admin approved a loan.
            *
            * audit_logs shape:
-           *   actor     — admin Stellar address (topic[1] of the LoanApprv event)
-           *   action    — 'loan_approved'
-           *   target    — 'loan:<loanId>'
-           *   payload   — { eventId, loanId, borrower, txHash }
-           *   ip_address — null (on-chain action, no HTTP request IP)
+           *   actor:      admin Stellar address (topic[1] of the LoanApprv event)
+           *   action:     'loan_approved'
+           *   target:     'loan:<loanId>'
+           *   payload:    { eventId, loanId, borrower, txHash }
+           *   ip_address: null (on-chain action, no HTTP request IP)
            */
           if (event.eventType === 'LoanApprv') {
             await client.query(
@@ -880,6 +1047,68 @@ export class EventIndexer {
                 null,
                 200, // Loan approved on-chain
               ],
+            );
+          }
+
+          // Project agent_registry / agent_vault events into agent_vaults
+          // (Issue #774). Applied inline, per event, using the event's own
+          // resulting balance fields (not deltas), so this is safe to run
+          // once per event rather than aggregated like the score updates
+          // below. COALESCE(param, existing) means a field this specific
+          // event doesn't carry is left untouched rather than overwritten.
+          if (event.agentUpdate) {
+            const u = event.agentUpdate;
+            const isActive = u.status !== undefined ? u.status === 'Active' : null;
+            await client.query(
+              `INSERT INTO agent_vaults (
+                 agent_address, status, bond_amount, region, license_expiry,
+                 float_balance, collateral_balance, is_active, updated_at
+               ) VALUES (
+                 $1, COALESCE($2, 'Pending'), COALESCE($3::numeric, 0), $4, $5::bigint,
+                 COALESCE($6::numeric, 0), COALESCE($7::numeric, 0), COALESCE($8::boolean, false),
+                 CURRENT_TIMESTAMP
+               )
+               ON CONFLICT (agent_address) DO UPDATE SET
+                 status = COALESCE($2, agent_vaults.status),
+                 bond_amount = COALESCE($3::numeric, agent_vaults.bond_amount),
+                 region = COALESCE($4, agent_vaults.region),
+                 license_expiry = COALESCE($5::bigint, agent_vaults.license_expiry),
+                 float_balance = COALESCE($6::numeric, agent_vaults.float_balance),
+                 collateral_balance = COALESCE($7::numeric, agent_vaults.collateral_balance),
+                 is_active = COALESCE($8::boolean, agent_vaults.is_active),
+                 updated_at = CURRENT_TIMESTAMP`,
+              [
+                u.agentAddress,
+                u.status ?? null,
+                u.bondAmount ?? null,
+                u.region ?? null,
+                u.licenseExpiry ?? null,
+                u.floatBalance ?? null,
+                u.collateralBalance ?? null,
+                isActive,
+              ],
+            );
+          }
+
+          // FloatTransferred carries no resulting balances, so it is the one
+          // agent event applied as a delta. This block only runs when the
+          // event row was newly inserted, so a replayed event can't apply twice.
+          if (
+            event.eventType === 'FloatTransferred' &&
+            event.address &&
+            event.toAddress &&
+            event.amount
+          ) {
+            const amountBigInt = BigInt(event.amount);
+            // Subtract from source agent
+            await client.query(
+              `UPDATE agent_vaults SET float_balance = float_balance - $1, updated_at = CURRENT_TIMESTAMP WHERE agent_address = $2`,
+              [amountBigInt.toString(), event.address],
+            );
+            // Add to destination agent
+            await client.query(
+              `UPDATE agent_vaults SET float_balance = float_balance + $1, updated_at = CURRENT_TIMESTAMP WHERE agent_address = $2`,
+              [amountBigInt.toString(), event.toAddress],
             );
           }
 
@@ -910,7 +1139,7 @@ export class EventIndexer {
 
       // Apply batched score updates on the same pinned client so that both
       // the event inserts and the score changes are committed or rolled back
-      // together — satisfying the atomicity requirement.
+      // together, satisfying the atomicity requirement.
       if (scoreUpdates.size > 0) {
         await updateUserScoresBulk(scoreUpdates, client);
       }
@@ -990,6 +1219,8 @@ export class EventIndexer {
     let interestRateBps: number | undefined;
     let termLedgers: number | undefined;
     let borrowerRefund: string | undefined;
+    let agentUpdate: ContractEvent['agentUpdate'];
+    let toAddress: string | undefined;
 
     if (type === 'LoanRequested') {
       // (type, loan_id, borrower), amount
@@ -1186,6 +1417,74 @@ export class EventIndexer {
       address = this.decodeTupleSecondAddress(event.value);
     } else if (type === 'PoolPaused' || type === 'PoolUnpaused') {
       // (type)
+    } else if (type === 'CollateralDeposited' && this.agentVaultContractIds.has(event.contractId)) {
+      // agent_vault's CollateralDeposited: (type, agent), (amount, new_collateral).
+      // Shares its event name with the lending pool's own CollateralDeposited
+      // (handled in the branch below), which has a different topic/value
+      // shape, disambiguated by contractId.
+      if (!event.topic[1]) return null;
+      address = this.decodeAddress(event.topic[1]);
+      amount = this.decodeTupleFirstNumericValue(event.value);
+      const newCollateral = this.decodeTupleSecondNumericValue(event.value);
+      agentUpdate = newCollateral
+        ? { agentAddress: address, collateralBalance: newCollateral }
+        : undefined;
+    } else if (type === 'CollateralWithdrawn') {
+      // agent_vault: (type, agent), (amount, new_collateral)
+      if (!event.topic[1]) return null;
+      address = this.decodeAddress(event.topic[1]);
+      amount = this.decodeTupleFirstNumericValue(event.value);
+      const newCollateral = this.decodeTupleSecondNumericValue(event.value);
+      agentUpdate = newCollateral
+        ? { agentAddress: address, collateralBalance: newCollateral }
+        : undefined;
+    } else if (type === 'FloatMinted' || type === 'FloatBurned') {
+      // agent_vault: (type, agent), (amount, new_float)
+      if (!event.topic[1]) return null;
+      address = this.decodeAddress(event.topic[1]);
+      amount = this.decodeTupleFirstNumericValue(event.value);
+      const newFloat = this.decodeTupleSecondNumericValue(event.value);
+      agentUpdate = newFloat ? { agentAddress: address, floatBalance: newFloat } : undefined;
+    } else if (type === 'FloatTransferred') {
+      // agent_vault: (type, from, to), amount. No resulting-balance field is
+      // emitted for either side, so storeEvents applies the amount as a delta
+      // to both agents' agent_vaults rows (#828).
+      if (!event.topic[1]) return null;
+      address = this.decodeAddress(event.topic[1]);
+      toAddress = event.topic[2] ? this.decodeAddress(event.topic[2]) : undefined;
+      amount = this.decodeAmount(event.value);
+    } else if (type === 'VaultSettled') {
+      // agent_vault: (type, agent), (delta, new_float)
+      if (!event.topic[1]) return null;
+      address = this.decodeAddress(event.topic[1]);
+      amount = this.decodeTupleFirstNumericValue(event.value);
+      const newFloat = this.decodeTupleSecondNumericValue(event.value);
+      agentUpdate = newFloat ? { agentAddress: address, floatBalance: newFloat } : undefined;
+    } else if (type === 'AgentRegistered') {
+      // agent_registry: (type, agent), (kyc_ref, bond_amount, new_region)
+      if (!event.topic[1]) return null;
+      address = this.decodeAddress(event.topic[1]);
+      const data = scValToNative(event.value);
+      if (Array.isArray(data) && data.length >= 3) {
+        agentUpdate = { agentAddress: address, status: 'Pending' };
+        if (typeof data[1] === 'bigint') agentUpdate.bondAmount = data[1].toString();
+        if (typeof data[2] === 'string') agentUpdate.region = data[2];
+      }
+    } else if (type === 'AgentStatusChanged') {
+      // agent_registry: (type, agent), (from_status, to_status)
+      if (!event.topic[1]) return null;
+      address = this.decodeAddress(event.topic[1]);
+      const data = scValToNative(event.value);
+      if (Array.isArray(data) && data.length >= 2) {
+        const status = this.decodeEnumTag(data[1]);
+        if (status) agentUpdate = { agentAddress: address, status };
+      }
+    } else if (type === 'BondUpdated') {
+      // agent_registry: (type, agent), new_bond
+      if (!event.topic[1]) return null;
+      address = this.decodeAddress(event.topic[1]);
+      amount = this.decodeAmount(event.value);
+      agentUpdate = { agentAddress: address, bondAmount: amount };
     } else if (type === 'CollateralDeposited' || type === 'CollateralReleased') {
       // (type, borrower, loan_id), amount/()
       if (event.topic[1]) {
@@ -1249,6 +1548,8 @@ export class EventIndexer {
       ...(address !== undefined ? { address } : {}),
       ...(adminAddress !== undefined ? { adminAddress } : {}),
       ...(borrowerRefund !== undefined ? { borrowerRefund } : {}),
+      ...(agentUpdate !== undefined ? { agentUpdate } : {}),
+      ...(toAddress !== undefined ? { toAddress } : {}),
     };
   }
 
@@ -1256,11 +1557,11 @@ export class EventIndexer {
     if (!userId) return;
     try {
       await query(
-        `INSERT INTO scores (user_id, current_score)
+        `INSERT INTO scores (borrower, score)
          VALUES ($1, $2)
-         ON CONFLICT (user_id)
+         ON CONFLICT (borrower)
          DO UPDATE SET
-           current_score = LEAST(850, GREATEST(300, scores.current_score + $3)),
+           score = LEAST(850, GREATEST(300, scores.score + $3)),
            updated_at = CURRENT_TIMESTAMP`,
         [userId, 500 + delta, delta],
       );
@@ -1407,6 +1708,18 @@ export class EventIndexer {
     return undefined;
   }
 
+  /**
+   * Decodes a Soroban `#[contracttype]` unit enum value (e.g. `AgentStatus`)
+   * to its variant name. On chain a unit variant is `ScVec([ScSymbol(name)])`,
+   * which `scValToNative` returns as `[name]`.
+   */
+  private decodeEnumTag(native: unknown): string | undefined {
+    if (Array.isArray(native) && native.length === 1 && typeof native[0] === 'string') {
+      return native[0];
+    }
+    return undefined;
+  }
+
   private decodeTupleSecondAddress(value: xdr.ScVal): string | undefined {
     const native = scValToNative(value);
     if (!Array.isArray(native) || native.length < 2) {
@@ -1527,6 +1840,6 @@ export class EventIndexer {
 // `getSuspectRanges` above; the implementation lives in
 // ledgerCheckpoints.ts so consumers that only need the gate check (e.g.
 // defaultChecker.ts) don't pull in this module's heavier dependency graph
-// (Soroban RPC client, webhook/notification/event-stream services) — see
+// (Soroban RPC client, webhook/notification/event-stream services); see
 // that file's doc comment.
 export { hasUnresolvedLedgerGaps } from './ledgerCheckpoints.js';

@@ -14,8 +14,7 @@ import {
 } from "../../../hooks/useApi";
 import { useSSE } from "../../../hooks/useSSE";
 import { useUserStore } from "../../../stores/useUserStore";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+import { NEXT_PUBLIC_API_URL } from "../../../lib/apiConfig";
 
 function summarize(reason: string) {
   return reason.length > 120 ? `${reason.slice(0, 117)}...` : reason;
@@ -32,17 +31,17 @@ function formatDate(value: string) {
 function useAdminGuard() {
   const router = useRouter();
   const user = useUserStore((state) => state.user);
-  const token = useUserStore((state) => state.authToken);
-  const session = useVerifySession({ enabled: Boolean(token) });
+  const isAuthenticated = useUserStore((state) => state.isAuthenticated);
+  const session = useVerifySession({ enabled: isAuthenticated });
   const role = session.data?.role ?? user?.role;
-  const isChecking = Boolean(token) && !role && session.isLoading;
+  const isChecking = isAuthenticated && !role && session.isLoading;
   const isAdmin = role === "admin";
 
   useEffect(() => {
-    if (!token || (!isChecking && !isAdmin)) {
+    if (!isAuthenticated || (!isChecking && !isAdmin)) {
       router.replace("/");
     }
-  }, [isAdmin, isChecking, router, token]);
+  }, [isAdmin, isChecking, isAuthenticated, router]);
 
   return { isAdmin, isChecking };
 }
@@ -118,7 +117,7 @@ export default function AdminDisputesPage() {
   const disputesQuery = useAdminDisputes({ enabled: isAdmin });
 
   useSSE<{ eventType?: string; type?: string }>({
-    url: isAdmin ? `${API_URL}/api/events/stream` : null,
+    url: isAdmin ? `${NEXT_PUBLIC_API_URL}/api/events/stream` : null,
     onMessage: (event) => {
       const eventType = event.eventType ?? event.type ?? "";
       if (/dispute|default/i.test(eventType)) {

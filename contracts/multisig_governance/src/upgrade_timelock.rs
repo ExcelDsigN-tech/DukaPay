@@ -19,7 +19,7 @@
 //! only the admin can `emergency_unpause`.
 //!
 //! The default quorum for DukaPay is 3-of-5: admin, security, ops, legal,
-//! community — configured once via `configure_upgrade_signers`.
+//! community, configured once via `configure_upgrade_signers`.
 
 use soroban_sdk::{
     contractimpl, contracttype, symbol_short, Address, BytesN, Env, IntoVal, Map, Symbol, Vec,
@@ -161,6 +161,10 @@ impl GovernanceContract {
     ) -> Result<(), GovernanceError> {
         proposer.require_auth();
         Self::require_signer_or_admin(&env, &proposer)?;
+
+        if target == env.current_contract_address() {
+            return Err(GovernanceError::InvalidUpgradeTarget);
+        }
 
         if let Some(pending) = Self::load_pending(&env) {
             // Allow replacing an upgrade that has already expired.
@@ -326,7 +330,7 @@ impl GovernanceContract {
         Ok(())
     }
 
-    /// Lift the upgrade freeze. Admin-only — deliberately higher-bar than pausing.
+    /// Lift the upgrade freeze. Admin-only, deliberately higher-bar than pausing.
     pub fn emergency_unpause(env: Env) -> Result<(), GovernanceError> {
         let admin = GovernanceContract::read_admin(&env)?;
         admin.require_auth();

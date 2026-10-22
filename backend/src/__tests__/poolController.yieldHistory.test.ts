@@ -39,9 +39,10 @@ describe('getDepositorYieldHistory', () => {
     mockBuildHistory.mockResolvedValue([
       {
         timestamp: '2026-05-01T00:00:00.000Z',
-        depositedValue: 1000,
-        currentValue: 1050,
-        netYield: 50,
+        // Rebuilt history is in stroops: 1000 / 1050 / 50 USDC.
+        depositedValue: 10_000_000_000,
+        currentValue: 10_500_000_000,
+        netYield: 500_000_000,
       },
     ]);
   });

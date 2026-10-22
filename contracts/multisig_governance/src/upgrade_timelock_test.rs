@@ -1,7 +1,7 @@
 //! Tests for the upgrade timelock + multi-sig governance (Issue #452).
 
 use crate::upgrade_timelock::{UPGRADE_TIMELOCK_SECONDS, UPGRADE_TTL_SECONDS};
-use crate::{GovernanceContract, GovernanceContractClient};
+use crate::{GovernanceContract, GovernanceContractClient, GovernanceError};
 use soroban_sdk::testutils::{Address as _, Ledger, LedgerInfo};
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Symbol, Vec};
 
@@ -67,16 +67,15 @@ fn setup() -> Ctx {
     env.mock_all_auths();
     set_ts(&env, 1_000_000);
 
-    let gov_id = env.register(GovernanceContract, ());
+    let target_id = env.register(MockUpgradeable, ());
+    let admin = Address::generate(&env);
+
+    let gov_id = env.register(GovernanceContract, (&admin, &target_id));
     let gov = GovernanceContractClient::new(&env, &gov_id);
 
-    let target_id = env.register(MockUpgradeable, ());
     let target_client = MockUpgradeableClient::new(&env, &target_id);
-    // Governance is the admin of the target — upgrades must route through it.
+    // Governance is the admin of the target: upgrades must route through it.
     target_client.set_admin(&gov_id);
-
-    let admin = Address::generate(&env);
-    gov.initialize(&admin, &target_id);
 
     let signers = [
         Address::generate(&env),
@@ -189,6 +188,18 @@ fn non_signer_cannot_queue() {
 }
 
 #[test]
+fn queue_upgrade_rejects_governance_self_upgrade_target() {
+    let c = setup();
+
+    let result = c
+        .gov
+        .try_queue_upgrade(&c.signers[0], &c.gov.address, &hash(&c.env, 1));
+
+    assert_eq!(result, Err(Ok(GovernanceError::InvalidUpgradeTarget)));
+    assert!(c.gov.get_pending_upgrade().is_none());
+}
+
+#[test]
 fn emergency_pause_blocks_execution_and_unpause_restores() {
     let c = setup();
     let wasm = hash(&c.env, 9);
@@ -271,11 +282,10 @@ fn execute_without_configured_governance_fails() {
     let env = Env::default();
     env.mock_all_auths();
     set_ts(&env, 1_000_000);
-    let gov_id = env.register(GovernanceContract, ());
-    let gov = GovernanceContractClient::new(&env, &gov_id);
     let target_id = env.register(MockUpgradeable, ());
     let admin = Address::generate(&env);
-    gov.initialize(&admin, &target_id);
+    let gov_id = env.register(GovernanceContract, (&admin, &target_id));
+    let gov = GovernanceContractClient::new(&env, &gov_id);
     // No configure_upgrade_signers → queue must fail (admin still allowed to queue,
     // but there is no threshold configured so execution can never succeed).
     gov.queue_upgrade(&admin, &target_id, &BytesN::from_array(&env, &[1; 32]));

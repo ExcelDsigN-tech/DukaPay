@@ -1,12 +1,21 @@
 "use client";
 
 import { Toaster as SonnerToaster } from "sonner";
+import { useEffect, useState } from "react";
 
 /**
  * Toast notification component using Sonner.
  * Provides a clean, accessible toast system with dark mode support.
  */
 export function Toaster() {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true); // eslint-disable-line react-hooks/set-state-in-effect -- SSR mount detection
+  }, []);
+
+  if (!mounted) return null;
+
   return (
     <SonnerToaster
       position="top-right"

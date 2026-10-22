@@ -115,6 +115,10 @@ jest.unstable_mockModule('../utils/requestContext.js', () => ({
   runWithRequestContext: async (_requestId: string, callback: () => Promise<unknown>) => callback(),
 }));
 
+jest.unstable_mockModule('../services/pubsubService.js', () => ({
+  pubsubService: { publish: jest.fn<() => Promise<void>>().mockResolvedValue(undefined) },
+}));
+
 const { EventIndexer } = await import('../services/eventIndexer.js');
 
 function makeAddress() {
@@ -645,24 +649,34 @@ describe('EventIndexer', () => {
 
   it('initializes missing indexer state and persists the last indexed ledger during polling', async () => {
     const stateWrites: number[] = [];
+    let stateExists = false;
+    let lastLedgerWritten = 0;
 
     mockQuery.mockImplementation(async (sql: string, params: unknown[] = []) => {
-      if (sql.includes('SELECT last_ledger')) {
-        return { rows: [], rowCount: 0 };
+      if (sql.includes('SELECT last_ledger') || sql.includes('COALESCE(last_finalized_ledger')) {
+        return {
+          rows: stateExists ? [{ last_ledger: lastLedgerWritten }] : [],
+          rowCount: stateExists ? 1 : 0,
+        };
       }
 
       if (sql.includes('INSERT INTO indexer_state')) {
         if (sql.includes('$1, $2')) {
+          // updateLastIndexedLedger fallback: VALUES ($1, $2, $2)
           stateWrites.push(Number(params[1] ?? 0));
         } else {
-          const match = sql.match(/VALUES\s*\(\$1,\s*(\d+)\)/);
-          stateWrites.push(match ? Number(match[1] ?? 0) : Number(params[0] ?? 0));
+          // getLastIndexedLedger initial insert: VALUES ($1, 0, 0); extract the hardcoded 0
+          const match = sql.match(/VALUES\s*\(\s*\$\d+\s*,\s*(\d+)/);
+          stateWrites.push(match ? Number(match[1]) : 0);
         }
+        stateExists = true;
+        lastLedgerWritten = stateWrites[stateWrites.length - 1] ?? 0;
         return { rows: [], rowCount: 1 };
       }
 
       if (sql.includes('UPDATE indexer_state')) {
         stateWrites.push(Number(params[0]));
+        lastLedgerWritten = Number(params[0]);
         return { rows: [], rowCount: 1 };
       }
 
@@ -700,6 +714,50 @@ describe('EventIndexer', () => {
     await (indexer as unknown as { pollOnce: () => Promise<void> }).pollOnce();
 
     expect(stateWrites).toEqual([0, 15]);
+  });
+
+  it('pages getEvents with the cursor alone after the first request', async () => {
+    const indexer = new EventIndexer({
+      rpcUrl: 'https://rpc.test',
+      contractId: 'CINDEXERTEST',
+    });
+
+    const requests: Array<Record<string, unknown>> = [];
+    const pages = [
+      {
+        events: [makeRawEvent({ id: 'evt-a', ledger: 101, type: 'LoanRequested' })],
+        cursor: 'c1',
+      },
+      {
+        events: [
+          makeRawEvent({ id: 'evt-b', ledger: 150, type: 'LoanRequested' }),
+          makeRawEvent({ id: 'evt-late', ledger: 250, type: 'LoanRequested' }),
+        ],
+        cursor: 'c2',
+      },
+    ];
+    (indexer as unknown as { rpc: { getEvents: unknown } }).rpc = {
+      getEvents: async (request: Record<string, unknown>) => {
+        requests.push(request);
+        return pages[requests.length - 1] ?? { events: [] };
+      },
+    };
+
+    const events = await (
+      indexer as unknown as {
+        fetchEventsInRange: (start: number, end: number) => Promise<Array<{ id: string }>>;
+      }
+    ).fetchEventsInRange(100, 199);
+
+    // RPC rejects { startLedger/endLedger + cursor } with -32602.
+    expect(requests[0]).toMatchObject({ startLedger: 100, endLedger: 199 });
+    expect(requests[0]).not.toHaveProperty('cursor');
+    expect(requests[1]).toMatchObject({ cursor: 'c1' });
+    expect(requests[1]).not.toHaveProperty('startLedger');
+    expect(requests[1]).not.toHaveProperty('endLedger');
+    // Events past the window are dropped, and paging stops once it passes the end.
+    expect(events.map((event) => event.id)).toEqual(['evt-a', 'evt-b']);
+    expect(requests).toHaveLength(2);
   });
 
   it('quarantines parse failures and emits growth alert logs', async () => {

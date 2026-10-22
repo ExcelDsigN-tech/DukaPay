@@ -2,14 +2,33 @@
 
 This document is the human-readable rendering of the **single source of truth** for deployed
 Soroban contract IDs across all networks: [`scripts/contract-registry.json`](../scripts/contract-registry.json).
-Update **that file** whenever a contract is (re-)deployed — this page's tables are kept in sync
+Update **that file** whenever a contract is (re-)deployed. This page's tables are kept in sync
 with it, and [`scripts/verify-contracts.ts`](../scripts/verify-contracts.ts) checks that the
 registry, the on-chain state, and `backend/.env` agree.
 
-> **Secrets note**: contract IDs, deployer addresses and deploy tx hashes are public — safe to
+> **Secrets note**: contract IDs, deployer addresses and deploy tx hashes are public, so they are safe to
 > commit. **Never** commit secret/admin keys or signing secrets here or in the registry JSON.
 
 ---
+
+## Before you deploy
+
+`scripts/deploy-config.json` ships placeholders that must be replaced in the block for the
+network you deploy to. `scripts/deploy.ts` checks them before uploading anything and exits
+with a message naming each field to fix.
+
+| Field | Fill in |
+|---|---|
+| `admin` | Admin `G...` public key. If left as `YOUR_ADMIN_PUBLIC_KEY`, the deployer's own key is used. |
+| `token` | Pool token contract (`C...`). The `mainnet` block ships `YOUR_MAINNET_POOL_TOKEN_ADDRESS`. |
+| `contracts.circuit_breaker.signers` | One `G...` public key per signer (`YOUR_SIGNER_1_PUBLIC_KEY` ...), no duplicates. |
+| `contracts.circuit_breaker.threshold` | Integer from 1 to the number of signers. |
+| `contracts.oracle.sources` | At least 2 `{ "source": "<name>", "address": "G..." }` entries (`YOUR_ORACLE_SOURCE_1_PUBLIC_KEY` ...). |
+
+Each oracle source is the key that signs that feed's price submissions, so every entry needs
+its own address: the deploy fails if two sources share one. The oracle needs at least 2 fresh
+sources (`MIN_SOURCES` in `contracts/oracle/src/lib.rs`) before it returns a price. Source
+names are Soroban symbols (1-32 characters of `[A-Za-z0-9_]`).
 
 ## How to record a deployment
 
@@ -49,6 +68,9 @@ Explorer: `https://stellar.expert/explorer/testnet`
 | `token` (USDC-like pool token) | _not yet recorded_ | — | — | — | — | — | — |
 | `agent_registry` | _not yet recorded_ | — | — | — | — | — | — |
 | `agent_vault` | _not yet recorded_ | — | — | — | — | — | — |
+| `circuit_breaker` | _not yet recorded_ | — | — | — | — | — | — |
+| `oracle` | _not yet recorded_ | — | — | — | — | — | — |
+| `audit_anchor` | _not yet recorded_ | — | — | — | — | — | — |
 
 ### Environment variables that consume these IDs
 
@@ -63,6 +85,9 @@ Explorer: `https://stellar.expert/explorer/testnet`
 | `token` | `POOL_TOKEN_ADDRESS` |
 | `agent_registry` | `AGENT_REGISTRY_CONTRACT_ID` |
 | `agent_vault` | `AGENT_VAULT_CONTRACT_ID` |
+| `circuit_breaker` | `CIRCUIT_BREAKER_CONTRACT_ID` |
+| `oracle` | `ORACLE_CONTRACT_ID` |
+| `audit_anchor` | `AUDIT_ANCHOR_CONTRACT_ID` |
 
 #### Frontend (`frontend/.env`)
 
@@ -77,9 +102,79 @@ No contracts deployed yet.
 
 ---
 
-## Mainnet
+## Mainnet (`Public Global Stellar Network ; September 2015`)
 
-No contracts deployed yet.
+> **Status (mainnet launch: blocked until #561/#562 + external audit land, and pending #565 decision):** registry is **scaffolded but no contracts have ever touched Stellar mainnet**. The deploy config (`scripts/deploy-config.json` `mainnet` block) and registry (`scripts/contract-registry.json` `networks.mainnet`) are now structurally prepared so the deploy and verification tooling works: `scripts/deploy.ts -- mainnet` can be run once the correctness gaps and audit are cleared and #565 is decided. This is real-money deployment, not a testnet redeploy.
+
+RPC: `https://soroban-rpc.stellar.org`  
+Explorer: `https://stellar.expert/explorer/public`  
+Deploy config: `scripts/deploy-config.json` (`mainnet`: `networkPassphrase`, `rpcUrl`, `admin` placeholder, `token` placeholder, `contracts.*.wasm` for all 9 contracts deployed by `scripts/deploy.ts`: `remittance_nft`, `lending_pool`, `loan_manager`, `multisig_governance`, `agent_registry`, `agent_vault`, `circuit_breaker`, `oracle`, `audit_anchor`; `circuit_breaker.signers`/`threshold`/`override_timelock` and `oracle.sources` are read from this file)  
+Registry: `scripts/contract-registry.json` (`networks.mainnet`: 9 contracts + `token` scaffolded with `not yet recorded` placeholders, matching `testnet`)
+
+| Contract | Address (`C…`) | Deploy Date | Deployer | Deploy Tx Hash | ABI Version | Upgrade Authority | Timelock |
+|---|---|---|---|---|---|---|---|
+| `loan_manager` | _not yet recorded_ | — | — | — | — | — | — |
+| `lending_pool` | _not yet recorded_ | — | — | — | — | — | — |
+| `remittance_nft` | _not yet recorded_ | — | — | — | — | — | — |
+| `multisig_governance` | _not yet recorded_ | — | — | — | — | — | — |
+| `token` (USDC-like pool token) | _not yet recorded_ | — | — | — | — | — | — |
+| `agent_registry` | _not yet recorded_ | — | — | — | — | — | — |
+| `agent_vault` | _not yet recorded_ | — | — | — | — | — | — |
+| `circuit_breaker` | _not yet recorded_ | — | — | — | — | — | — |
+| `oracle` | _not yet recorded_ | — | — | — | — | — | — |
+| `audit_anchor` | _not yet recorded_ | — | — | — | — | — | — |
+
+### How mainnet deploy will be executed (when unblocked)
+
+```bash
+# 1. Build wasms for contracts
+cargo build --target wasm32-unknown-unknown --release --manifest-path contracts/Cargo.toml
+
+# 2. Deploy to mainnet (admin key via secrets manager; never commit the S... secret)
+SECRET_KEY=S... npm run deploy -- mainnet   # deploys all 9 contracts and wires the breaker + oracle
+
+# 3. Record each printed contract ID, deploy tx hash, deploy date, deployer, ABI version,
+#    upgrade authority and timelock in scripts/contract-registry.json (mainnet block)
+
+# 4. CRITICAL: migrate every contract's admin to multisig_governance (per CONTRACTS.md)
+#    Contracts not migrated stay gated by a raw admin key, which is not acceptable for mainnet.
+#    Verify via: stellar contract info --id <C...> --network mainnet
+
+# 5. Set the resulting contract IDs in production env / CI secrets
+#    (backend/.env.production, GitHub production environment vars/secrets, etc.)
+
+# 6. Verify registry/on-chain/env agreement
+npm run verify:contracts -- --network mainnet --format text
+
+# 7. Commit registry + docs + .env.production.example diff in same PR
+```
+
+Once steps 3–5 are done, replace the table above with real `C...` addresses (still safe to commit) and `verify-contracts.ts` will report `OK` instead of `SKIPPED`.
+
+### Environment variables that consume these IDs (mainnet)
+
+Same as testnet (see table above), but sourced from **production** secrets:
+
+| Contract | Env var | Production source |
+|---|---|---|
+| `loan_manager` | `LOAN_MANAGER_CONTRACT_ID` | `production` env `LOAN_MANAGER_CONTRACT_ID` secret + `backend/.env.production` |
+| `lending_pool` | `LENDING_POOL_CONTRACT_ID` | `production` env |
+| `remittance_nft` | `REMITTANCE_NFT_CONTRACT_ID` | `production` env |
+| `multisig_governance` | `MULTISIG_GOVERNANCE_CONTRACT_ID` | `production` env |
+| `token` | `POOL_TOKEN_ADDRESS` | `production` env `POOL_TOKEN_ADDRESS` |
+| `agent_registry` | `AGENT_REGISTRY_CONTRACT_ID` | `production` env |
+| `agent_vault` | `AGENT_VAULT_CONTRACT_ID` | `production` env |
+| `circuit_breaker` | `CIRCUIT_BREAKER_CONTRACT_ID` | `production` env |
+| `oracle` | `ORACLE_CONTRACT_ID` | `production` env |
+| `audit_anchor` | `AUDIT_ANCHOR_CONTRACT_ID` | `production` env |
+
+Frontend remains API-driven (no direct contract env reads).
+
+### Post-deploy verification
+
+- `scripts/verify-contracts.ts --network mainnet` checks address format, env consistency, on-chain existence (best-effort RPC probe), and metadata completeness.
+- Before any mainnet contract is populated, verification reports `SKIPPED` (placeholders), not a failure, so CI stays green until real deployment.
+- After deployment, the same check must pass clean (`OK`) for **every** mainnet entry that is populated, and every deployed contract's admin must be verified as `multisig_governance` (see `CONTRACTS.md` upgrade governance). All 9 contracts are deployed and recorded by `deploy.ts`, including `circuit_breaker`, `oracle` and `audit_anchor`.
 
 ---
 
@@ -87,11 +182,11 @@ No contracts deployed yet.
 
 `scripts/verify-contracts.ts` checks, per recorded contract:
 
-1. **Address format** — every recorded address is a valid Stellar contract ID (`C…`).
-2. **Env consistency** — the recorded address matches the value set for its backend env var.
-3. **On-chain existence** — the network RPC is reachable and serving (best-effort; skipped when
+1. **Address format**: every recorded address is a valid Stellar contract ID (`C…`).
+2. **Env consistency**: the recorded address matches the value set for its backend env var.
+3. **On-chain existence**: the network RPC is reachable and serving (best-effort; skipped when
    the RPC is unavailable from the runner).
-4. **Metadata completeness** — ABI version, upgrade authority, timelock, deployer, deploy tx
+4. **Metadata completeness**: ABI version, upgrade authority, timelock, deployer, deploy tx
    hash and deploy date are all recorded.
 
 Unrecorded placeholders (`not yet recorded`) and missing environment inputs are reported as

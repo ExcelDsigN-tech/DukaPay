@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import { useSSE } from "../../hooks/useSSE";
+import { NEXT_PUBLIC_API_URL } from "../../lib/apiConfig";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 const FALLBACK_POLL_INTERVAL_MS = 30_000;
 
 interface PauseState {
@@ -44,7 +44,7 @@ export function PauseBanner() {
     try {
       setIsLoading(true);
       setError(null);
-      const response = await fetch(`${API_URL}/api/status/pause`);
+      const response = await fetch(`${NEXT_PUBLIC_API_URL}/api/status/pause`);
       if (!response.ok) {
         throw new Error(`Failed to fetch pause state: ${response.statusText}`);
       }
@@ -63,7 +63,7 @@ export function PauseBanner() {
   }, [fetchPauseState]);
 
   useSSE<PauseEvent>({
-    url: `${API_URL}/api/events/stream`,
+    url: `${NEXT_PUBLIC_API_URL}/api/events/stream`,
     onMessage: (event) => {
       const eventType = event.eventType ?? event.type ?? "";
       if (/pause|unpause/i.test(eventType)) {

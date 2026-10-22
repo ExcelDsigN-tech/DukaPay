@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useLocale } from "next-intl";
 import { Card } from "../ui/Card";
 import { Button } from "../ui/Button";
 import type { BorrowerLoan } from "../../hooks/useApi";
@@ -10,9 +11,9 @@ import { LoanStatusBadge } from "../ui/LoanStatusBadge";
 export interface LoanCardProps {
   loan: BorrowerLoan;
   /**
-   * compact — raw status badge, no progress bar, responsive grid.
+   * compact: raw status badge, no progress bar, responsive grid.
    *           Used by LoanDashboard.
-   * detailed — urgency badge, repayment progress bar, fixed 3-col grid.
+   * detailed: urgency badge, repayment progress bar, fixed 3-col grid.
    *            Used by ActiveLoansTracker.
    */
   variant?: "compact" | "detailed";
@@ -20,6 +21,7 @@ export interface LoanCardProps {
 
 export function LoanCard({ loan, variant = "compact" }: LoanCardProps) {
   const router = useRouter();
+  const locale = useLocale();
   const daysUntil = getDaysUntilDeadline(loan.nextPaymentDeadline);
   const isOverdue = daysUntil < 0;
   const isUrgent = daysUntil >= 0 && daysUntil <= 7;
@@ -81,7 +83,8 @@ export function LoanCard({ loan, variant = "compact" }: LoanCardProps) {
         : `${daysUntil} days remaining`;
 
   // ── Progress (detailed only) ───────────────────────────────────────────────
-  const totalForProgress = loan.principal + loan.accruedInterest;
+  // No interest has accrued while a loan is still being indexed.
+  const totalForProgress = loan.principal + (loan.accruedInterest ?? 0);
   const progress = totalForProgress > 0 ? (loan.totalRepaid / totalForProgress) * 100 : 0;
 
   return (
@@ -100,7 +103,9 @@ export function LoanCard({ loan, variant = "compact" }: LoanCardProps) {
         </div>
         <div className="text-right">
           <p className="text-sm text-gray-600">Total Owed</p>
-          <p className="text-2xl font-bold text-gray-900">{formatCurrency(loan.totalOwed)}</p>
+          <p className="text-2xl font-bold text-gray-900">
+            {formatCurrency(loan.totalOwed ?? loan.principal)}
+          </p>
         </div>
       </div>
 
@@ -143,7 +148,7 @@ export function LoanCard({ loan, variant = "compact" }: LoanCardProps) {
             {variant === "compact" ? "Accrued Interest" : "Interest"}
           </p>
           <p className="text-lg font-semibold text-orange-600">
-            {formatCurrency(loan.accruedInterest)}
+            {formatCurrency(loan.accruedInterest ?? 0)}
           </p>
         </div>
 
@@ -165,26 +170,26 @@ export function LoanCard({ loan, variant = "compact" }: LoanCardProps) {
         {isTerminalDistressed ? (
           <>
             <Button
-              onClick={() => router.push(`/loans/${loan.id}`)}
+              onClick={() => router.push(`/${locale}/loans/${loan.id}`)}
               className="flex-1"
               variant="primary"
             >
               Contact Support
             </Button>
-            <Button variant="outline" onClick={() => router.push(`/loans/${loan.id}`)}>
+            <Button variant="outline" onClick={() => router.push(`/${locale}/loans/${loan.id}`)}>
               {variant === "compact" ? "View Details" : "Details"}
             </Button>
           </>
         ) : (
           <>
             <Button
-              onClick={() => router.push(`/repay/${loan.id}`)}
+              onClick={() => router.push(`/${locale}/repay/${loan.id}`)}
               className="flex-1"
               variant={isOverdue || isUrgent ? "primary" : "outline"}
             >
               {isOverdue ? "Pay Now (Overdue)" : "Repay Now"}
             </Button>
-            <Button variant="outline" onClick={() => router.push(`/loans/${loan.id}`)}>
+            <Button variant="outline" onClick={() => router.push(`/${locale}/loans/${loan.id}`)}>
               {variant === "compact" ? "View Details" : "Details"}
             </Button>
           </>

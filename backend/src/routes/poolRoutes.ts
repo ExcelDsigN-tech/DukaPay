@@ -11,14 +11,11 @@ import {
   getAnalytics,
   getAgentDashboard,
 } from '../controllers/poolController.js';
-import {
-  requireLender,
-  requireJwtAuth,
-  requireScopes,
-  requireWalletParamMatchesJwt,
-} from '../middleware/jwtAuth.js';
+import { requireLender, requireJwtAuth, requireScopes } from '../middleware/jwtAuth.js';
+import { requireTenantAccess, requireRole } from '../middleware/rbac.js';
 import { validate, validateBody } from '../middleware/validation.js';
 import { idempotencyMiddleware } from '../middleware/idempotency.js';
+import { poolAnalyticsRateLimiter } from '../middleware/rateLimiter.js';
 import { addressParamSchema } from '../schemas/stellarSchemas.js';
 import {
   buildPoolTransactionSchema,
@@ -77,7 +74,7 @@ const router = Router();
  *       500:
  *         description: Internal server error.
  */
-router.get('/analytics', getAnalytics);
+router.get('/analytics', poolAnalyticsRateLimiter, getAnalytics);
 
 /**
  * @swagger
@@ -86,9 +83,12 @@ router.get('/analytics', getAnalytics);
  *     summary: Get an agent's lending dashboard
  *     description: >
  *       Returns a single agent's float balance, collateral balance, active
- *       state, and number of active loans. Public endpoint; cached for 30
- *       seconds.
+ *       state, and number of active loans. Restricted to the dashboard owner
+ *       (agent/lender), admins and auditors under tenant isolation; cached for
+ *       the active scope for 30 seconds.
  *     tags: [Pool]
+ *     security:
+ *       - BearerAuth: []
  *     parameters:
  *       - in: path
  *         name: agentAddress
@@ -116,8 +116,10 @@ router.get('/analytics', getAnalytics);
  *                       type: string
  *                     floatBalance:
  *                       type: number
+ *                       description: Whole-token units (not stroops), matching the convention of getPoolStats.
  *                     collateralBalance:
  *                       type: number
+ *                       description: Whole-token units (not stroops), matching the convention of getPoolStats.
  *                     isActive:
  *                       type: boolean
  *                     activeLoans:
@@ -131,7 +133,13 @@ router.get('/analytics', getAnalytics);
  *       500:
  *         description: Internal server error.
  */
-router.get('/agent/dashboard/:agentAddress', getAgentDashboard);
+router.get(
+  '/agent/dashboard/:agentAddress',
+  requireJwtAuth,
+  requireRole('agent', 'lender', 'admin', 'auditor'),
+  requireTenantAccess,
+  getAgentDashboard,
+);
 
 /**
  * @swagger
@@ -191,7 +199,7 @@ router.get(
   requireJwtAuth,
   requireLender,
   requireScopes('read:pool'),
-  requireWalletParamMatchesJwt('address'),
+  requireTenantAccess,
   validate(addressParamSchema),
   getDepositorPortfolio,
 );
@@ -237,7 +245,7 @@ router.get(
   requireJwtAuth,
   requireLender,
   requireScopes('read:pool'),
-  requireWalletParamMatchesJwt('address'),
+  requireTenantAccess,
   validate(getDepositorYieldHistorySchema),
   getDepositorYieldHistory,
 );
@@ -306,7 +314,7 @@ router.get(
  *                 description: Address of the token to deposit
  *               amount:
  *                 type: number
- *                 description: Amount to deposit
+ *                 description: Amount to deposit in whole tokens (e.g. USDC), up to 7 decimal places
  *                 example: 1000
  *     responses:
  *       200:
@@ -361,7 +369,7 @@ router.post(
  *                 description: Address of the token to withdraw
  *               amount:
  *                 type: number
- *                 description: Amount (shares) to withdraw
+ *                 description: Pool shares to withdraw, up to 7 decimal places (same scale as the token)
  *                 example: 500
  *     responses:
  *       200:
@@ -417,7 +425,7 @@ router.post(
  *                 description: Address of the token to withdraw
  *               shares:
  *                 type: number
- *                 description: Amount (shares) to withdraw
+ *                 description: Pool shares to withdraw, up to 7 decimal places (same scale as the token)
  *     responses:
  *       200:
  *         description: Unsigned transaction XDR returned

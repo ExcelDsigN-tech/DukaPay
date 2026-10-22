@@ -65,7 +65,7 @@ npm run test:e2e     # Playwright end-to-end tests
 npm run audit:a11y   # Build then run axe-playwright accessibility audit
 ```
 
-> **Note:** `npm run lint` runs `prettier --check` — it checks formatting, not ESLint rules.
+> **Note:** `npm run lint` runs `prettier --check`. It checks formatting, not ESLint rules.
 > ESLint runs automatically via `lint-staged` on pre-commit.
 
 ## Project Structure
@@ -226,7 +226,7 @@ Design-system primitives live in [`src/app/components/ui/`](src/app/components/u
 ## Styling
 
 Tailwind CSS 4 is configured via CSS-first `@import "tailwindcss"` in
-[`src/app/[locale]/globals.css`](src/app/%5Blocale%5D/globals.css) — there is no
+[`src/app/[locale]/globals.css`](src/app/%5Blocale%5D/globals.css); there is no
 `tailwind.config.ts` file. Design tokens are declared as CSS custom properties in `:root`:
 
 ```css
@@ -251,7 +251,7 @@ Dark mode is driven by the `.dark` class (set by `useThemeStore`) and also respe
 
 ## Testing
 
-### Unit tests — Jest + React Testing Library
+### Unit tests: Jest + React Testing Library
 
 ```bash
 npm test            # run once
@@ -260,11 +260,11 @@ npm run test:watch  # interactive watch mode
 
 Test files sit alongside source files (`*.test.ts` / `*.test.tsx`). Key test suites:
 
-- `src/app/stores/stores.test.ts` — Zustand store logic
-- `src/app/utils/*.test.ts` — pure utility functions
-- `src/app/components/**/*.test.tsx` — component rendering
+- `src/app/stores/stores.test.ts`: Zustand store logic
+- `src/app/utils/*.test.ts`: pure utility functions
+- `src/app/components/**/*.test.tsx`: component rendering
 
-### End-to-end tests — Playwright
+### End-to-end tests: Playwright
 
 ```bash
 npm run test:e2e
@@ -295,7 +295,7 @@ directly for on-chain calls.
 
 ## Architecture & System Documentation
 
-- [Toast & Notification System Guide](src/app/hooks/README_TOAST_SYSTEM.md) — Detailed architecture and usage for `useContractToast`, `useContractMutation`, and Sonner transaction feedback.
+- [Toast & Notification System Guide](src/app/hooks/README_TOAST_SYSTEM.md): Detailed architecture and usage for `useContractToast`, `useContractMutation`, and Sonner transaction feedback.
 
 ## Deployment
 
@@ -346,4 +346,4 @@ rm -rf node_modules package-lock.json && npm install
 
 ## License
 
-ISC License — see LICENSE file for details.
+ISC License. See LICENSE file for details.

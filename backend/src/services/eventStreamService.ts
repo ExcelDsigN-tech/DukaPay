@@ -8,7 +8,7 @@ export interface LoanEventPayload {
   eventType: string;
   loanId?: number | undefined;
   address?: string | undefined;
-  /** Exact stroop amount, as decoded from the chain — never a float. */
+  /** Exact stroop amount, as decoded from the chain, never a float. */
   amount?: string | undefined;
   /**
    * Display-precision string derived from `amount` via the shared money

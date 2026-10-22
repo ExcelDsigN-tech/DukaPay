@@ -30,7 +30,7 @@ export function StaleServiceWorkerCleanup() {
         }
       })
       .catch(() => {
-        /* ignore — cleanup is best-effort in dev */
+        /* ignore: cleanup is best-effort in dev */
       });
   }, []);
 

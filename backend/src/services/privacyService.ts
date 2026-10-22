@@ -1,8 +1,9 @@
 import crypto from 'node:crypto';
 import { query, withTransaction } from '../db/connection.js';
 import logger from '../utils/logger.js';
+import { env } from '../config/env.js';
 
-const ANONYMIZATION_HASH_SALT = process.env.ANONYMIZATION_HASH_SALT ?? 'dukapay-anon-default';
+const ANONYMIZATION_HASH_SALT = env.ANONYMIZATION_HASH_SALT;
 
 export interface DsarRequest {
   id: string;
@@ -98,7 +99,7 @@ export class PrivacyService {
       notificationsResult,
     ] = await Promise.all([
       query('SELECT * FROM user_profiles WHERE public_key = $1', [publicKey]),
-      query('SELECT * FROM scores WHERE user_id = $1', [publicKey]),
+      query('SELECT * FROM scores WHERE borrower = $1', [publicKey]),
       query(
         `SELECT * FROM contract_events WHERE address = $1 ORDER BY ledger_closed_at DESC LIMIT 1000`,
         [publicKey],
@@ -169,7 +170,7 @@ export class PrivacyService {
       );
 
       // 4. Delete scores (credit scores are personal data)
-      await client.query('DELETE FROM scores WHERE user_id = $1', [publicKey]);
+      await client.query('DELETE FROM scores WHERE borrower = $1', [publicKey]);
 
       // 5. Delete audit logs referencing this user as actor
       // Financial audit records are held under the seven-year statutory
@@ -263,6 +264,16 @@ export class PrivacyService {
       createdAt: row.created_at,
       completedAt: row.completed_at,
     };
+  }
+
+  /**
+   * Mark a DSAR request as completed.
+   */
+  async completeDsarRequest(id: string): Promise<void> {
+    await query(
+      "UPDATE dsar_requests SET status = 'completed', completed_at = NOW() WHERE id = $1",
+      [id],
+    );
   }
 
   /**

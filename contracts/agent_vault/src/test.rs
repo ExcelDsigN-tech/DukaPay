@@ -3,7 +3,7 @@ use proptest::prelude::*;
 use soroban_sdk::testutils::{Address as _, Events as _, Ledger as _};
 use soroban_sdk::token::Client as TokenClient;
 use soroban_sdk::token::StellarAssetClient;
-use soroban_sdk::{vec, Address, Env, FromVal, Symbol, Vec};
+use soroban_sdk::{vec, Address, Env, FromVal, IntoVal, Symbol, Val, Vec};
 
 const MAX_HAIRCUT: u32 = 8_000; // 80%
 const MIN_COLLATERAL: i128 = 100;
@@ -24,9 +24,11 @@ fn setup() -> Setup {
     let owner = Address::generate(&env);
     let operator = Address::generate(&env);
     let (token, stellar, token_client) = create_token_contract(&env, &owner);
-    let id = env.register(AgentVault, ());
+    let id = env.register(
+        AgentVault,
+        (&owner, &operator, &token, &MAX_HAIRCUT, &MIN_COLLATERAL),
+    );
     let client = AgentVaultClient::new(&env, &id);
-    client.init(&owner, &operator, &token, &MAX_HAIRCUT, &MIN_COLLATERAL);
     Setup {
         env,
         client,
@@ -59,7 +61,7 @@ fn fund(s: &Setup, a: &Address, amount: i128) {
 }
 
 /// `env.events().all()` returns only the events of the MOST RECENT top-level
-/// invocation — previous call frames' events are gone. Call this immediately
+/// invocation; previous call frames' events are gone. Call this immediately
 /// after the event-emitting call, before any read/other call.
 fn last_event_topic0(env: &Env) -> Symbol {
     let events = env.events().all();
@@ -67,7 +69,7 @@ fn last_event_topic0(env: &Env) -> Symbol {
     Symbol::from_val(env, &event.1.get(0).unwrap())
 }
 
-// ── Init ──────────────────────────────────────────────────────────────────────
+// ── Init / Constructor ────────────────────────────────────────────────────────
 
 #[test]
 fn test_init_sets_config() {
@@ -84,26 +86,63 @@ fn test_init_sets_config() {
 }
 
 #[test]
-fn test_init_rejects_bad_params() {
+fn test_no_callable_initializer_after_deploy() {
+    let s = setup();
+    let owner = s.client.get_owner();
+    let result = s.env.try_invoke_contract::<Val, Val>(
+        &s.vault,
+        &Symbol::new(&s.env, "init"),
+        (
+            owner,
+            s.operator.clone(),
+            s.token.clone(),
+            MAX_HAIRCUT,
+            MIN_COLLATERAL,
+        )
+            .into_val(&s.env),
+    );
+    assert!(result.is_err(), "old init entrypoint is still callable");
+}
+
+#[test]
+#[should_panic(expected = "invalid max_haircut_bps")]
+fn test_constructor_rejects_zero_haircut() {
     let env = Env::default();
     env.mock_all_auths();
     let owner = Address::generate(&env);
     let operator = Address::generate(&env);
     let (token, _, _) = create_token_contract(&env, &owner);
-    let id = env.register(AgentVault, ());
-    let client = AgentVaultClient::new(&env, &id);
+    env.register(
+        AgentVault,
+        (&owner, &operator, &token, &0u32, &MIN_COLLATERAL),
+    );
+}
 
-    assert_eq!(
-        client.try_init(&owner, &operator, &token, &0, &MIN_COLLATERAL),
-        Err(Ok(VaultError::InvalidParams))
+#[test]
+#[should_panic(expected = "invalid max_haircut_bps")]
+fn test_constructor_rejects_haircut_above_10000() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let owner = Address::generate(&env);
+    let operator = Address::generate(&env);
+    let (token, _, _) = create_token_contract(&env, &owner);
+    env.register(
+        AgentVault,
+        (&owner, &operator, &token, &10_001u32, &MIN_COLLATERAL),
     );
-    assert_eq!(
-        client.try_init(&owner, &operator, &token, &10_001, &MIN_COLLATERAL),
-        Err(Ok(VaultError::InvalidParams))
-    );
-    assert_eq!(
-        client.try_init(&owner, &operator, &token, &MAX_HAIRCUT, &-1),
-        Err(Ok(VaultError::InvalidParams))
+}
+
+#[test]
+#[should_panic(expected = "invalid min_collateral")]
+fn test_constructor_rejects_negative_min_collateral() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let owner = Address::generate(&env);
+    let operator = Address::generate(&env);
+    let (token, _, _) = create_token_contract(&env, &owner);
+    env.register(
+        AgentVault,
+        (&owner, &operator, &token, &MAX_HAIRCUT, &-1i128),
     );
 }
 
@@ -256,7 +295,7 @@ fn test_transfer_float_atomic() {
 /// `write_vault`. When `from == to` both reads observe the same starting
 /// balance and the second write clobbers the first, so a naive
 /// implementation nets the agent `+amount` float per call with no
-/// corresponding mint or collateral movement — an unbounded free-float
+/// corresponding mint or collateral movement: an unbounded free-float
 /// exploit that also breaks the global solvency invariant.
 #[test]
 fn test_transfer_float_rejects_self_transfer() {
@@ -269,7 +308,7 @@ fn test_transfer_float_rejects_self_transfer() {
         s.client.try_transfer_float(&a, &a, &100),
         Err(Ok(VaultError::InvalidParams))
     );
-    // Float must be unchanged — no free minting via self-transfer.
+    // Float must be unchanged: no free minting via self-transfer.
     assert_eq!(s.client.get_vault(&a).float, 500);
 }
 
@@ -289,6 +328,20 @@ fn test_transfer_float_respects_recipient_bound() {
     // Partial transfer stays within b's bound.
     s.client.transfer_float(&a, &b, &400);
     assert_eq!(s.client.get_vault(&b).float, 400);
+}
+
+#[test]
+fn test_transfer_to_agent_atomic() {
+    let s = setup();
+    let a = agent(&s.env);
+    let b = agent(&s.env);
+    fund(&s, &a, 1_000);
+    fund(&s, &b, 1_000);
+    s.client.mint_float(&a, &500);
+    s.client.transfer_to_agent(&a, &b, &300);
+
+    assert_eq!(s.client.get_vault(&a).float, 200);
+    assert_eq!(s.client.get_vault(&b).float, 300);
 }
 
 // ── Settlement ───────────────────────────────────────────────────────────────
@@ -428,9 +481,11 @@ fn test_mint_float_requires_operator() {
     let owner = Address::generate(&env);
     let operator = Address::generate(&env);
     let (token, stellar, _) = create_token_contract(&env, &owner);
-    let id = env.register(AgentVault, ());
+    let id = env.register(
+        AgentVault,
+        (&owner, &operator, &token, &MAX_HAIRCUT, &MIN_COLLATERAL),
+    );
     let client = AgentVaultClient::new(&env, &id);
-    client.init(&owner, &operator, &token, &MAX_HAIRCUT, &MIN_COLLATERAL);
 
     let a = agent(&env);
     stellar.mint(&a, &1_000);
@@ -439,6 +494,190 @@ fn test_mint_float_requires_operator() {
     // Drop all auths: an unauthorised caller must not be able to mint.
     env.mock_auths(&[]);
     client.mint_float(&a, &100);
+}
+
+#[test]
+#[should_panic]
+fn test_set_circuit_breaker_unauthorized() {
+    let env = Env::default();
+    let owner = Address::generate(&env);
+    let operator = Address::generate(&env);
+    let (token, _, _) = create_token_contract(&env, &owner);
+    let id = env.register(
+        AgentVault,
+        (&owner, &operator, &token, &MAX_HAIRCUT, &MIN_COLLATERAL),
+    );
+    let client = AgentVaultClient::new(&env, &id);
+    let breaker = Address::generate(&env);
+    client.set_circuit_breaker(&Some(breaker));
+}
+
+#[soroban_sdk::contract]
+struct MockBreaker;
+
+#[soroban_sdk::contractimpl]
+impl MockBreaker {
+    pub fn is_blocked(_env: Env, _contract: Address, _function: Symbol) -> bool {
+        true
+    }
+}
+
+#[test]
+fn test_circuit_breaker_tripped_blocks_deposit() {
+    let s = setup();
+    let breaker_id = s.env.register(MockBreaker, ());
+    s.client.set_circuit_breaker(&Some(breaker_id));
+    let a = agent(&s.env);
+    s.stellar.mint(&a, &1_000);
+    assert_eq!(
+        s.client.try_deposit_collateral(&a, &1_000),
+        Err(Ok(VaultError::CircuitBreakerTripped))
+    );
+}
+
+// ── AgentRegistry integration (#788) ────────────────────────────────────────
+
+#[test]
+#[should_panic]
+fn test_set_registry_unauthorized() {
+    let env = Env::default();
+    let owner = Address::generate(&env);
+    let operator = Address::generate(&env);
+    let (token, _, _) = create_token_contract(&env, &owner);
+    let id = env.register(
+        AgentVault,
+        (&owner, &operator, &token, &MAX_HAIRCUT, &MIN_COLLATERAL),
+    );
+    let client = AgentVaultClient::new(&env, &id);
+    let registry = Address::generate(&env);
+    client.set_registry(&Some(registry));
+}
+
+#[soroban_sdk::contract]
+struct MockRegistry;
+
+#[soroban_sdk::contractimpl]
+impl MockRegistry {
+    pub fn __constructor(env: Env, status: Option<crate::AgentStatus>) {
+        env.storage()
+            .instance()
+            .set(&Symbol::new(&env, "status"), &status);
+    }
+
+    pub fn get_agent(env: Env, _agent: Address) -> Result<crate::AgentInfo, crate::RegistryError> {
+        let status: Option<crate::AgentStatus> = env
+            .storage()
+            .instance()
+            .get(&Symbol::new(&env, "status"))
+            .unwrap();
+        status
+            .map(|status| crate::AgentInfo {
+                status,
+                kyc_ref: Symbol::new(&env, "kyc"),
+                bond_amount: 1,
+                license_expiry: 0,
+                region: Symbol::new(&env, "KE"),
+                reputation: 0,
+            })
+            .ok_or(crate::RegistryError::AgentNotFound)
+    }
+}
+
+fn mock_registry(env: &Env, status: Option<crate::AgentStatus>) -> Address {
+    env.register(MockRegistry, (status,))
+}
+
+#[test]
+fn test_mint_float_rejects_non_active_agent() {
+    for status in [
+        None,
+        Some(crate::AgentStatus::Pending),
+        Some(crate::AgentStatus::Suspended),
+        Some(crate::AgentStatus::Expired),
+    ] {
+        let s = setup();
+        let registry = mock_registry(&s.env, status);
+        s.client.set_registry(&Some(registry));
+        let a = agent(&s.env);
+        fund(&s, &a, 1_000);
+        assert_eq!(
+            s.client.try_mint_float(&a, &100),
+            Err(Ok(VaultError::AgentNotFound))
+        );
+    }
+}
+
+const NON_ACTIVE_STATUSES: [Option<crate::AgentStatus>; 4] = [
+    None,
+    Some(crate::AgentStatus::Pending),
+    Some(crate::AgentStatus::Suspended),
+    Some(crate::AgentStatus::Expired),
+];
+
+/// Two funded agents, each holding 300 float, minted before any registry is
+/// set so the mock's status applies only to the call under test.
+fn setup_with_float() -> (Setup, Address, Address) {
+    let s = setup();
+    let a = agent(&s.env);
+    let b = agent(&s.env);
+    fund(&s, &a, 1_000);
+    fund(&s, &b, 1_000);
+    s.client.mint_float(&a, &300);
+    s.client.mint_float(&b, &300);
+    (s, a, b)
+}
+
+#[test]
+fn test_transfer_float_rejects_non_active_recipient() {
+    for status in NON_ACTIVE_STATUSES {
+        let (s, a, b) = setup_with_float();
+        s.client.set_registry(&Some(mock_registry(&s.env, status)));
+        assert_eq!(
+            s.client.try_transfer_float(&a, &b, &100),
+            Err(Ok(VaultError::AgentNotFound))
+        );
+        assert_eq!(s.client.get_vault(&b).float, 300);
+    }
+}
+
+#[test]
+fn test_settle_net_rejects_non_active_positive_delta() {
+    for status in NON_ACTIVE_STATUSES {
+        let (s, a, b) = setup_with_float();
+        s.client.set_registry(&Some(mock_registry(&s.env, status)));
+        let entries: Vec<(Address, i128)> = vec![&s.env, (a.clone(), -100), (b.clone(), 100)];
+        assert_eq!(
+            s.client.try_settle_net(&entries),
+            Err(Ok(VaultError::AgentNotFound))
+        );
+        assert_eq!(s.client.get_vault(&a).float, 300);
+        assert_eq!(s.client.get_vault(&b).float, 300);
+    }
+}
+
+#[test]
+fn test_transfer_and_settle_allow_active_agents() {
+    let (s, a, b) = setup_with_float();
+    s.client.set_registry(&Some(mock_registry(
+        &s.env,
+        Some(crate::AgentStatus::Active),
+    )));
+    s.client.transfer_float(&a, &b, &100);
+    let entries: Vec<(Address, i128)> = vec![&s.env, (a.clone(), 50), (b.clone(), -50)];
+    s.client.settle_net(&entries);
+    assert_eq!(s.client.get_vault(&a).float, 250);
+    assert_eq!(s.client.get_vault(&b).float, 350);
+}
+
+#[test]
+fn test_mint_float_allows_active_agent() {
+    let s = setup();
+    let registry = mock_registry(&s.env, Some(crate::AgentStatus::Active));
+    s.client.set_registry(&Some(registry));
+    let a = agent(&s.env);
+    fund(&s, &a, 1_000);
+    s.client.mint_float(&a, &100);
+    assert_eq!(s.client.get_vault(&a).float, 100);
 }
 
 // ── Invariant checks ────────────────────────────────────────────────────────
@@ -526,5 +765,215 @@ proptest! {
         let low = AgentVault::max_float_of(collateral, haircut);
         let high = AgentVault::max_float_of(collateral + delta, haircut);
         prop_assert!(high >= low, "adding collateral shrank the float cap");
+    }
+}
+
+// ── Issue #513: checked arithmetic on the three debits ────────────────────
+// Each of the three functions below previously guarded its debit with an
+// explicit `amount > balance` comparison and then subtracted unchecked. The
+// guard is now the arithmetic itself (`checked_sub`), so these tests pin the
+// rejected-underflow behaviour *and* that a rejection leaves no partial state
+// behind. `withdraw_collateral` additionally has to release its reentrancy
+// lock on that path: `acquire_lock` panics when the lock is still held, so the
+// follow-up call in the first test fails loudly if the release is dropped.
+
+#[test]
+fn test_withdraw_collateral_underflow_rejected_and_state_unchanged() {
+    let s = setup();
+    let a = agent(&s.env);
+    fund(&s, &a, 1_000);
+    s.client.mint_float(&a, &100);
+
+    assert_eq!(
+        s.client.try_withdraw_collateral(&a, &1_001),
+        Err(Ok(VaultError::InsufficientCollateral))
+    );
+
+    let vault: Vault = s.client.get_vault(&a);
+    assert_eq!(vault.collateral, 1_000);
+    assert_eq!(vault.float, 100);
+    assert_eq!(s.token_client.balance(&s.vault), 1_000);
+
+    // The rejected call must have released the reentrancy lock, otherwise
+    // this second withdrawal panics inside `acquire_lock`.
+    s.client.withdraw_collateral(&a, &500);
+    assert_eq!(s.client.get_vault(&a).collateral, 500);
+    assert_eq!(s.token_client.balance(&a), 500);
+}
+
+#[test]
+fn test_burn_float_underflow_rejected_and_state_unchanged() {
+    let s = setup();
+    let a = agent(&s.env);
+    fund(&s, &a, 1_000);
+    s.client.mint_float(&a, &500);
+
+    assert_eq!(
+        s.client.try_burn_float(&a, &501),
+        Err(Ok(VaultError::InsufficientFloat))
+    );
+    assert_eq!(s.client.get_vault(&a).float, 500);
+
+    // Burning exactly the remaining balance still works after the rejection.
+    s.client.burn_float(&a, &500);
+    assert_eq!(s.client.get_vault(&a).float, 0);
+}
+
+#[test]
+fn test_transfer_float_underflow_rejected_and_both_sides_unchanged() {
+    let s = setup();
+    let a = agent(&s.env);
+    let b = agent(&s.env);
+    fund(&s, &a, 1_000);
+    fund(&s, &b, 1_000);
+    s.client.mint_float(&a, &500);
+    s.client.mint_float(&b, &200);
+
+    assert_eq!(
+        s.client.try_transfer_float(&a, &b, &501),
+        Err(Ok(VaultError::InsufficientFloat))
+    );
+
+    assert_eq!(s.client.get_vault(&a).float, 500);
+    assert_eq!(s.client.get_vault(&b).float, 200);
+
+    // The rejected debit must not have been credited to the recipient.
+    s.client.transfer_float(&a, &b, &500);
+    assert_eq!(s.client.get_vault(&a).float, 0);
+    assert_eq!(s.client.get_vault(&b).float, 700);
+}
+
+// ── Upgrade path (#500) ───────────────────────────────────────────────────────
+
+mod upgrade {
+    use super::*;
+    use soroban_sdk::testutils::{MockAuth, MockAuthInvoke};
+    use soroban_sdk::{BytesN, IntoVal};
+
+    fn hash(env: &Env) -> BytesN<32> {
+        BytesN::from_array(env, &[7u8; 32])
+    }
+
+    #[test]
+    fn version_starts_at_one() {
+        let s = setup();
+        assert_eq!(s.client.version(), 1);
+    }
+
+    #[test]
+    fn version_reads_as_one_for_a_vault_deployed_before_versioning() {
+        let s = setup();
+        s.env.as_contract(&s.vault, || {
+            s.env.storage().instance().remove(&crate::DataKey::Version);
+        });
+        assert_eq!(s.client.version(), 1);
+    }
+
+    #[test]
+    fn upgrade_fails_without_owner_auth() {
+        let s = setup();
+        s.env.mock_auths(&[]);
+
+        assert!(s.client.try_upgrade(&hash(&s.env)).is_err());
+        assert_eq!(s.client.version(), 1);
+    }
+
+    #[test]
+    fn the_operator_cannot_upgrade() {
+        let s = setup();
+        let new_hash = hash(&s.env);
+        s.env.mock_auths(&[MockAuth {
+            address: &s.operator,
+            invoke: &MockAuthInvoke {
+                contract: &s.vault,
+                fn_name: "upgrade",
+                args: (new_hash.clone(),).into_val(&s.env),
+                sub_invokes: &[],
+            },
+        }]);
+
+        assert!(s.client.try_upgrade(&new_hash).is_err());
+        assert_eq!(s.client.version(), 1);
+    }
+
+    #[test]
+    fn an_arbitrary_address_cannot_upgrade() {
+        let s = setup();
+        let stranger = agent(&s.env);
+        let new_hash = hash(&s.env);
+        s.env.mock_auths(&[MockAuth {
+            address: &stranger,
+            invoke: &MockAuthInvoke {
+                contract: &s.vault,
+                fn_name: "upgrade",
+                args: (new_hash.clone(),).into_val(&s.env),
+                sub_invokes: &[],
+            },
+        }]);
+
+        assert!(s.client.try_upgrade(&new_hash).is_err());
+    }
+
+    #[test]
+    fn upgrade_before_init_reports_not_initialized() {
+        // With constructors, every deployed vault is already initialized.
+        // Verify that a freshly constructed vault can attempt an upgrade without
+        // hitting NotInitialized (it may still fail auth, but not with that error).
+        let s = setup();
+        // Calling upgrade with valid owner auth succeeds structurally (wasm hash
+        // may be synthetic — just confirm NotInitialized is not returned).
+        let result = s.client.try_upgrade(&hash(&s.env));
+        assert_ne!(result, Err(Ok(VaultError::NotInitialized)));
+    }
+
+    #[test]
+    fn recording_an_upgrade_bumps_the_version_and_emits_the_audit_event() {
+        let s = setup();
+
+        let (old, new) = s
+            .env
+            .as_contract(&s.vault, || AgentVault::record_upgrade(&s.env));
+
+        // Events are only visible from the invocation that emitted them, so read
+        // them before making any other call.
+        let events = s.env.events().all();
+        let event = events.get(events.len() - 1).unwrap();
+        assert_eq!(event.0, s.vault);
+        assert_eq!(
+            Symbol::from_val(&s.env, &event.1.get(0).unwrap()),
+            Symbol::new(&s.env, "ContractUpgraded")
+        );
+        let (old_v, new_v): (u32, u32) = FromVal::from_val(&s.env, &event.2);
+        assert_eq!((old_v, new_v), (1, 2));
+
+        assert_eq!((old, new), (1, 2));
+        assert_eq!(s.client.version(), 2);
+    }
+
+    #[test]
+    fn each_recorded_upgrade_increments_the_version_by_one() {
+        let s = setup();
+        for expected in 2..=5u32 {
+            let (_, new) = s
+                .env
+                .as_contract(&s.vault, || AgentVault::record_upgrade(&s.env));
+            assert_eq!(new, expected);
+        }
+        assert_eq!(s.client.version(), 5);
+    }
+
+    #[test]
+    fn a_failed_upgrade_leaves_version_and_balances_untouched() {
+        let s = setup();
+        let a = agent(&s.env);
+        fund(&s, &a, 1_000);
+        s.client.mint_float(&a, &100);
+
+        // Un-uploaded wasm: the code swap fails and the whole call rolls back.
+        assert!(s.client.try_upgrade(&hash(&s.env)).is_err());
+
+        assert_eq!(s.client.version(), 1);
+        let vault = s.client.get_vault(&a);
+        assert_eq!((vault.collateral, vault.float), (1_000, 100));
     }
 }

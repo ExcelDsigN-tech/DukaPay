@@ -1,7 +1,7 @@
 import { DukaPayError } from './errors.js';
 
 export interface HttpClientOptions {
-  /** API base URL, e.g. https://api.dukapay.io */
+  /** API base URL, e.g. https://your-backend.example */
   baseUrl: string;
   /** Static bearer token, or a function returning one (sync or async). */
   token?: string | (() => string | null | undefined | Promise<string | null | undefined>);

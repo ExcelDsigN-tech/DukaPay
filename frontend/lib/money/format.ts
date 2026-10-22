@@ -1,15 +1,15 @@
 /**
- * Cross-layer money policy — frontend implementation.
+ * Cross-layer money policy: frontend implementation.
  *
  * This module is the *only* sanctioned place in the frontend to format or
  * parse a stroop-denominated (`bigint`) amount. It mirrors
  * `contracts/money/src/lib.rs` (`round_div`) and `backend/src/money/decimal.ts`
  * (`roundDiv`) instruction-for-instruction so a displayed amount always
- * agrees with the settlement amount at full stroop precision — no `Number`
+ * agrees with the settlement amount at full stroop precision, with no `Number`
  * division is used anywhere in this file.
  *
  * Note: bigint literal syntax (`0n`) is deliberately avoided throughout this
- * file in favor of `BigInt(0)` — the frontend's `tsconfig.json` targets
+ * file in favor of `BigInt(0)`: the frontend's `tsconfig.json` targets
  * ES2017, and `tsc` rejects BigInt literals below ES2020 even though Node
  * itself would happily run them.
  *
@@ -48,7 +48,7 @@ export const STROOP_SCALE = SCALE;
 export const STROOP_DECIMALS = SCALE_DECIMALS;
 /** Default rounding mode every layer agrees on for settlement math. */
 export const DEFAULT_MODE = MODE as RoundingMode;
-/** Fractional digits used for *display only* — settlement always uses {@link STROOP_DECIMALS}. */
+/** Fractional digits used for *display only*; settlement always uses {@link STROOP_DECIMALS}. */
 export const DISPLAY_DECIMAL_PLACES = DISPLAY_DP;
 
 /** Divide `num` by `den`, applying `mode` to any remainder. No `Number` involved. */
@@ -118,8 +118,8 @@ export interface FormatStroopsOptions {
 /**
  * Format an exact stroop amount as a decimal string for display.
  *
- * Settlement precision ({@link STROOP_DECIMALS}) is never exceeded internally
- * — this only *truncates for presentation* using the policy's rounding mode,
+ * Settlement precision ({@link STROOP_DECIMALS}) is never exceeded internally:
+ * this only *truncates for presentation* using the policy's rounding mode,
  * it never mutates the underlying settlement value. Pass the returned string
  * to a UI label; never feed it back into a transaction (use
  * {@link parseAmount} on the original user input for that).

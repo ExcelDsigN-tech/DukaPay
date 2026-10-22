@@ -1,27 +1,13 @@
-// e2e coverage temporarily skipped: assertions rely on product wiring (wallet-connect state, /api/* mock paths, Zustand hydration) that has drifted from the current app. Restore file-by-file once the flows are re-aligned with the mocks.
 import { test, expect } from "@playwright/test";
+import { MOCK_ADDRESS, seedConnectedWallet, seedSignedInUser } from "./helpers/session";
 
-test.skip("opens recent transactions drawer with copied hashes", async ({ page }) => {
-  await page.addInitScript(() => {
-    window.localStorage.setItem(
-      "dukapay-user",
-      JSON.stringify({
-        state: {
-          authToken: "mock-token",
-          isAuthenticated: true,
-          user: {
-            id: "u1",
-            email: "borrower@example.com",
-            walletAddress: "GBORROWER",
-            kycVerified: true,
-          },
-        },
-        version: 0,
-      }),
-    );
-  });
+test("opens recent transactions drawer with copied hashes", async ({ page }) => {
+  // A connected wallet renders the app shell (with the header drawer button)
+  // instead of the landing page; the signed-in user enables the query.
+  await seedConnectedWallet(page);
+  await seedSignedInUser(page);
 
-  await page.route("**/api/v1/transactions/me**", async (route) => {
+  await page.route("**/api/transactions/me**", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -33,7 +19,7 @@ test.skip("opens recent transactions drawer with copied hashes", async ({ page }
             txHash: "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
             status: "SUCCESS",
             submittedAt: new Date().toISOString(),
-            submittedBy: "GBORROWER",
+            submittedBy: MOCK_ADDRESS,
             transactionType: "loan",
           },
         ],
@@ -44,6 +30,7 @@ test.skip("opens recent transactions drawer with copied hashes", async ({ page }
 
   await page.goto("/en");
   await page.getByRole("button", { name: /recent transactions/i }).click();
-  await expect(page.getByRole("dialog")).toContainText("Recent transactions");
-  await expect(page.getByText("SUCCESS")).toBeVisible();
+  const drawer = page.getByRole("dialog");
+  await expect(drawer).toContainText("Recent transactions");
+  await expect(drawer.getByText("SUCCESS")).toBeVisible();
 });

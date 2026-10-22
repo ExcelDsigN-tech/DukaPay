@@ -18,6 +18,10 @@ pub struct Config {
     pub batch_size: u32,
     /// Number of parallel workers draining the event channel.
     pub worker_concurrency: usize,
+    /// Retries after the initial attempt before a failed event is dead-lettered.
+    pub max_event_retries: u32,
+    /// NDJSON file used to durably record events that exhaust retries.
+    pub dead_letter_file: String,
     /// Bounded channel capacity between the fetcher and the workers.
     pub channel_capacity: usize,
     /// Optional shard config for horizontal scaling: (shard_index, shard_total).
@@ -35,9 +39,9 @@ pub struct Config {
 
 #[derive(Clone, Debug)]
 pub enum CheckpointBackend {
-    /// JSON file on a persistent volume — fine for single-replica deployments.
+    /// JSON file on a persistent volume, fine for single-replica deployments.
     File { path: String },
-    /// Postgres row per (shard, contract) — required for multi-replica.
+    /// Postgres row per (shard, contract), required for multi-replica.
     Postgres { url: String },
 }
 
@@ -135,6 +139,8 @@ impl Config {
             poll_interval: Duration::from_millis(parse("INDEXER_POLL_INTERVAL_MS", 3000u64)?),
             batch_size: parse("INDEXER_BATCH_SIZE", 200)?,
             worker_concurrency: parse("INDEXER_WORKER_CONCURRENCY", 8usize)?,
+            max_event_retries: parse("INDEXER_MAX_EVENT_RETRIES", 3u32)?,
+            dead_letter_file: env_or("INDEXER_DEAD_LETTER_FILE", "./dead-letter.ndjson"),
             channel_capacity: parse("INDEXER_CHANNEL_CAPACITY", 10_000usize)?,
             shard: (shard_index, shard_total),
             checkpoint,
@@ -163,5 +169,228 @@ impl Config {
             .filter(|c| self.owns_contract(c))
             .cloned()
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Mutex;
+
+    // All tests that mutate process env must hold this lock for their duration.
+    // Without it, parallel test threads race on env vars and flake.
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    /// Clear all INDEXER_* and STELLAR_RPC_URL vars, then set the given ones.
+    /// Holds `ENV_LOCK` for the entire operation so tests are serialized.
+    fn isolated_env<F: FnOnce() -> Result<Config>>(vars: &[(&str, &str)], f: F) -> Result<Config> {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+
+        let all_keys = [
+            "INDEXER_RPC_URL",
+            "STELLAR_RPC_URL",
+            "INDEXER_CONTRACT_IDS",
+            "INDEXER_SHARD_INDEX",
+            "INDEXER_SHARD_TOTAL",
+            "INDEXER_CHECKPOINT_DSN",
+            "DATABASE_URL",
+            "INDEXER_CHECKPOINT_FILE",
+            "INDEXER_SINK",
+            "INDEXER_SINK_FILE",
+            "INDEXER_KAFKA_BROKERS",
+            "INDEXER_KAFKA_TOPIC",
+            "INDEXER_FINALITY_DEPTH",
+            "INDEXER_POLL_INTERVAL_MS",
+            "INDEXER_BATCH_SIZE",
+            "INDEXER_WORKER_CONCURRENCY",
+            "INDEXER_MAX_EVENT_RETRIES",
+            "INDEXER_DEAD_LETTER_FILE",
+            "INDEXER_CHANNEL_CAPACITY",
+            "INDEXER_METRICS_PORT",
+            "INDEXER_LAG_ALERT_THRESHOLD",
+        ];
+
+        let saved: Vec<(String, Option<String>)> = all_keys
+            .iter()
+            .map(|k| (k.to_string(), std::env::var(k).ok()))
+            .collect();
+
+        for k in &all_keys {
+            // SAFETY: single-threaded by ENV_LOCK.
+            unsafe { std::env::remove_var(k) };
+        }
+        for (k, v) in vars {
+            // SAFETY: single-threaded by ENV_LOCK.
+            unsafe { std::env::set_var(k, v) };
+        }
+
+        let result = f();
+
+        for (k, prev) in &saved {
+            match prev {
+                Some(v) => unsafe { std::env::set_var(k, v) },
+                None => unsafe { std::env::remove_var(k) },
+            }
+        }
+
+        result
+    }
+
+    fn minimal_vars() -> Vec<(&'static str, &'static str)> {
+        vec![
+            ("INDEXER_RPC_URL", "https://soroban-testnet.stellar.org"),
+            ("INDEXER_CONTRACT_IDS", "CABC,CDEF"),
+        ]
+    }
+
+    // ── RPC URL resolution ────────────────────────────────────────────────────
+
+    #[test]
+    fn uses_indexer_rpc_url_when_set() {
+        let cfg = isolated_env(
+            &[
+                ("INDEXER_RPC_URL", "https://primary.example.com"),
+                ("STELLAR_RPC_URL", "https://fallback.example.com"),
+                ("INDEXER_CONTRACT_IDS", "CABC"),
+            ],
+            Config::from_env,
+        )
+        .unwrap();
+        assert_eq!(cfg.rpc_url, "https://primary.example.com");
+    }
+
+    #[test]
+    fn falls_back_to_stellar_rpc_url_when_indexer_rpc_url_absent() {
+        let cfg = isolated_env(
+            &[
+                ("STELLAR_RPC_URL", "https://fallback.stellar.org"),
+                ("INDEXER_CONTRACT_IDS", "CABC"),
+            ],
+            Config::from_env,
+        )
+        .unwrap();
+        assert_eq!(cfg.rpc_url, "https://fallback.stellar.org");
+    }
+
+    #[test]
+    fn fails_when_neither_rpc_url_is_set() {
+        let err = isolated_env(&[("INDEXER_CONTRACT_IDS", "CABC")], Config::from_env).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("INDEXER_RPC_URL") || msg.contains("STELLAR_RPC_URL"),
+            "unexpected error: {msg}"
+        );
+    }
+
+    // ── Required variables ────────────────────────────────────────────────────
+
+    #[test]
+    fn fails_when_contract_ids_missing() {
+        let err = isolated_env(
+            &[("INDEXER_RPC_URL", "https://soroban-testnet.stellar.org")],
+            Config::from_env,
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("INDEXER_CONTRACT_IDS"));
+    }
+
+    #[test]
+    fn fails_when_contract_ids_is_blank() {
+        let err = isolated_env(
+            &[
+                ("INDEXER_RPC_URL", "https://soroban-testnet.stellar.org"),
+                ("INDEXER_CONTRACT_IDS", "   "),
+            ],
+            Config::from_env,
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("INDEXER_CONTRACT_IDS"));
+    }
+
+    // ── Defaults ─────────────────────────────────────────────────────────────
+
+    #[test]
+    fn default_values_are_applied() {
+        let cfg = isolated_env(&minimal_vars(), Config::from_env).unwrap();
+        assert_eq!(cfg.finality_depth, 5);
+        assert_eq!(cfg.poll_interval, Duration::from_millis(3000));
+        assert_eq!(cfg.batch_size, 200);
+        assert_eq!(cfg.worker_concurrency, 8);
+        assert_eq!(cfg.max_event_retries, 3);
+        assert_eq!(cfg.channel_capacity, 10_000);
+        assert_eq!(cfg.metrics_port, 9464);
+        assert_eq!(cfg.lag_alert_threshold, 100);
+    }
+
+    #[test]
+    fn default_checkpoint_backend_is_file() {
+        let cfg = isolated_env(&minimal_vars(), Config::from_env).unwrap();
+        assert!(
+            matches!(cfg.checkpoint, CheckpointBackend::File { .. }),
+            "expected File checkpoint backend"
+        );
+    }
+
+    #[test]
+    fn default_sink_is_stdout() {
+        let cfg = isolated_env(&minimal_vars(), Config::from_env).unwrap();
+        assert!(matches!(cfg.sink, SinkBackend::Stdout));
+    }
+
+    #[test]
+    fn default_shard_is_0_of_1() {
+        let cfg = isolated_env(&minimal_vars(), Config::from_env).unwrap();
+        assert_eq!(cfg.shard, (0, 1));
+    }
+
+    // ── Invalid values ────────────────────────────────────────────────────────
+
+    #[test]
+    fn invalid_finality_depth_returns_error() {
+        let mut vars = minimal_vars();
+        vars.push(("INDEXER_FINALITY_DEPTH", "not_a_number"));
+        let err = isolated_env(&vars, Config::from_env).unwrap_err();
+        assert!(err.to_string().contains("INDEXER_FINALITY_DEPTH"));
+    }
+
+    #[test]
+    fn unknown_sink_returns_error() {
+        let mut vars = minimal_vars();
+        vars.push(("INDEXER_SINK", "grpc"));
+        let err = isolated_env(&vars, Config::from_env).unwrap_err();
+        assert!(err.to_string().contains("INDEXER_SINK"));
+    }
+
+    // ── Shard pod-name parsing ────────────────────────────────────────────────
+
+    #[test]
+    fn shard_index_parsed_from_pod_name() {
+        let mut vars = minimal_vars();
+        vars.push(("INDEXER_SHARD_INDEX", "dukapay-indexer-2"));
+        vars.push(("INDEXER_SHARD_TOTAL", "5"));
+        let cfg = isolated_env(&vars, Config::from_env).unwrap();
+        assert_eq!(cfg.shard, (2, 5));
+    }
+
+    #[test]
+    fn shard_index_must_be_less_than_total() {
+        let mut vars = minimal_vars();
+        vars.push(("INDEXER_SHARD_INDEX", "5"));
+        vars.push(("INDEXER_SHARD_TOTAL", "5"));
+        let err = isolated_env(&vars, Config::from_env).unwrap_err();
+        assert!(
+            err.to_string().contains("INDEXER_SHARD_INDEX")
+                || err.to_string().contains("INDEXER_SHARD_TOTAL")
+        );
+    }
+
+    // ── owns_contract / owned_contracts ──────────────────────────────────────
+
+    #[test]
+    fn single_shard_owns_all_contracts() {
+        let cfg = isolated_env(&minimal_vars(), Config::from_env).unwrap();
+        assert!(cfg.owns_contract("CABC"));
+        assert!(cfg.owns_contract("CDEF"));
+        assert_eq!(cfg.owned_contracts().len(), 2);
     }
 }

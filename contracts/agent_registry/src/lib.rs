@@ -6,14 +6,15 @@
 //! operator (the DukaPay deployment backend) can register/activate/suspend;
 //! the agent must authorize their own registration.
 
-use soroban_sdk::{contract, contracterror, contractimpl, contracttype, Address, Env, Symbol};
+use soroban_sdk::{
+    contract, contracterror, contractimpl, contracttype, Address, BytesN, Env, Symbol,
+};
 
 mod events;
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum RegistryError {
-    AlreadyInitialized = 1,
     NotInitialized = 2,
     Unauthorized = 3,
     AgentAlreadyRegistered = 4,
@@ -22,6 +23,7 @@ pub enum RegistryError {
     MissingKyc = 7,
     InvalidStatusTransition = 8,
     BondFrozen = 9,
+    LicenseExpired = 10,
 }
 
 #[contracttype]
@@ -52,6 +54,8 @@ pub enum DataKey {
     Owner,
     Operator,
     Agent(Address),
+    /// Monotonic contract version, bumped by [`AgentRegistry::upgrade`].
+    Version,
 }
 
 #[contract]
@@ -59,16 +63,39 @@ pub struct AgentRegistry;
 
 #[contractimpl]
 impl AgentRegistry {
-    pub fn init(env: Env, owner: Address, operator: Address) -> Result<(), RegistryError> {
-        if env.storage().instance().has(&DataKey::Owner) {
-            return Err(RegistryError::AlreadyInitialized);
-        }
+    /// Contract version written at `init` and incremented on every upgrade.
+    const CURRENT_VERSION: u32 = 1;
+    /// TTL constants mirroring agent_vault's bump pattern (#790).
+    const INSTANCE_TTL_THRESHOLD: u32 = 17_280;
+    const INSTANCE_TTL_BUMP: u32 = 518_400;
+    const PERSISTENT_TTL_THRESHOLD: u32 = 17_280;
+    const PERSISTENT_TTL_BUMP: u32 = 518_400;
+
+    fn bump_instance_ttl(env: &Env) {
+        env.storage()
+            .instance()
+            .extend_ttl(Self::INSTANCE_TTL_THRESHOLD, Self::INSTANCE_TTL_BUMP);
+    }
+
+    fn bump_persistent_ttl(env: &Env, key: &DataKey) {
+        env.storage().persistent().extend_ttl(
+            key,
+            Self::PERSISTENT_TTL_THRESHOLD,
+            Self::PERSISTENT_TTL_BUMP,
+        );
+    }
+
+    pub fn __constructor(env: Env, owner: Address, operator: Address) {
         env.storage().instance().set(&DataKey::Owner, &owner);
         env.storage().instance().set(&DataKey::Operator, &operator);
-        Ok(())
+        env.storage()
+            .instance()
+            .set(&DataKey::Version, &Self::CURRENT_VERSION);
+        Self::bump_instance_ttl(&env);
     }
 
     fn owner(env: &Env) -> Result<Address, RegistryError> {
+        Self::bump_instance_ttl(env);
         env.storage()
             .instance()
             .get(&DataKey::Owner)
@@ -76,6 +103,7 @@ impl AgentRegistry {
     }
 
     fn operator(env: &Env) -> Result<Address, RegistryError> {
+        Self::bump_instance_ttl(env);
         env.storage()
             .instance()
             .get(&DataKey::Operator)
@@ -88,16 +116,20 @@ impl AgentRegistry {
     }
 
     fn get_info(env: &Env, agent: &Address) -> Result<AgentInfo, RegistryError> {
-        env.storage()
+        let key = DataKey::Agent(agent.clone());
+        let info = env
+            .storage()
             .persistent()
-            .get(&DataKey::Agent(agent.clone()))
-            .ok_or(RegistryError::AgentNotFound)
+            .get(&key)
+            .ok_or(RegistryError::AgentNotFound)?;
+        Self::bump_persistent_ttl(env, &key);
+        Ok(info)
     }
 
     fn set_info(env: &Env, agent: &Address, info: &AgentInfo) {
-        env.storage()
-            .persistent()
-            .set(&DataKey::Agent(agent.clone()), info);
+        let key = DataKey::Agent(agent.clone());
+        env.storage().persistent().set(&key, info);
+        Self::bump_persistent_ttl(env, &key);
     }
 
     /// Operator registers an agent on behalf of the shop owner. The agent
@@ -136,6 +168,21 @@ impl AgentRegistry {
         Ok(())
     }
 
+    /// Checks shared by `activate` and `reinstate`: no active agent without
+    /// a bond, a kyc_ref, and a license that has not already lapsed (#789).
+    fn validate_eligible_for_active(env: &Env, info: &AgentInfo) -> Result<(), RegistryError> {
+        if info.kyc_ref == Symbol::new(env, "") {
+            return Err(RegistryError::MissingKyc);
+        }
+        if info.bond_amount <= 0 {
+            return Err(RegistryError::InvalidBond);
+        }
+        if info.license_expiry <= env.ledger().timestamp() {
+            return Err(RegistryError::LicenseExpired);
+        }
+        Ok(())
+    }
+
     /// Operator activates a Pending agent. Invariant: no active agent
     /// without a bond and a kyc_ref.
     pub fn activate(env: Env, agent: Address) -> Result<(), RegistryError> {
@@ -144,12 +191,39 @@ impl AgentRegistry {
         if info.status != AgentStatus::Pending {
             return Err(RegistryError::InvalidStatusTransition);
         }
-        if info.kyc_ref == Symbol::new(&env, "") {
-            return Err(RegistryError::MissingKyc);
+        Self::validate_eligible_for_active(&env, &info)?;
+        let from = info.status;
+        info.status = AgentStatus::Active;
+        Self::set_info(&env, &agent, &info);
+        events::agent_status_changed(&env, &agent, from, info.status);
+        Ok(())
+    }
+
+    /// Permissionless: moves an Active agent whose license has lapsed to
+    /// Expired. Anyone may call it since it only applies an already-true
+    /// fact; it is a no-op (well, an error) on any agent not currently
+    /// Active-and-lapsed (#789).
+    pub fn expire(env: Env, agent: Address) -> Result<(), RegistryError> {
+        let mut info = Self::get_info(&env, &agent)?;
+        if info.status != AgentStatus::Active || info.license_expiry > env.ledger().timestamp() {
+            return Err(RegistryError::InvalidStatusTransition);
         }
-        if info.bond_amount <= 0 {
-            return Err(RegistryError::InvalidBond);
+        let from = info.status;
+        info.status = AgentStatus::Expired;
+        Self::set_info(&env, &agent, &info);
+        events::agent_status_changed(&env, &agent, from, info.status);
+        Ok(())
+    }
+
+    /// Operator reinstates a Suspended agent back to Active, re-checking
+    /// the same eligibility `activate` requires (#789).
+    pub fn reinstate(env: Env, agent: Address) -> Result<(), RegistryError> {
+        Self::require_operator(&env)?;
+        let mut info = Self::get_info(&env, &agent)?;
+        if info.status != AgentStatus::Suspended {
+            return Err(RegistryError::InvalidStatusTransition);
         }
+        Self::validate_eligible_for_active(&env, &info)?;
         let from = info.status;
         info.status = AgentStatus::Active;
         Self::set_info(&env, &agent, &info);
@@ -175,8 +249,10 @@ impl AgentRegistry {
     pub fn set_reputation(env: Env, agent: Address, reputation: i128) -> Result<(), RegistryError> {
         Self::require_operator(&env)?;
         let mut info = Self::get_info(&env, &agent)?;
+        let old_reputation = info.reputation;
         info.reputation = reputation;
         Self::set_info(&env, &agent, &info);
+        events::reputation_updated(&env, &agent, old_reputation, reputation);
         Ok(())
     }
 
@@ -187,9 +263,14 @@ impl AgentRegistry {
         license_expiry: u64,
     ) -> Result<(), RegistryError> {
         Self::require_operator(&env)?;
+        if license_expiry <= env.ledger().timestamp() {
+            return Err(RegistryError::LicenseExpired);
+        }
         let mut info = Self::get_info(&env, &agent)?;
+        let old_expiry = info.license_expiry;
         info.license_expiry = license_expiry;
         Self::set_info(&env, &agent, &info);
+        events::license_renewed(&env, &agent, old_expiry, license_expiry);
         Ok(())
     }
 
@@ -210,7 +291,7 @@ impl AgentRegistry {
         Ok(())
     }
 
-    /// Operator withdraws an agent's bond. Frozen while the agent is Active —
+    /// Operator withdraws an agent's bond. Frozen while the agent is Active:
     /// a live agent must stay bonded. (The vault enforces float == 0 before
     /// releasing custody on the real USDC.)
     pub fn withdraw_bond(env: Env, agent: Address) -> Result<(), RegistryError> {
@@ -236,6 +317,31 @@ impl AgentRegistry {
 
     pub fn get_owner(env: Env) -> Result<Address, RegistryError> {
         Self::owner(&env)
+    }
+
+    /// Current contract version. Starts at [`Self::CURRENT_VERSION`] and is
+    /// bumped by each successful [`Self::upgrade`].
+    pub fn version(env: Env) -> u32 {
+        env.storage().instance().get(&DataKey::Version).unwrap_or(0)
+    }
+
+    /// Patch the contract in place, replacing the installed WASM with
+    /// `new_wasm_hash`. Owner-gated: state is preserved, so agent records,
+    /// bonds and KYC references survive the upgrade.
+    ///
+    /// Mirrors the lending-pool upgrade pattern: bump the stored version and
+    /// emit an event before handing control to the deployer, so the version a
+    /// reader sees always matches the WASM that will run next.
+    pub fn upgrade(env: Env, new_wasm_hash: BytesN<32>) -> Result<(), RegistryError> {
+        Self::owner(&env)?.require_auth();
+        let old_version = Self::version(env.clone());
+        let new_version = old_version.saturating_add(1);
+        env.storage()
+            .instance()
+            .set(&DataKey::Version, &new_version);
+        events::contract_upgraded(&env, old_version, new_version);
+        env.deployer().update_current_contract_wasm(new_wasm_hash);
+        Ok(())
     }
 }
 

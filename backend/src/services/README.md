@@ -81,8 +81,8 @@ npm test -- services/
 ### Related Documentation
 
 - [Event Indexer deep-dive](#event-indexer-service) (below)
-- [Indexer Recovery Runbook](../../docs/runbooks/indexer-recovery.md)
-- [Webhooks Guide](../../docs/webhooks.md)
+- [Indexer Recovery Runbook](../../../docs/runbooks/indexer-recovery.md)
+- [Webhooks Guide](../../../docs/webhooks.md)
 
 ---
 
@@ -502,13 +502,13 @@ The backend runs several scheduled background jobs to maintain system integrity 
 
 These services exist in the codebase but are **not currently started** in `index.ts`:
 
-- **`scoreDecayJob`** (`cron/scoreDecayJob.ts`) — Periodic credit score decay logic (not scheduled)
-- **`webhookRetryProcessor`** (`services/webhookRetryProcessor.ts`) — Alternative webhook retry implementation (superseded by `webhookRetryScheduler`)
+- **`scoreDecayJob`** (`cron/scoreDecayJob.ts`): Periodic credit score decay logic (not scheduled)
+- **`webhookRetryProcessor`** (`services/webhookRetryProcessor.ts`): Alternative webhook retry implementation (superseded by `webhookRetryScheduler`)
 
 ### Related Documentation
 
-- [Indexer Recovery Runbook](../../docs/runbooks/indexer-recovery.md) — Troubleshooting indexer lag and manual re-sync
-- [Webhooks Guide](../../docs/webhooks.md) — Webhook retry behavior and signature verification
+- [Indexer Recovery Runbook](../../../docs/runbooks/indexer-recovery.md): Troubleshooting indexer lag and manual re-sync
+- [Webhooks Guide](../../../docs/webhooks.md): Webhook retry behavior and signature verification
 
 ### Monitoring
 

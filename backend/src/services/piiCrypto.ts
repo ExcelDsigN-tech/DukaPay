@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
-import { pool } from '../db/connection.js';
+import pool from '../db/connection.js';
 import logger from '../utils/logger.js';
+import { env } from '../config/env.js';
 
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12;
@@ -38,15 +39,27 @@ export function onKeyRotationAlert(listener: KeyRotationListener): () => void {
 }
 
 function getKekId(): string {
-  return process.env.PII_KEK_ID ?? 'default-kek';
+  return env.PII_KEK_ID;
 }
 
 function getKmsEndpoint(): string {
-  return process.env.PII_KMS_ENDPOINT ?? '';
+  return env.PII_KMS_ENDPOINT;
 }
 
 function getKekKey(): Buffer {
-  const hex = process.env.PII_KEK_KEY ?? '0'.repeat(64);
+  const hex = env.PII_KEK_KEY;
+  if (!hex) {
+    throw new Error(
+      'PII_KEK_KEY environment variable is required. ' +
+        'Generate a 64-character hex key: openssl rand -hex 32',
+    );
+  }
+  if (!/^[0-9a-fA-F]{64}$/.test(hex)) {
+    throw new Error(
+      'PII_KEK_KEY must be a valid 64-character hex string. ' +
+        'Generate one with: openssl rand -hex 32',
+    );
+  }
   return Buffer.from(hex, 'hex');
 }
 
@@ -368,13 +381,11 @@ async function logPiiAccess(
   requestId: string,
 ): Promise<void> {
   try {
-    if (pool && typeof pool.query === 'function') {
-      await pool.query(
-        `INSERT INTO pii_access_log (id, actor, record_id, field, reason, request_id, created_at)
-         VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, NOW())`,
-        [actor, recordId, field, reason, requestId],
-      );
-    }
+    await pool.query(
+      `INSERT INTO pii_access_log (id, actor, record_id, field, reason, request_id, created_at)
+       VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, NOW())`,
+      [actor, recordId, field, reason, requestId],
+    );
   } catch (err) {
     // Audit logging failure should not leak PII in error messages
     logger.withContext().warn('Failed to insert PII access audit log', {

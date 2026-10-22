@@ -1,121 +1,156 @@
 import React from "react";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { screen, fireEvent, within, act } from "@testing-library/react";
+import { renderWithIntl } from "../../../test-utils/intl";
+import en from "../../../../messages/en.json";
 import { LandingPage } from "./LandingPage";
 
-// Inline English catalog so the test asserts against real display text.
-const EN: Record<string, string> = {
-  "hero.eyebrow": "Borderless Finance",
-  "hero.title": "Enter the Citadel",
-  "hero.tagline": "Lend, borrow, and move value across borders on the Stellar Network.",
-  "hero.cta": "Enter the Citadel",
-  "hero.subCta": "Connect Wallet",
-  "hero.telegram": "Join our Telegram",
-  "hero.telegramUrl": "https://t.me/+eRqhka27TVo0NzM8",
-  "hero.tvl": "$1.2B+",
-  "hero.tvlLabel": "Total Value Locked",
-  "hero.yield": "4.8%",
-  "hero.yieldLabel": "Avg. Yield",
-  "arsenal.eyebrow": "The DukaPay Arsenal",
-  "arsenal.title": "Everything You Need to Grow",
-  "arsenal.subtitle": "One platform. Three ways to put your capital to work.",
-  "arsenal.lendTitle": "Lend to Earn",
-  "arsenal.lendDesc": "Earn passive yield on deposited assets",
-  "arsenal.questsTitle": "Gamified Quests",
-  "arsenal.questsDesc": "Earn XP rewards for financial actions",
-  "arsenal.vaultsTitle": "Secure Vaults",
-  "arsenal.vaultsDesc": "Audited smart contract infrastructure",
-  "verified.eyebrow": "Verified Growth",
-  "verified.title": "Built to be trusted",
-  "verified.audit": "Certified",
-  "verified.auditDesc": "Audited by independent security firms",
-  "verified.stellarTitle": "Stellar Network",
-  "verified.stellarDesc": "Low fees, high-speed settlement, on-chain transparency",
-  "gates.eyebrow": "The Gates are Opening",
-  "gates.title": "Claim your place inside the Citadel",
-  "gates.subtitle": "Connect your wallet to claim access.",
-  "gates.cta": "Claim Access",
-};
+const L = en.Landing;
 
-jest.mock("next-intl", () => ({
-  useLocale: () => "en",
-  useTranslations: () => (key: string) => EN[key] ?? key,
-}));
+// The canvas floor, the animated diagram and the theme switch have their own concerns;
+// this suite covers the landing copy, the nav menus and the calls to action.
+jest.mock("./HeroFloor", () => ({ HeroFloor: () => null }));
+jest.mock("./HeroNetwork", () => ({ HeroNetwork: () => null }));
+jest.mock("../ui/ThemeToggle", () => ({ ThemeToggle: () => null }));
 
 describe("LandingPage", () => {
-  const mockOnConnect = jest.fn();
+  const onConnect = jest.fn();
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    onConnect.mockClear();
   });
 
-  it("renders the hero with brand, tagline, and social-proof metrics", () => {
-    render(<LandingPage onConnect={mockOnConnect} />);
+  const renderPage = () => renderWithIntl(<LandingPage onConnect={onConnect} />);
 
-    expect(screen.getByRole("heading", { name: "Enter the Citadel" })).toBeInTheDocument();
-    expect(screen.getByText(EN["hero.tagline"])).toBeInTheDocument();
-    expect(screen.getByText("$1.2B+")).toBeInTheDocument();
-    expect(screen.getByText("Total Value Locked")).toBeInTheDocument();
-    expect(screen.getByText("4.8%")).toBeInTheDocument();
-    expect(screen.getByText("Avg. Yield")).toBeInTheDocument();
+  it("renders the hero with headline, tagline and network status", () => {
+    renderPage();
+
+    expect(screen.getByRole("heading", { level: 1, name: L.hero.title })).toBeInTheDocument();
+    expect(screen.getByText(L.hero.tagline)).toBeInTheDocument();
+    expect(screen.getAllByText(L.hero.status).length).toBeGreaterThan(0);
   });
 
-  it("calls onConnect when the hero CTA is pressed", () => {
-    render(<LandingPage onConnect={mockOnConnect} />);
+  it("opens a nav menu on hover with a description and real app links", () => {
+    renderPage();
+    const nav = screen.getByRole("navigation", { name: L.nav.label });
+    const borrow = within(nav).getByRole("button", { name: L.nav.borrow });
 
-    const cta = screen.getByRole("button", {
-      name: EN["hero.cta"],
+    expect(borrow).toHaveAttribute("aria-expanded", "false");
+    fireEvent.mouseEnter(borrow.parentElement!);
+
+    expect(borrow).toHaveAttribute("aria-expanded", "true");
+    expect(within(nav).getByText(L.nav.borrowDesc)).toBeVisible();
+    expect(within(nav).getByRole("link", { name: L.nav.borrowRequest })).toHaveAttribute(
+      "href",
+      "/en/request-loan",
+    );
+    expect(within(nav).getByRole("link", { name: L.nav.borrowLoans })).toHaveAttribute(
+      "href",
+      "/en/loans",
+    );
+  });
+
+  it("toggles a nav menu on click and closes it with Escape", () => {
+    renderPage();
+    const nav = screen.getByRole("navigation", { name: L.nav.label });
+    const lend = within(nav).getByRole("button", { name: L.nav.lend });
+
+    fireEvent.click(lend);
+    expect(lend).toHaveAttribute("aria-expanded", "true");
+    expect(within(nav).getByRole("link", { name: L.nav.lendLiquidations })).toHaveAttribute(
+      "href",
+      "/en/liquidations",
+    );
+
+    act(() => {
+      fireEvent.keyDown(document, { key: "Escape" });
     });
-    fireEvent.click(cta);
-
-    expect(mockOnConnect).toHaveBeenCalledTimes(1);
+    expect(lend).toHaveAttribute("aria-expanded", "false");
   });
 
-  it("renders the DukaPay Arsenal feature suite", () => {
-    render(<LandingPage onConnect={mockOnConnect} />);
+  it("points every nav menu at pages that exist", () => {
+    renderPage();
+    const nav = screen.getByRole("navigation", { name: L.nav.label });
+    const hrefs = Array.from(nav.querySelectorAll("a")).map((a) => a.getAttribute("href"));
 
-    expect(
-      screen.getByRole("heading", { name: "Everything You Need to Grow" }),
-    ).toBeInTheDocument();
-    expect(screen.getByText("Lend to Earn")).toBeInTheDocument();
-    expect(screen.getByText(EN["arsenal.lendDesc"])).toBeInTheDocument();
-    expect(screen.getByText("Gamified Quests")).toBeInTheDocument();
-    expect(screen.getByText("Secure Vaults")).toBeInTheDocument();
+    expect(hrefs).toEqual([
+      "/en/request-loan",
+      "/en/loans",
+      "/en/send-remittance",
+      "/en/remittances",
+      "/en/wallet",
+      "/en/lend",
+      "/en/liquidations",
+      "/en/analytics",
+      "/en/kingdom",
+    ]);
   });
 
-  it("renders the Verified Growth trust section with Stellar callout", () => {
-    render(<LandingPage onConnect={mockOnConnect} />);
+  it("calls onConnect from the header, the hero and the Claim Access band", () => {
+    renderPage();
 
-    expect(screen.getByText("Verified Growth")).toBeInTheDocument();
-    expect(screen.getByText("Stellar Network")).toBeInTheDocument();
-    expect(screen.getByText(EN["verified.stellarDesc"])).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: L.nav.connect }));
+    fireEvent.click(screen.getAllByRole("button", { name: L.hero.cta })[0]);
+    fireEvent.click(screen.getByRole("button", { name: L.gates.cta }));
+
+    expect(onConnect).toHaveBeenCalledTimes(3);
   });
 
-  it("renders the closing Gates module and its Claim Access CTA calls onConnect", () => {
-    render(<LandingPage onConnect={mockOnConnect} />);
+  it("points How it works at the features section", () => {
+    renderPage();
 
-    expect(screen.getByText("The Gates are Opening")).toBeInTheDocument();
-    expect(
-      screen.getByRole("heading", { name: "Claim your place inside the Citadel" }),
-    ).toBeInTheDocument();
-
-    const claim = screen.getByRole("button", { name: "Claim Access" });
-    fireEvent.click(claim);
-
-    expect(mockOnConnect).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("link", { name: L.hero.howItWorks })).toHaveAttribute(
+      "href",
+      "#how-it-works",
+    );
+    expect(document.getElementById("how-it-works")).toBeInTheDocument();
   });
 
-  it("provides accessible, keyboard-focusable CTAs", () => {
-    render(<LandingPage onConnect={mockOnConnect} />);
+  it("renders every section from the Figma Landing", () => {
+    renderPage();
 
-    expect(screen.getByRole("button", { name: EN["hero.cta"] })).not.toBeDisabled();
-    expect(screen.getByRole("button", { name: "Claim Access" })).not.toBeDisabled();
+    for (const title of [L.features.title, L.kingdom.title, L.trust.title, L.gates.title]) {
+      expect(screen.getByRole("heading", { level: 2, name: title })).toBeInTheDocument();
+    }
+    expect(screen.getByRole("link", { name: L.features.loanLink })).toHaveAttribute(
+      "href",
+      "/en/request-loan",
+    );
+    expect(screen.getByRole("link", { name: L.features.agentLink })).toHaveAttribute(
+      "href",
+      "/en/agent/dashboard",
+    );
   });
 
-  it("renders a Telegram community link pointing to the group", () => {
-    render(<LandingPage onConnect={mockOnConnect} />);
+  it("labels product previews as samples and keeps their fake buttons out of the tab order", () => {
+    renderPage();
 
-    const telegram = screen.getByRole("link", { name: EN["hero.telegram"] });
-    expect(telegram).toHaveAttribute("href", EN["hero.telegramUrl"]);
-    expect(telegram).toHaveAttribute("target", "_blank");
+    for (const label of [L.features.previewLabel, L.kingdom.previewLabel, L.trust.previewLabel]) {
+      const preview = screen.getByRole("img", { name: label });
+      expect(within(preview).queryAllByRole("button")).toHaveLength(0);
+    }
+    expect(screen.getAllByText(/Sample values\./)).toHaveLength(3);
+  });
+
+  it("shows no audit claims or Telegram link", () => {
+    renderPage();
+
+    expect(screen.queryByText(/audit/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/telegram/i)).not.toBeInTheDocument();
+    expect(document.querySelector('a[href*="t.me"]')).toBeNull();
+  });
+
+  it("links the footer to the app and the GitHub repo", () => {
+    renderPage();
+    const footer = screen.getByRole("contentinfo");
+
+    expect(within(footer).getByRole("link", { name: L.footer.github })).toHaveAttribute(
+      "href",
+      "https://github.com/ExcelDsigN-tech/dukapay",
+    );
+    expect(within(footer).getByRole("link", { name: L.nav.lend })).toHaveAttribute(
+      "href",
+      "/en/lend",
+    );
+    expect(within(footer).getByText(L.footer.disclaimer)).toBeInTheDocument();
   });
 });

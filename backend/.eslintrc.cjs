@@ -25,8 +25,31 @@ module.exports = {
     'no-console': ['warn', { allow: ['warn', 'error'] }],
     '@typescript-eslint/no-explicit-any': 'warn',
     'no-constant-condition': 'off',
+    // Read configuration through the typed `env` from src/config/env.ts.
+    'no-restricted-properties': [
+      'error',
+      {
+        object: 'process',
+        property: 'env',
+        message: 'Use `env` from src/config/env.ts instead of process.env.',
+      },
+    ],
   },
   overrides: [
+    {
+      // src/config owns process.env; tests set it up as fixture input.
+      files: [
+        'src/config/**/*.ts',
+        '**/*.test.ts',
+        '**/*.spec.ts',
+        'src/tests/**/*.ts',
+        'src/**/__tests__/**/*.ts',
+        'scripts/**/*.ts',
+      ],
+      rules: {
+        'no-restricted-properties': 'off',
+      },
+    },
     {
       files: ['**/*.test.ts', '**/*.spec.ts', 'src/tests/**/*.ts', 'src/**/__tests__/**/*.ts'],
       rules: {
@@ -34,9 +57,27 @@ module.exports = {
       },
     },
     {
+      // scripts/*.ts are run by tsx and are intentionally outside the
+      // tsconfig.json `include` (which is src-only), so type-aware parsing
+      // cannot resolve them. Fall back to syntax-only parsing; the shared
+      // base rules (prettier, no-unused-vars, etc.) still apply.
+      files: ['scripts/**/*.ts'],
+      parserOptions: {
+        project: null,
+      },
+    },
+    {
       files: ['src/utils/demo*.ts'],
       rules: {
         'no-console': 'off',
+      },
+    },
+    {
+      // Request handlers must not query once per item (N+1); batch or use Promise.all.
+      files: ['src/controllers/**/*.ts', 'src/routes/**/*.ts'],
+      excludedFiles: ['**/*.test.ts', '**/__tests__/**'],
+      rules: {
+        'no-await-in-loop': 'error',
       },
     },
   ],

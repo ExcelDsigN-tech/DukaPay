@@ -6,7 +6,7 @@
  * real sound trigger, instead of being pulled into every bundle that
  * imports soundManager.ts's useSoundEffect() hook regardless of whether
  * the user ever plays a sound. Do not import this module directly from
- * components — use useSoundEffect() from ./soundManager instead.
+ * components; use useSoundEffect() from ./soundManager instead.
  */
 
 import type { SoundEffect } from "./soundManager";

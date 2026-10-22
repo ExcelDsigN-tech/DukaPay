@@ -3,7 +3,7 @@
 //! This crate is the single place where stroop-denominated `i128` amounts are
 //! divided, rounded, or split pro-rata. Every contract that touches a stroop
 //! quantity must route the conversion through [`round_div`] or
-//! [`split_pro_rata`] rather than using a bare `/` — that is what keeps this
+//! [`split_pro_rata`] rather than using a bare `/`: that is what keeps this
 //! crate's semantics, the backend's `decimal.ts`, and the frontend's
 //! generated formatter in lock-step (see `money-policy.json` at the repo
 //! root and `scripts/gen-money.ts`).
@@ -168,8 +168,8 @@ pub fn split_pro_rata(env: &Env, total: i128, weights: &Vec<i128>) -> Result<Vec
         return Err(MathError::DriftDetected);
     }
 
-    // Selection sort descending by remainder (n is expected to be small —
-    // pool participants / loan tranches — so O(n^2) is fine and avoids
+    // Selection sort descending by remainder (n is expected to be small:
+    // pool participants / loan tranches, so O(n^2) is fine and avoids
     // pulling in an allocator-backed sort).
     let remainder_count = remainders.len();
     let mut sorted: Vec<(u32, i128)> = Vec::new(env);

@@ -3,7 +3,7 @@
 //!
 //! Holds each agent's USDC collateral and tracks their on-chain float
 //! (stablecoin credit issued against that collateral). The solvency
-//! invariant: float <= collateral * haircut_bps / 10_000 at all times —
+//! invariant: float <= collateral * haircut_bps / 10_000 at all times:
 //! an agent can never be short against their own collateral. A global
 //! `min_collateral` floor keeps live agents meaningfully capitalised while
 //! any float is outstanding; full exit is only possible at float == 0.
@@ -14,7 +14,8 @@
 
 use soroban_sdk::token::Client as TokenClient;
 use soroban_sdk::{
-    contract, contractclient, contracterror, contractimpl, contracttype, Address, Env, Symbol, Vec,
+    contract, contractclient, contracterror, contractimpl, contracttype, Address, BytesN, Env,
+    Symbol, Vec,
 };
 
 mod events;
@@ -26,10 +27,55 @@ pub trait BreakerInterface {
     fn is_blocked(env: Env, contract: Address, function: Symbol) -> bool;
 }
 
+/// Mirrors agent_registry::AgentStatus field-for-field so cross-contract
+/// decoding matches exactly (#788).
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum AgentStatus {
+    Pending,
+    Active,
+    Suspended,
+    Expired,
+}
+
+/// Mirrors agent_registry::AgentInfo. Only `status` is read here, but the
+/// whole struct is decoded so the encoding matches the registry exactly.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AgentInfo {
+    pub status: AgentStatus,
+    pub kyc_ref: Symbol,
+    pub bond_amount: i128,
+    pub license_expiry: u64,
+    pub region: Symbol,
+    pub reputation: i128,
+}
+
+/// Mirrors agent_registry::RegistryError so a failed `get_agent` call (e.g.
+/// unregistered agent) decodes instead of panicking the vault call.
+#[contracterror]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum RegistryError {
+    NotInitialized = 2,
+    Unauthorized = 3,
+    AgentAlreadyRegistered = 4,
+    AgentNotFound = 5,
+    InvalidBond = 6,
+    MissingKyc = 7,
+    InvalidStatusTransition = 8,
+    BondFrozen = 9,
+}
+
+/// Interface exposed by the DukaPay `AgentRegistry` contract. The vault
+/// consults `get_agent` before minting new float (#788).
+#[contractclient(name = "RegistryClient")]
+pub trait RegistryInterface {
+    fn get_agent(env: Env, agent: Address) -> Result<AgentInfo, RegistryError>;
+}
+
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum VaultError {
-    AlreadyInitialized = 1,
     NotInitialized = 2,
     Unauthorized = 3,
     AgentNotFound = 4,
@@ -73,8 +119,13 @@ pub enum DataKey {
     /// Optional address of the DukaPay CircuitBreaker contract. When set, the
     /// vault consults it before executing value-moving operations.
     CircuitBreaker,
+    /// Optional address of the DukaPay AgentRegistry contract. When set, the
+    /// vault requires an Active status before minting new float (#788).
+    Registry,
     Vault(Address),
     ReentrancyLock,
+    /// Contract code version, bumped by every `upgrade`.
+    Version,
 }
 
 #[contract]
@@ -88,6 +139,9 @@ impl AgentVault {
     const PERSISTENT_TTL_THRESHOLD: u32 = 17_280;
     const PERSISTENT_TTL_BUMP: u32 = 518_400;
     const BATCH_MAX: u32 = 100;
+    /// Version of the code a freshly initialised vault runs. Vaults deployed
+    /// before versioning existed have no stored version and read as this too.
+    const INITIAL_VERSION: u32 = 1;
 
     // ── TTL helpers ───────────────────────────────────────────────────────
 
@@ -159,17 +213,46 @@ impl AgentVault {
         Ok(())
     }
 
+    /// Require that `agent` is registered and `Active` before minting new
+    /// float for them (#788). A no-op when no registry is configured, so
+    /// existing deployments stay backward compatible until they wire one in
+    /// via `set_registry`.
+    fn assert_agent_active(env: &Env, agent: &Address) -> Result<(), VaultError> {
+        if let Some(registry) = env
+            .storage()
+            .instance()
+            .get::<_, Option<Address>>(&DataKey::Registry)
+            .flatten()
+        {
+            let client = RegistryClient::new(env, &registry);
+            match client.try_get_agent(agent) {
+                Ok(Ok(info)) if info.status == AgentStatus::Active => Ok(()),
+                _ => Err(VaultError::AgentNotFound),
+            }
+        } else {
+            Ok(())
+        }
+    }
+
     fn acquire_lock(env: &Env) -> Result<(), VaultError> {
-        let locked: bool = env.storage().instance().get(&DataKey::ReentrancyLock).unwrap_or(false);
+        let locked: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::ReentrancyLock)
+            .unwrap_or(false);
         if locked {
             panic!("reentrancy guard triggered");
         }
-        env.storage().instance().set(&DataKey::ReentrancyLock, &true);
+        env.storage()
+            .instance()
+            .set(&DataKey::ReentrancyLock, &true);
         Ok(())
     }
 
     fn release_lock(env: &Env) {
-        env.storage().instance().set(&DataKey::ReentrancyLock, &false);
+        env.storage()
+            .instance()
+            .set(&DataKey::ReentrancyLock, &false);
     }
 
     fn read_vault(env: &Env, agent: &Address) -> Vault {
@@ -205,24 +288,21 @@ impl AgentVault {
 
     // ── Lifecycle ─────────────────────────────────────────────────────────
 
-    /// One-time init. `max_haircut_bps` must be in `1..=10_000`;
+    /// Constructor. `max_haircut_bps` must be in `1..=10_000`;
     /// `min_collateral` must be non-negative.
-    pub fn init(
+    pub fn __constructor(
         env: Env,
         owner: Address,
         operator: Address,
         token: Address,
         max_haircut_bps: u32,
         min_collateral: i128,
-    ) -> Result<(), VaultError> {
-        if env.storage().instance().has(&DataKey::Owner) {
-            return Err(VaultError::AlreadyInitialized);
-        }
+    ) {
         if max_haircut_bps == 0 || max_haircut_bps > 10_000 {
-            return Err(VaultError::InvalidParams);
+            panic!("invalid max_haircut_bps");
         }
         if min_collateral < 0 {
-            return Err(VaultError::InvalidParams);
+            panic!("invalid min_collateral");
         }
         env.storage().instance().set(&DataKey::Owner, &owner);
         env.storage().instance().set(&DataKey::Operator, &operator);
@@ -234,8 +314,45 @@ impl AgentVault {
                 min_collateral,
             },
         );
+        env.storage()
+            .instance()
+            .set(&DataKey::Version, &Self::INITIAL_VERSION);
         Self::bump_instance_ttl(&env);
+    }
+
+    // ── Upgrades ──────────────────────────────────────────────────────────
+
+    /// Contract code version: starts at 1 and increases by one on every
+    /// `upgrade`. Lets operators and indexers tell which code a vault runs.
+    pub fn version(env: Env) -> u32 {
+        Self::bump_instance_ttl(&env);
+        env.storage()
+            .instance()
+            .get(&DataKey::Version)
+            .unwrap_or(Self::INITIAL_VERSION)
+    }
+
+    /// Replace the vault's code with the uploaded WASM `new_wasm_hash`,
+    /// keeping all storage (collateral, float, params) in place. Owner only.
+    ///
+    /// Emits `ContractUpgraded (old_version, new_version)`, the same event the
+    /// other DukaPay contracts emit, so the upgrade is auditable on-chain.
+    pub fn upgrade(env: Env, new_wasm_hash: BytesN<32>) -> Result<(), VaultError> {
+        Self::owner(&env)?.require_auth();
+        Self::record_upgrade(&env);
+        env.deployer().update_current_contract_wasm(new_wasm_hash);
         Ok(())
+    }
+
+    /// Bump the stored version and announce it. Returns `(old, new)`.
+    fn record_upgrade(env: &Env) -> (u32, u32) {
+        let old_version = Self::version(env.clone());
+        let new_version = old_version.saturating_add(1);
+        env.storage()
+            .instance()
+            .set(&DataKey::Version, &new_version);
+        events::contract_upgraded(env, old_version, new_version);
+        (old_version, new_version)
     }
 
     // ── Collateral ────────────────────────────────────────────────────────
@@ -283,11 +400,19 @@ impl AgentVault {
         let token = Self::token(&env)?;
         let params = Self::params(&env)?;
         let mut vault = Self::read_vault(&env, &agent);
-        if amount > vault.collateral {
-            Self::release_lock(&env);
-            return Err(VaultError::InsufficientCollateral);
-        }
-        let remaining = vault.collateral - amount;
+        // Checked arithmetic (issue #513): the debit is its own underflow
+        // guard: `checked_sub` returns `None` on underflow, and the remainder
+        // is additionally required to stay non-negative, because a vault
+        // balance below zero is never a valid state regardless of how the
+        // subtraction behaved. The reentrancy lock still has to be released on
+        // this path, which is why it cannot use a bare `.ok_or(...)?`.
+        let remaining = match vault.collateral.checked_sub(amount) {
+            Some(remaining) if remaining >= 0 => remaining,
+            _ => {
+                Self::release_lock(&env);
+                return Err(VaultError::InsufficientCollateral);
+            }
+        };
         if vault.float > 0 {
             if remaining < params.min_collateral {
                 Self::release_lock(&env);
@@ -313,6 +438,7 @@ impl AgentVault {
     pub fn mint_float(env: Env, agent: Address, amount: i128) -> Result<(), VaultError> {
         Self::require_operator(&env)?;
         Self::assert_circuit_ok(&env, Symbol::new(&env, "mint_float"))?;
+        Self::assert_agent_active(&env, &agent)?;
         if amount <= 0 {
             return Err(VaultError::InvalidAmount);
         }
@@ -338,10 +464,12 @@ impl AgentVault {
             return Err(VaultError::InvalidAmount);
         }
         let mut vault = Self::read_vault(&env, &agent);
-        if amount > vault.float {
-            return Err(VaultError::InsufficientFloat);
-        }
-        vault.float -= amount;
+        // Checked arithmetic (issue #513): underflow is rejected by the debit
+        // itself, and the stored float is never allowed to go negative.
+        vault.float = match vault.float.checked_sub(amount) {
+            Some(remaining) if remaining >= 0 => remaining,
+            _ => return Err(VaultError::InsufficientFloat),
+        };
         Self::write_vault(&env, &agent, &vault);
         events::float_burned(&env, &agent, amount, vault.float);
         Ok(())
@@ -368,14 +496,19 @@ impl AgentVault {
         from.require_auth();
         to.require_auth();
         Self::assert_circuit_ok(&env, Symbol::new(&env, "transfer_float"))?;
+        Self::assert_agent_active(&env, &to)?;
         if amount <= 0 {
             return Err(VaultError::InvalidAmount);
         }
         let mut from_vault = Self::read_vault(&env, &from);
         let mut to_vault = Self::read_vault(&env, &to);
-        if amount > from_vault.float {
-            return Err(VaultError::InsufficientFloat);
-        }
+        // Checked arithmetic (issue #513): the sender's debit is the underflow
+        // guard, and the sender's float is never allowed to go negative, so a
+        // rejected transfer cannot leave the pair half-applied.
+        let from_float = match from_vault.float.checked_sub(amount) {
+            Some(remaining) if remaining >= 0 => remaining,
+            _ => return Err(VaultError::InsufficientFloat),
+        };
         let to_float = to_vault
             .float
             .checked_add(amount)
@@ -383,12 +516,23 @@ impl AgentVault {
         if to_float > Self::max_float_of(to_vault.collateral, to_vault.haircut_bps) {
             return Err(VaultError::SolvencyViolated);
         }
-        from_vault.float -= amount;
+        from_vault.float = from_float;
         to_vault.float = to_float;
         Self::write_vault(&env, &from, &from_vault);
         Self::write_vault(&env, &to, &to_vault);
         events::float_transferred(&env, &from, &to, amount);
         Ok(())
+    }
+
+    /// Agent-to-agent float transfer entrypoint (Soroban cross-agent liquidity).
+    /// Atomic float transfer between agents. Both initiator and recipient must authorise.
+    pub fn transfer_to_agent(
+        env: Env,
+        from: Address,
+        to: Address,
+        amount: i128,
+    ) -> Result<(), VaultError> {
+        Self::transfer_float(env, from, to, amount)
     }
 
     /// Operator nets end-of-day positions. `entries` is a list of
@@ -411,6 +555,9 @@ impl AgentVault {
         for entry in entries.iter() {
             let agent = entry.0;
             let delta = entry.1;
+            if delta > 0 {
+                Self::assert_agent_active(&env, &agent)?;
+            }
             let mut vault = Self::read_vault(&env, &agent);
             let new_float = vault
                 .float
@@ -448,6 +595,25 @@ impl AgentVault {
         vault.haircut_bps = new_haircut_bps;
         Self::write_vault(&env, &agent, &vault);
         events::haircut_updated(&env, &agent, old, new_haircut_bps);
+        Ok(())
+    }
+
+    /// Configure (or clear) the `CircuitBreaker` contract address.
+    /// Admin only.
+    pub fn set_circuit_breaker(env: Env, breaker: Option<Address>) -> Result<(), VaultError> {
+        Self::owner(&env)?.require_auth();
+        env.storage()
+            .instance()
+            .set(&DataKey::CircuitBreaker, &breaker);
+        Self::bump_instance_ttl(&env);
+        Ok(())
+    }
+
+    /// Configure (or clear) the `AgentRegistry` contract address. Owner only.
+    pub fn set_registry(env: Env, registry: Option<Address>) -> Result<(), VaultError> {
+        Self::owner(&env)?.require_auth();
+        env.storage().instance().set(&DataKey::Registry, &registry);
+        Self::bump_instance_ttl(&env);
         Ok(())
     }
 
