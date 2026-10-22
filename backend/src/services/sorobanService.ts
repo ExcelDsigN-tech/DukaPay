@@ -9,6 +9,7 @@ import {
   StrKey,
   Keypair,
   authorizeEntry,
+  xdr,
 } from '@stellar/stellar-sdk';
 import logger from '../utils/logger.js';
 import { AppError } from '../errors/AppError.js';
@@ -171,7 +172,7 @@ class SorobanService {
   }
 
   private getAgentRegistryContractId(): string {
-    const contractId = process.env.AGENT_REGISTRY_CONTRACT_ID;
+    const contractId = env.AGENT_REGISTRY_CONTRACT_ID;
     if (!contractId) {
       throw AppError.internal('AGENT_REGISTRY_CONTRACT_ID is not configured');
     }
@@ -199,7 +200,7 @@ class SorobanService {
       .build();
     const prepared = await server.prepareTransaction(tx);
     if (authorizeOperator) {
-      const operatorSecret = process.env.AGENT_OPERATOR_SECRET?.trim();
+      const operatorSecret = env.AGENT_OPERATOR_SECRET?.trim();
       if (!operatorSecret) {
         throw AppError.internal('AGENT_OPERATOR_SECRET is not configured');
       }
@@ -211,24 +212,39 @@ class SorobanService {
         throw AppError.internal('AGENT_OPERATOR_SECRET is invalid');
       }
 
-      const configuredOperator = process.env.AGENT_OPERATOR_PUBLIC_KEY?.trim();
+      const configuredOperator = env.AGENT_OPERATOR_PUBLIC_KEY?.trim();
       if (configuredOperator && configuredOperator !== operator.publicKey()) {
         throw AppError.internal('AGENT_OPERATOR_SECRET does not match AGENT_OPERATOR_PUBLIC_KEY');
       }
 
+      // Sign the operator's auth entries in the envelope itself; the decoded
+      // `prepared.operations` are copies and would not change the XDR.
       const latestLedger = await server.getLatestLedger();
-      for (const operation of prepared.operations()) {
-        if (typeof operation.auth !== 'function') continue;
-        const authEntries = operation.auth();
-        const signedEntries = await Promise.all(
-          authEntries.map(async (entry) => {
-            const address = Address.fromScVal(entry.credentials().address().address()).toString();
-            if (address !== operator.publicKey()) return entry;
-            return authorizeEntry(entry, operator, latestLedger.sequence + 100, passphrase);
-          }),
-        );
-        operation.auth(signedEntries);
-      }
+      const envelope = prepared.toEnvelope();
+      const ops = envelope.v1().tx().operations();
+      await Promise.all(
+        ops.map(async (op) => {
+          if (op.body().switch() !== xdr.OperationType.invokeHostFunction()) return;
+          const invoke = op.body().invokeHostFunctionOp();
+          const signedEntries = await Promise.all(
+            invoke.auth().map(async (entry) => {
+              if (
+                entry.credentials().switch() !==
+                xdr.SorobanCredentialsType.sorobanCredentialsAddress()
+              ) {
+                return entry;
+              }
+              const address = Address.fromScAddress(
+                entry.credentials().address().address(),
+              ).toString();
+              if (address !== operator.publicKey()) return entry;
+              return authorizeEntry(entry, operator, latestLedger.sequence + 100, passphrase);
+            }),
+          );
+          invoke.auth(signedEntries);
+        }),
+      );
+      return { unsignedTxXdr: envelope.toXDR('base64'), networkPassphrase: passphrase };
     }
     return { unsignedTxXdr: prepared.toXDR(), networkPassphrase: passphrase };
   }

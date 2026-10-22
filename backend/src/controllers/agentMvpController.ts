@@ -5,6 +5,7 @@ import { sorobanService } from '../services/sorobanService.js';
 import { AppError } from '../errors/AppError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { query } from '../db/connection.js';
+import { env } from '../config/env.js';
 
 function publicKey(value: unknown, field: string): string {
   if (typeof value !== 'string' || !StrKey.isValidEd25519PublicKey(value)) {
@@ -34,7 +35,7 @@ function requireSelf(req: Request, target: string): void {
 }
 
 function requireOperator(req: Request): string {
-  const operator = process.env.AGENT_OPERATOR_PUBLIC_KEY?.trim();
+  const operator = env.AGENT_OPERATOR_PUBLIC_KEY?.trim();
   if (!operator) {
     throw AppError.internal('AGENT_OPERATOR_PUBLIC_KEY is not configured');
   }
@@ -44,9 +45,11 @@ function requireOperator(req: Request): string {
   return operator;
 }
 
+// The registry requires operator auth on `register` so the operator vets each
+// agent. Only the operator builds it; the agent then signs the returned XDR.
 export const registerAgent = asyncHandler(async (req: Request, res: Response) => {
-  const agent = publicKey(req.body.agentPublicKey ?? req.user?.publicKey, 'agentPublicKey');
-  requireSelf(req, agent);
+  requireOperator(req);
+  const agent = publicKey(req.body.agentPublicKey, 'agentPublicKey');
   const kycRef = typeof req.body.kycRef === 'string' ? req.body.kycRef.trim() : '';
   const region = typeof req.body.region === 'string' ? req.body.region.trim() : '';
   if (!kycRef || !region || kycRef.length > 32 || region.length > 16) {
@@ -120,7 +123,7 @@ export const getPublicSolvency = asyncHandler(async (_req: Request, res: Respons
   const agents = result.rows.map((row) => {
     const collateralStroops = BigInt(String(row.collateral_balance ?? 0));
     const floatStroops = BigInt(String(row.float_balance ?? 0));
-    const haircutBps = BigInt(String(row.haircut_bps ?? 10_000));
+    const haircutBps = BigInt(String(row.haircut_bps ?? 0));
     const maxAllowedStroops = (collateralStroops * haircutBps) / 10_000n;
     const collateral = stroopsToAmount(collateralStroops);
     const float = stroopsToAmount(floatStroops);
@@ -146,7 +149,7 @@ export const getPublicSolvency = asyncHandler(async (_req: Request, res: Respons
   const totalFloat = stroopsToAmount(totalFloatStroops);
   const totalMaxAllowedStroops = result.rows.reduce((sum, row) => {
     const collateral = BigInt(String(row.collateral_balance ?? 0));
-    const haircut = BigInt(String(row.haircut_bps ?? 10_000));
+    const haircut = BigInt(String(row.haircut_bps ?? 0));
     return sum + (collateral * haircut) / 10_000n;
   }, 0n);
   res.json({

@@ -70,7 +70,7 @@ router.post('/submit', requireJwtAuth, submitAgentTransaction);
  * @swagger
  * /agents/register:
  *   post:
- *     summary: Build an agent registration transaction
+ *     summary: Build an operator-approved agent registration transaction for the agent to sign
  *     tags: [Agents]
  *     security:
  *       - BearerAuth: []
@@ -90,8 +90,9 @@ router.post('/submit', requireJwtAuth, submitAgentTransaction);
  *     responses:
  *       200: { description: Unsigned registration transaction }
  *       400: { description: Invalid registration data }
+ *       403: { description: Configured operator required }
  */
-router.post('/register', requireJwtAuth, registerAgent);
+router.post('/register', requireJwtAuth, requireRole('admin'), registerAgent);
 
 /**
  * @swagger
