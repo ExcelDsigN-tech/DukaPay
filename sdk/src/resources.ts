@@ -31,6 +31,7 @@ import type {
 import { ValidationError } from './errors.js';
 import {
   validateStellarAddress,
+  validateContractAddress,
   validateAmount,
   validatePositiveInt,
   validateTokenAmount,
@@ -316,17 +317,21 @@ export class PoolResource {
   }
 
   /**
-   * Builds the emergency withdraw transaction for a pool and returns the
+   * Builds the emergency withdraw transaction for a depositor and returns the
    * unsigned XDR for signing.
    *
-   * `amount` is in whole tokens (e.g. `100.0` USDC, up to 7 decimal places);
-   * the API converts it to stroops. `token` is the asset code or address.
-   * `from` must be a valid Stellar address.
+   * `shares` is in whole tokens (up to 7 decimal places); the API converts it
+   * to stroops. `token` is the pool token's contract address (C...).
+   * `depositorPublicKey` must match the authenticated wallet.
    */
-  buildEmergencyWithdraw(params: { token: string; amount: string; from: string }): Promise<UnsignedTransaction> {
-    validateStellarAddress(params.token, 'token');
-    validateAmount(params.amount, 'amount');
-    validateStellarAddress(params.from, 'from');
+  buildEmergencyWithdraw(params: {
+    depositorPublicKey: string;
+    token: string;
+    shares: number;
+  }): Promise<UnsignedTransaction> {
+    validateStellarAddress(params.depositorPublicKey, 'depositorPublicKey');
+    validateContractAddress(params.token, 'token');
+    validateTokenAmount(params.shares, 'shares');
     return this.http.post('/pool/build-emergency-withdraw', params);
   }
 }
