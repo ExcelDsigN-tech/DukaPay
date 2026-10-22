@@ -1,5 +1,5 @@
 import { describe, it, expect, afterAll, beforeEach, jest } from '@jest/globals';
-import { query } from '../../db/connection.js';
+import { closePool, query } from '../../db/connection.js';
 
 // The locking and claim logic only means something against a real Postgres,
 // so this suite is gated like the other DB-backed integration suites.
@@ -37,7 +37,6 @@ describeIfDb('Integration: agent float transfer concurrency against real schema'
       AGENT_A,
       AGENT_B,
     ]);
-    await query(`DELETE FROM audit_logs WHERE actor = ANY($1::text[])`, [actors]);
   };
 
   const setPairLimits = async (dailyLimit: number, weeklyLimit: number) => {
@@ -50,7 +49,10 @@ describeIfDb('Integration: agent float transfer concurrency against real schema'
     );
   };
 
-  afterAll(cleanup);
+  afterAll(async () => {
+    await cleanup();
+    await closePool();
+  });
   beforeEach(async () => {
     mockBuildTransferToAgentTx.mockClear();
     await cleanup();
@@ -71,9 +73,7 @@ describeIfDb('Integration: agent float transfer concurrency against real schema'
     );
 
     const fulfilled = results.filter((r) => r.status === 'fulfilled');
-    const rejected = results.filter(
-      (r): r is PromiseRejectedResult => r.status === 'rejected',
-    );
+    const rejected = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
 
     // 1000 daily limit / 300 per transfer: exactly three can pass.
     expect(fulfilled).toHaveLength(3);

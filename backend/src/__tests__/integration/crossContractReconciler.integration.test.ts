@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach } from '@jest/globals';
-import { query } from '../../db/connection.js';
+import { closePool, query } from '../../db/connection.js';
 import { crossContractReconciler } from '../../services/crossContractReconciler.js';
 
 // The reconciler SQL only runs against a migrated Postgres, so this suite is
@@ -20,7 +20,10 @@ describeIfDb('Integration: crossContractReconciler against real schema', () => {
 
   beforeAll(cleanup);
   afterEach(cleanup);
-  afterAll(cleanup);
+  afterAll(async () => {
+    await cleanup();
+    await closePool();
+  });
 
   it('backfills a LoanRepaid event, matches its ScoreUpdated event, and is idempotent on re-run', async () => {
     await query(
