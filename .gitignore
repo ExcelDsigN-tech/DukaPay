@@ -17,9 +17,7 @@ create_issues.sh
 issue.md
 pr.md
 checks.md
-# Local Claude Code state stays ignored; shared skills are committed.
-.claude/*
-!.claude/skills/
+.claude
 .kiro/
 
 # Teacher-only bug-hunt answer key (never commit)
