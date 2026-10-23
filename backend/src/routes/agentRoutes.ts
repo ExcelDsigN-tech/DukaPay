@@ -20,8 +20,195 @@ import {
   getAgentDashboard,
   clearAgentDashboardCache,
 } from '../controllers/agentDashboardController.js';
+import {
+  registerAgent,
+  activateAgent,
+  topUpAgentBond,
+  buildAgentVaultAction,
+  getPublicSolvency,
+  submitAgentTransaction,
+} from '../controllers/agentMvpController.js';
 
 const router = Router();
+
+/**
+ * @swagger
+ * /agents/solvency:
+ *   get:
+ *     summary: Get the public solvency projection for active agents
+ *     tags: [Agents]
+ *     responses:
+ *       200:
+ *         description: Solvency projection
+ */
+router.get('/solvency', getPublicSolvency);
+
+/**
+ * @swagger
+ * /agents/submit:
+ *   post:
+ *     summary: Submit a wallet-signed agent transaction
+ *     tags: [Agents]
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [signedTxXdr]
+ *             properties:
+ *               signedTxXdr: { type: string }
+ *     responses:
+ *       200: { description: Transaction submitted }
+ *       400: { description: Invalid transaction or failed submission }
+ */
+router.post('/submit', requireJwtAuth, submitAgentTransaction);
+
+/**
+ * @swagger
+ * /agents/register:
+ *   post:
+ *     summary: Build an operator-approved agent registration transaction for the agent to sign
+ *     tags: [Agents]
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [agentPublicKey, kycRef, region, bond, licenseExpiry]
+ *             properties:
+ *               agentPublicKey: { type: string }
+ *               kycRef: { type: string, maxLength: 32 }
+ *               region: { type: string, maxLength: 16 }
+ *               bond: { type: string }
+ *               licenseExpiry: { type: integer, format: int64 }
+ *     responses:
+ *       200: { description: Unsigned registration transaction }
+ *       400: { description: Invalid registration data }
+ *       403: { description: Configured operator required }
+ */
+router.post('/register', requireJwtAuth, requireRole('admin'), registerAgent);
+
+/**
+ * @swagger
+ * /agents/{agentPublicKey}/activate:
+ *   post:
+ *     summary: Build an operator-signed activation transaction
+ *     tags: [Agents]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: agentPublicKey
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: Unsigned activation transaction }
+ *       403: { description: Configured operator required }
+ */
+router.post('/:agentPublicKey/activate', requireJwtAuth, requireRole('admin'), activateAgent);
+
+/**
+ * @swagger
+ * /agents/{agentPublicKey}/top-up-bond:
+ *   post:
+ *     summary: Build an operator-signed bond top-up transaction
+ *     tags: [Agents]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: agentPublicKey
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [amount]
+ *             properties:
+ *               amount: { type: string }
+ *     responses:
+ *       200: { description: Unsigned bond top-up transaction }
+ *       403: { description: Configured operator required }
+ */
+router.post('/:agentPublicKey/top-up-bond', requireJwtAuth, requireRole('admin'), topUpAgentBond);
+
+/**
+ * @swagger
+ * /agents/vault/deposit-collateral:
+ *   post:
+ *     summary: Build a collateral deposit transaction
+ *     tags: [Agents]
+ *     security: [{ BearerAuth: [] }]
+ *     responses:
+ *       200: { description: Unsigned transaction }
+ */
+router.post(
+  '/vault/deposit-collateral',
+  requireJwtAuth,
+  requireRole('agent', 'admin'),
+  buildAgentVaultAction('deposit_collateral'),
+);
+
+/**
+ * @swagger
+ * /agents/vault/withdraw-collateral:
+ *   post:
+ *     summary: Build a collateral withdrawal transaction
+ *     tags: [Agents]
+ *     security: [{ BearerAuth: [] }]
+ *     responses:
+ *       200: { description: Unsigned transaction }
+ */
+router.post(
+  '/vault/withdraw-collateral',
+  requireJwtAuth,
+  requireRole('agent', 'admin'),
+  buildAgentVaultAction('withdraw_collateral'),
+);
+
+/**
+ * @swagger
+ * /agents/vault/mint-float:
+ *   post:
+ *     summary: Build an operator-signed cash-in transaction
+ *     tags: [Agents]
+ *     security: [{ BearerAuth: [] }]
+ *     responses:
+ *       200: { description: Unsigned transaction }
+ *       403: { description: Configured operator required }
+ */
+router.post(
+  '/vault/mint-float',
+  requireJwtAuth,
+  requireRole('admin'),
+  buildAgentVaultAction('mint_float'),
+);
+
+/**
+ * @swagger
+ * /agents/vault/burn-float:
+ *   post:
+ *     summary: Build a cash-out transaction
+ *     tags: [Agents]
+ *     security: [{ BearerAuth: [] }]
+ *     responses:
+ *       200: { description: Unsigned transaction }
+ */
+router.post(
+  '/vault/burn-float',
+  requireJwtAuth,
+  requireRole('agent', 'admin'),
+  buildAgentVaultAction('burn_float'),
+);
 
 /**
  * @swagger

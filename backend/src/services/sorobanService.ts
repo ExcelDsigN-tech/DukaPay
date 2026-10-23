@@ -8,6 +8,8 @@ import {
   FeeBumpTransaction,
   StrKey,
   Keypair,
+  authorizeEntry,
+  xdr,
 } from '@stellar/stellar-sdk';
 import logger from '../utils/logger.js';
 import { AppError } from '../errors/AppError.js';
@@ -167,6 +169,145 @@ class SorobanService {
       throw AppError.internal('AGENT_VAULT_CONTRACT_ID is not configured');
     }
     return contractId;
+  }
+
+  private getAgentRegistryContractId(): string {
+    const contractId = env.AGENT_REGISTRY_CONTRACT_ID;
+    if (!contractId) {
+      throw AppError.internal('AGENT_REGISTRY_CONTRACT_ID is not configured');
+    }
+    return contractId;
+  }
+
+  private async buildAgentContractTx(
+    sourcePublicKey: string,
+    contractId: string,
+    functionName: string,
+    args: ReturnType<typeof nativeToScVal>[],
+    authorizeOperator = false,
+  ): Promise<{ unsignedTxXdr: string; networkPassphrase: string }> {
+    const server = this.getRpcServer();
+    const passphrase = this.getNetworkPassphrase();
+    const account = await server.getAccount(sourcePublicKey);
+    const tx = new TransactionBuilder(account, {
+      fee: BASE_FEE,
+      networkPassphrase: passphrase,
+    })
+      .addOperation(
+        Operation.invokeContractFunction({ contract: contractId, function: functionName, args }),
+      )
+      .setTimeout(30)
+      .build();
+    const prepared = await server.prepareTransaction(tx);
+    if (authorizeOperator) {
+      const operatorSecret = env.AGENT_OPERATOR_SECRET?.trim();
+      if (!operatorSecret) {
+        throw AppError.internal('AGENT_OPERATOR_SECRET is not configured');
+      }
+
+      let operator: Keypair;
+      try {
+        operator = Keypair.fromSecret(operatorSecret);
+      } catch {
+        throw AppError.internal('AGENT_OPERATOR_SECRET is invalid');
+      }
+
+      const configuredOperator = env.AGENT_OPERATOR_PUBLIC_KEY?.trim();
+      if (configuredOperator && configuredOperator !== operator.publicKey()) {
+        throw AppError.internal('AGENT_OPERATOR_SECRET does not match AGENT_OPERATOR_PUBLIC_KEY');
+      }
+
+      // Sign the operator's auth entries in the envelope itself; the decoded
+      // `prepared.operations` are copies and would not change the XDR.
+      const latestLedger = await server.getLatestLedger();
+      const envelope = prepared.toEnvelope();
+      const ops = envelope.v1().tx().operations();
+      await Promise.all(
+        ops.map(async (op) => {
+          if (op.body().switch() !== xdr.OperationType.invokeHostFunction()) return;
+          const invoke = op.body().invokeHostFunctionOp();
+          const signedEntries = await Promise.all(
+            invoke.auth().map(async (entry) => {
+              if (
+                entry.credentials().switch() !==
+                xdr.SorobanCredentialsType.sorobanCredentialsAddress()
+              ) {
+                return entry;
+              }
+              const address = Address.fromScAddress(
+                entry.credentials().address().address(),
+              ).toString();
+              if (address !== operator.publicKey()) return entry;
+              return authorizeEntry(entry, operator, latestLedger.sequence + 100, passphrase);
+            }),
+          );
+          invoke.auth(signedEntries);
+        }),
+      );
+      return { unsignedTxXdr: envelope.toXDR('base64'), networkPassphrase: passphrase };
+    }
+    return { unsignedTxXdr: prepared.toXDR(), networkPassphrase: passphrase };
+  }
+
+  async buildRegisterAgentTx(
+    agentPublicKey: string,
+    kycRef: string,
+    region: string,
+    bondAmount: bigint,
+    licenseExpiry: bigint,
+  ) {
+    return this.buildAgentContractTx(
+      agentPublicKey,
+      this.getAgentRegistryContractId(),
+      'register',
+      [
+        nativeToScVal(Address.fromString(agentPublicKey), { type: 'address' }),
+        nativeToScVal(kycRef, { type: 'symbol' }),
+        nativeToScVal(region, { type: 'symbol' }),
+        nativeToScVal(bondAmount, { type: 'i128' }),
+        nativeToScVal(licenseExpiry, { type: 'u64' }),
+      ],
+      true,
+    );
+  }
+
+  async buildActivateAgentTx(operatorPublicKey: string, agentPublicKey: string) {
+    return this.buildAgentContractTx(
+      operatorPublicKey,
+      this.getAgentRegistryContractId(),
+      'activate',
+      [nativeToScVal(Address.fromString(agentPublicKey), { type: 'address' })],
+    );
+  }
+
+  async buildTopUpBondTx(operatorPublicKey: string, agentPublicKey: string, amount: bigint) {
+    return this.buildAgentContractTx(
+      operatorPublicKey,
+      this.getAgentRegistryContractId(),
+      'top_up_bond',
+      [
+        nativeToScVal(Address.fromString(agentPublicKey), { type: 'address' }),
+        nativeToScVal(amount, { type: 'i128' }),
+      ],
+    );
+  }
+
+  async buildAgentVaultTx(
+    sourcePublicKey: string,
+    functionName: 'deposit_collateral' | 'withdraw_collateral' | 'mint_float' | 'burn_float',
+    agentPublicKey: string,
+    amount: bigint,
+  ) {
+    const args = [
+      nativeToScVal(Address.fromString(agentPublicKey), { type: 'address' }),
+      nativeToScVal(amount, { type: 'i128' }),
+    ];
+    return this.buildAgentContractTx(
+      sourcePublicKey,
+      this.getAgentVaultContractId(),
+      functionName,
+      args,
+    );
   }
 
   private getScoreReadSourceKeypair(): Keypair {
@@ -758,32 +899,16 @@ class SorobanService {
     toAgent: string,
     amount: bigint,
   ): Promise<{ unsignedTxXdr: string; networkPassphrase: string }> {
-    const server = this.getRpcServer();
-    const contractId = this.getAgentVaultContractId();
-    const passphrase = this.getNetworkPassphrase();
-
-    const account = await server.getAccount(fromAgent);
-
-    const fromScVal = nativeToScVal(Address.fromString(fromAgent), { type: 'address' });
-    const toScVal = nativeToScVal(Address.fromString(toAgent), { type: 'address' });
-    const amountScVal = nativeToScVal(amount, { type: 'i128' });
-
-    const tx = new TransactionBuilder(account, {
-      fee: BASE_FEE,
-      networkPassphrase: passphrase,
-    })
-      .addOperation(
-        Operation.invokeContractFunction({
-          contract: contractId,
-          function: 'transfer_to_agent',
-          args: [fromScVal, toScVal, amountScVal],
-        }),
-      )
-      .setTimeout(30)
-      .build();
-
-    const prepared = await server.prepareTransaction(tx);
-    const unsignedTxXdr = prepared.toXDR();
+    const result = await this.buildAgentContractTx(
+      fromAgent,
+      this.getAgentVaultContractId(),
+      'transfer_to_agent',
+      [
+        nativeToScVal(Address.fromString(fromAgent), { type: 'address' }),
+        nativeToScVal(Address.fromString(toAgent), { type: 'address' }),
+        nativeToScVal(amount, { type: 'i128' }),
+      ],
+    );
 
     logger.withContext().info('Built transfer_to_agent transaction', {
       fromAgent,
@@ -791,7 +916,7 @@ class SorobanService {
       amount,
     });
 
-    return { unsignedTxXdr, networkPassphrase: passphrase };
+    return result;
   }
 
   /**
