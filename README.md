@@ -12,6 +12,7 @@ Stablecoin cash-in, cash-out and micro-loans through local agents, with solvency
 
 <br>
 
+[![CI](https://github.com/ExcelDsigN-tech/DukaPay/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ExcelDsigN-tech/DukaPay/actions/workflows/ci.yml)
 [![Stellar](https://img.shields.io/badge/Stellar-Soroban-6366F1?logo=stellar&logoColor=white)](https://stellar.org)
 [![Network](https://img.shields.io/badge/network-testnet-18D6B0)](docs/deployed-contracts.md)
 [![Audit](https://img.shields.io/badge/audit-not%20yet-F59E0B)](SECURITY.md)
