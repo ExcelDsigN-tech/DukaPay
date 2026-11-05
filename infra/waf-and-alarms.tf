@@ -89,8 +89,43 @@ resource "aws_wafv2_web_acl_association" "alb" {
   web_acl_arn  = aws_wafv2_web_acl.alb.arn
 }
 
+data "aws_caller_identity" "current" {}
+
+# Customer-managed key: CloudWatch alarms cannot publish to a topic encrypted
+# with the AWS-managed alias/aws/sns key.
+resource "aws_kms_key" "alb_alarms" {
+  description         = "dukapay-alb-alarms-${var.environment} SNS encryption"
+  enable_key_rotation = true
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "AccountAdmin"
+        Effect    = "Allow"
+        Principal = { AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root" }
+        Action    = "kms:*"
+        Resource  = "*"
+      },
+      {
+        Sid       = "CloudWatchAlarmsPublish"
+        Effect    = "Allow"
+        Principal = { Service = "cloudwatch.amazonaws.com" }
+        Action    = ["kms:Decrypt", "kms:GenerateDataKey*"]
+        Resource  = "*"
+      },
+    ]
+  })
+
+  tags = {
+    Name        = "dukapay-alb-alarms"
+    Environment = var.environment
+  }
+}
+
 resource "aws_sns_topic" "alb_alarms" {
-  name = "dukapay-alb-alarms-${var.environment}"
+  name              = "dukapay-alb-alarms-${var.environment}"
+  kms_master_key_id = aws_kms_key.alb_alarms.arn
 
   tags = {
     Name        = "dukapay-alb-alarms"
