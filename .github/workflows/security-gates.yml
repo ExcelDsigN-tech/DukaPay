@@ -156,8 +156,8 @@ jobs:
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ~/.cargo/bin/cargo-audit
-          key: cargo-audit-${{ runner.os }}
-      - run: cargo install cargo-audit --locked
+          key: cargo-audit-0.22.1-${{ runner.os }}
+      - run: cargo install cargo-audit --version 0.22.1 --locked
       - run: cargo audit
         working-directory: contracts
 

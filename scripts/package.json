@@ -31,7 +31,7 @@
   },
   "overrides": {
     "axios": "1.20.0",
-    "toml": "4.3.0"
+    "toml": "5.0.1"
   },
   "allowScripts": {
     "esbuild@0.28.1": true
