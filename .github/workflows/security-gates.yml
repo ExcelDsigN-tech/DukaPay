@@ -98,10 +98,9 @@ jobs:
     name: Trivy filesystem scan
     if: github.event_name != 'push'
     runs-on: ubuntu-latest
-    # Reports on PRs but does not block yet: main already has high/critical
-    # findings, so blocking would fail every PR. Flip to blocking once the
-    # accepted findings are baselined (follow-up to #839).
-    continue-on-error: true
+    # Blocking on pull requests; scheduled runs stay non-blocking and feed the
+    # weekly report.
+    continue-on-error: ${{ github.event_name != 'pull_request' }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       # Was pinned to `@master`, a mutable branch, the least hermetic
@@ -120,10 +119,9 @@ jobs:
     name: npm audit
     if: github.event_name != 'push'
     runs-on: ubuntu-latest
-    # Reports on PRs but does not block yet: main already has high/critical
-    # findings, so blocking would fail every PR. Flip to blocking once the
-    # accepted findings are baselined (follow-up to #839).
-    continue-on-error: true
+    # Blocking on pull requests; scheduled runs stay non-blocking and feed the
+    # weekly report.
+    continue-on-error: ${{ github.event_name != 'pull_request' }}
     strategy:
       fail-fast: false
       matrix:
@@ -144,10 +142,9 @@ jobs:
     name: cargo audit
     if: github.event_name != 'push'
     runs-on: ubuntu-latest
-    # Reports on PRs but does not block yet: main already has high/critical
-    # findings, so blocking would fail every PR. Flip to blocking once the
-    # accepted findings are baselined (follow-up to #839).
-    continue-on-error: true
+    # Blocking on pull requests; scheduled runs stay non-blocking and feed the
+    # weekly report.
+    continue-on-error: ${{ github.event_name != 'pull_request' }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master; toolchain pinned below to match contracts/rust-toolchain.toml
