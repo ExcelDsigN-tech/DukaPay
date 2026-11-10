@@ -1,5 +1,5 @@
 use super::*;
-use soroban_sdk::testutils::{Address as _, Ledger, LedgerInfo};
+use soroban_sdk::testutils::{storage::Instance as _, Address as _, Ledger, LedgerInfo};
 use soroban_sdk::{Address, BytesN, Env, IntoVal, Symbol, Val, Vec};
 #[allow(deprecated)]
 #[contract]
@@ -718,4 +718,39 @@ fn has_approved_tracks_approvals() {
     client.approve_transfer(&s2);
     assert!(client.has_approved(&s1));
     assert!(client.has_approved(&s2));
+}
+
+#[test]
+fn test_read_and_write_entry_points_extend_instance_ttl() {
+    let (env, client, _admin, _) = setup();
+    let s = Address::generate(&env);
+    let signers = Vec::from_slice(&env, core::slice::from_ref(&s));
+
+    // Advance into the bump window (INSTANCE_TTL_BUMP - INSTANCE_TTL_THRESHOLD = 501_120)
+    // and verify a write entry point re-extends the instance TTL to INSTANCE_TTL_BUMP.
+    env.ledger()
+        .set_sequence_number(env.ledger().sequence() + 510_000);
+    client.propose_admin_transfer(
+        &Address::generate(&env),
+        &signers,
+        &1,
+        &MIN_TIMELOCK_SECONDS,
+    );
+    let ttl_after_write = env.as_contract(&client.address, || env.storage().instance().get_ttl());
+    assert_eq!(ttl_after_write, INSTANCE_TTL_BUMP);
+
+    // Advance into the bump window again and verify read-only entry points also
+    // re-extend the instance TTL back to INSTANCE_TTL_BUMP (#864).
+    env.ledger()
+        .set_sequence_number(env.ledger().sequence() + 510_000);
+    let _ = client.get_pending_transfer();
+    let ttl_after_read = env.as_contract(&client.address, || env.storage().instance().get_ttl());
+    assert_eq!(ttl_after_read, INSTANCE_TTL_BUMP);
+
+    env.ledger()
+        .set_sequence_number(env.ledger().sequence() + 510_000);
+    assert!(!client.has_approved(&s));
+    let ttl_after_has_approved =
+        env.as_contract(&client.address, || env.storage().instance().get_ttl());
+    assert_eq!(ttl_after_has_approved, INSTANCE_TTL_BUMP);
 }

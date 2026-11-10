@@ -140,6 +140,7 @@ impl GovernanceContract {
             return Err(GovernanceError::InvalidUpgradeThreshold);
         }
 
+        Self::bump_instance_ttl(&env);
         env.storage().instance().set(&KEY_UPG_SIGNERS, &unique);
         env.storage().instance().set(&KEY_UPG_THRESH, &threshold);
         if !env.storage().instance().has(&KEY_UPG_PAUSED) {
@@ -177,6 +178,7 @@ impl GovernanceContract {
         let now = env.ledger().timestamp();
         let count: u32 = env.storage().instance().get(&KEY_UPG_COUNT).unwrap_or(0);
         let id = count + 1;
+        Self::bump_instance_ttl(&env);
         env.storage().instance().set(&KEY_UPG_COUNT, &id);
 
         let executable_after = now.saturating_add(UPGRADE_TIMELOCK_SECONDS);
@@ -223,6 +225,7 @@ impl GovernanceContract {
         let approvals = pending.approvals.len();
         let threshold = Self::upgrade_threshold(&env)?;
         let id = pending.id;
+        Self::bump_instance_ttl(&env);
         env.storage().instance().set(&KEY_UPG_PENDING, &pending);
 
         env.events().publish(
@@ -276,6 +279,7 @@ impl GovernanceContract {
             soroban_sdk::vec![&env, pending.new_wasm_hash.clone().into_val(&env)],
         );
 
+        Self::bump_instance_ttl(&env);
         env.storage().instance().remove(&KEY_UPG_PENDING);
 
         env.events().publish(
@@ -299,6 +303,7 @@ impl GovernanceContract {
         Self::require_signer_or_admin(&env, &caller)?;
 
         let pending = Self::load_pending(&env).ok_or(GovernanceError::NoPendingUpgrade)?;
+        Self::bump_instance_ttl(&env);
         env.storage().instance().remove(&KEY_UPG_PENDING);
 
         env.events().publish(
@@ -318,6 +323,7 @@ impl GovernanceContract {
     pub fn emergency_pause(env: Env, caller: Address) -> Result<(), GovernanceError> {
         caller.require_auth();
         Self::require_signer_or_admin(&env, &caller)?;
+        Self::bump_instance_ttl(&env);
         env.storage().instance().set(&KEY_UPG_PAUSED, &true);
         env.events().publish(
             (symbol_short!("UpgPause"),),
@@ -334,6 +340,7 @@ impl GovernanceContract {
     pub fn emergency_unpause(env: Env) -> Result<(), GovernanceError> {
         let admin = GovernanceContract::read_admin(&env)?;
         admin.require_auth();
+        Self::bump_instance_ttl(&env);
         env.storage().instance().set(&KEY_UPG_PAUSED, &false);
         env.events().publish(
             (symbol_short!("UpgUnpse"),),
@@ -349,10 +356,12 @@ impl GovernanceContract {
     // ── Views ─────────────────────────────────────────────────────────────────
 
     pub fn get_pending_upgrade(env: Env) -> Option<PendingUpgrade> {
+        Self::bump_instance_ttl(&env);
         Self::load_pending(&env)
     }
 
     pub fn is_upgrade_paused(env: Env) -> bool {
+        Self::bump_instance_ttl(&env);
         env.storage()
             .instance()
             .get(&KEY_UPG_PAUSED)
@@ -360,6 +369,7 @@ impl GovernanceContract {
     }
 
     pub fn get_upgrade_signers(env: Env) -> Vec<Address> {
+        Self::bump_instance_ttl(&env);
         env.storage()
             .instance()
             .get(&KEY_UPG_SIGNERS)
@@ -367,10 +377,12 @@ impl GovernanceContract {
     }
 
     pub fn get_upgrade_threshold(env: Env) -> u32 {
+        Self::bump_instance_ttl(&env);
         env.storage().instance().get(&KEY_UPG_THRESH).unwrap_or(0)
     }
 
     pub fn get_upgrade_approval_count(env: Env) -> Result<u32, GovernanceError> {
+        Self::bump_instance_ttl(&env);
         Ok(Self::load_pending(&env)
             .ok_or(GovernanceError::NoPendingUpgrade)?
             .approvals
@@ -378,6 +390,7 @@ impl GovernanceContract {
     }
 
     pub fn has_approved_upgrade(env: Env, signer: Address) -> Result<bool, GovernanceError> {
+        Self::bump_instance_ttl(&env);
         Ok(Self::load_pending(&env)
             .ok_or(GovernanceError::NoPendingUpgrade)?
             .approvals
@@ -387,6 +400,7 @@ impl GovernanceContract {
 
     /// Seconds until `execute_upgrade` is unblocked (0 once elapsed / none pending).
     pub fn upgrade_timelock_remaining(env: Env) -> u64 {
+        Self::bump_instance_ttl(&env);
         match Self::load_pending(&env) {
             None => 0,
             Some(p) => {

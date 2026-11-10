@@ -522,3 +522,28 @@ fn set_override_timelock_rejects_non_admin() {
     );
     assert_eq!(client.get_override_timelock(), 86_400);
 }
+
+#[test]
+fn test_admin_entry_points_extend_instance_ttl() {
+    let (env, contract_id, admin, signers) = setup();
+    let client = CircuitBreakerClient::new(&env, &contract_id);
+
+    // Advance into the bump window (INSTANCE_TTL_BUMP - INSTANCE_TTL_THRESHOLD = 501_120)
+    // and call an admin entry point; assert instance TTL returns to INSTANCE_TTL_BUMP (#864).
+    env.ledger()
+        .set_sequence_number(env.ledger().sequence() + 510_000);
+    env.mock_all_auths();
+    client.set_override_timelock(&admin, &MIN_OVERRIDE_TIMELOCK);
+
+    let ttl_after_admin = env.as_contract(&contract_id, || env.storage().instance().get_ttl());
+    assert_eq!(ttl_after_admin, crate::INSTANCE_TTL_BUMP);
+
+    // Advance into the bump window again and verify override governance entry points bump too.
+    env.ledger()
+        .set_sequence_number(env.ledger().sequence() + 510_000);
+    let proposer = signers.get(0).unwrap();
+    client.propose_override(&proposer, &OverrideTarget::Global);
+
+    let ttl_after_override = env.as_contract(&contract_id, || env.storage().instance().get_ttl());
+    assert_eq!(ttl_after_override, crate::INSTANCE_TTL_BUMP);
+}

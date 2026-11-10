@@ -91,7 +91,10 @@ impl AuditAnchor {
 #[cfg(test)]
 mod test {
     use super::*;
-    use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, IntoVal, Symbol, Val};
+    use soroban_sdk::{
+        testutils::{storage::Instance as _, Address as _, Ledger as _},
+        Address, BytesN, Env, IntoVal, Symbol, Val,
+    };
 
     fn setup() -> (Env, AuditAnchorClient<'static>, Address) {
         let env = Env::default();
@@ -162,5 +165,20 @@ mod test {
             result.is_err(),
             "anchor without owner auth must be rejected"
         );
+    }
+
+    #[test]
+    fn anchor_extends_instance_ttl() {
+        let (env, client, _owner) = setup();
+
+        // Advance into the bump window (INSTANCE_TTL_BUMP - INSTANCE_TTL_THRESHOLD = 501_120)
+        // and verify `anchor` re-extends the instance TTL to INSTANCE_TTL_BUMP (#864).
+        env.ledger()
+            .set_sequence_number(env.ledger().sequence() + 510_000);
+        let root = BytesN::from_array(&env, &[5; 32]);
+        client.anchor(&1, &root, &2);
+
+        let ttl_after = env.as_contract(&client.address, || env.storage().instance().get_ttl());
+        assert_eq!(ttl_after, AuditAnchor::INSTANCE_TTL_BUMP);
     }
 }
