@@ -296,6 +296,7 @@ describe('Agent Float Transfer API (/api/agents/float-transfer)', () => {
   describe('POST /api/agents/float-transfer/:id/submit', () => {
     it('marks a transfer completed only after Stellar confirms SUCCESS', async () => {
       process.env.AGENT_VAULT_CONTRACT_ID = 'C123456789AGENTVAULT';
+      mockValidateTransferToAgentTx.mockReturnValueOnce('confirmed-hash');
       mockQuery.mockResolvedValueOnce({
         rows: [
           {
@@ -306,6 +307,16 @@ describe('Agent Float Transfer API (/api/agents/float-transfer)', () => {
             status: 'AWAITING_SIGNATURE',
             required_approvals: 2,
             approval_count: 2,
+            tx_hash: null,
+          },
+        ],
+      });
+      mockQuery.mockResolvedValueOnce({
+        rows: [
+          {
+            id: 'ft_12345',
+            status: 'AWAITING_SIGNATURE',
+            tx_hash: 'confirmed-hash',
           },
         ],
       });
@@ -336,6 +347,33 @@ describe('Agent Float Transfer API (/api/agents/float-transfer)', () => {
         AGENT_B,
         50_000_000_000n,
       );
+    });
+
+    it('rejects a second submit with 409 when a tx_hash is already pending reconciliation (#843)', async () => {
+      process.env.AGENT_VAULT_CONTRACT_ID = 'C123456789AGENTVAULT';
+      mockQuery.mockResolvedValueOnce({
+        rows: [
+          {
+            id: 'ft_12345',
+            from_agent: AGENT_A,
+            to_agent: AGENT_B,
+            amount: '5000',
+            status: 'AWAITING_SIGNATURE',
+            required_approvals: 2,
+            approval_count: 2,
+            tx_hash: 'pending-tx-hash',
+          },
+        ],
+      });
+
+      const response = await request(app)
+        .post('/api/agents/float-transfer/ft_12345/submit')
+        .set(bearer(AGENT_B))
+        .send({ signedTxXdr: 'c2lnbmVkLXhkcg==' });
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.message).toMatch(/already has a pending transaction/i);
+      expect(mockSubmitSignedTx).not.toHaveBeenCalled();
     });
   });
 

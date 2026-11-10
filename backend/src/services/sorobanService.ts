@@ -930,7 +930,7 @@ class SorobanService {
     fromAgent: string,
     toAgent: string,
     amount: bigint,
-  ): void {
+  ): string {
     let parsed;
     try {
       parsed = TransactionBuilder.fromXDR(signedTxXdr, this.getNetworkPassphrase());
@@ -996,6 +996,8 @@ class SorobanService {
     if (!argsMatch) {
       throw mismatch('contract arguments');
     }
+
+    return parsed.hash().toString('hex');
   }
 
   /**

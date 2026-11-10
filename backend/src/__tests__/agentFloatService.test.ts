@@ -644,9 +644,13 @@ describe('AgentFloatService', () => {
       tx_hash: null,
     } as const;
 
-    it('completes only after the matching signed transaction is confirmed', async () => {
+    it('stores tx_hash before polling and completes after the signed transaction is confirmed', async () => {
       process.env.AGENT_VAULT_CONTRACT_ID = 'C123456789AGENTVAULT';
+      mockValidateTransferToAgentTx.mockReturnValueOnce('confirmed-hash');
       mockQuery.mockResolvedValueOnce({ rows: [awaitingTransfer] });
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ ...awaitingTransfer, tx_hash: 'confirmed-hash' }],
+      });
       mockSubmitSignedTx.mockResolvedValueOnce({
         txHash: 'confirmed-hash',
         status: 'SUCCESS',
@@ -668,6 +672,10 @@ describe('AgentFloatService', () => {
         AGENT_B,
         255_000_000n,
       );
+      expect(mockQuery).toHaveBeenNthCalledWith(2, expect.stringContaining('SET tx_hash = $2'), [
+        awaitingTransfer.id,
+        'confirmed-hash',
+      ]);
       expect(mockSubmitSignedTx).toHaveBeenCalledWith('signed-xdr');
       expect(result.transfer.status).toBe('COMPLETED');
       expect(result.executedOnChain).toBe(true);
@@ -683,10 +691,26 @@ describe('AgentFloatService', () => {
       );
     });
 
-    it('does not complete when Stellar does not confirm the transaction', async () => {
+    it('keeps tx_hash on the AWAITING_SIGNATURE row when the submit poll times out (#843)', async () => {
       process.env.AGENT_VAULT_CONTRACT_ID = 'C123456789AGENTVAULT';
+      mockValidateTransferToAgentTx.mockReturnValueOnce('tx-poll-timeout');
       mockQuery.mockResolvedValueOnce({ rows: [awaitingTransfer] });
-      mockSubmitSignedTx.mockRejectedValueOnce(new Error('Transaction failed'));
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ ...awaitingTransfer, tx_hash: 'tx-poll-timeout' }],
+      });
+      mockSubmitSignedTx.mockRejectedValueOnce(
+        new AppError(
+          'Transaction tx-poll-timeout was not confirmed (status: NOT_FOUND)',
+          503,
+          true,
+          undefined,
+          undefined,
+          {
+            txHash: 'tx-poll-timeout',
+            txStatus: 'NOT_FOUND',
+          },
+        ),
+      );
 
       await expect(
         service.submitTransfer({
@@ -694,9 +718,82 @@ describe('AgentFloatService', () => {
           signedTxXdr: 'signed-xdr',
           submitter: AGENT_A,
         }),
-      ).rejects.toThrow('Transaction failed');
+      ).rejects.toThrow(/not confirmed \(status: NOT_FOUND\)/);
 
-      expect(mockQuery).toHaveBeenCalledTimes(1);
+      // SELECT + pre-poll UPDATE setting tx_hash; no COMPLETED update or executed audit log
+      expect(mockQuery).toHaveBeenCalledTimes(2);
+      expect(mockQuery).toHaveBeenNthCalledWith(2, expect.stringContaining('SET tx_hash = $2'), [
+        awaitingTransfer.id,
+        'tx-poll-timeout',
+      ]);
+      expect(mockQuery).not.toHaveBeenCalledWith(
+        expect.stringContaining("SET status = 'COMPLETED'"),
+        expect.anything(),
+      );
+    });
+
+    it('rejects a second submit when the transfer already has a pending tx_hash (#843)', async () => {
+      process.env.AGENT_VAULT_CONTRACT_ID = 'C123456789AGENTVAULT';
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ ...awaitingTransfer, tx_hash: 'tx-poll-timeout' }],
+      });
+
+      await expect(
+        service.submitTransfer({
+          transferId: awaitingTransfer.id,
+          signedTxXdr: 'signed-xdr-retry',
+          submitter: AGENT_A,
+        }),
+      ).rejects.toThrow(/already has a pending transaction \(tx-poll-timeout\)/);
+
+      expect(mockValidateTransferToAgentTx).not.toHaveBeenCalled();
+      expect(mockSubmitSignedTx).not.toHaveBeenCalled();
+    });
+
+    it('marks the transfer FAILED and emits an audit event when on-chain execution fails (#843)', async () => {
+      process.env.AGENT_VAULT_CONTRACT_ID = 'C123456789AGENTVAULT';
+      mockValidateTransferToAgentTx.mockReturnValueOnce('tx-failed-onchain');
+      mockQuery.mockResolvedValueOnce({ rows: [awaitingTransfer] });
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ ...awaitingTransfer, tx_hash: 'tx-failed-onchain' }],
+      });
+      mockSubmitSignedTx.mockRejectedValueOnce(
+        new AppError(
+          'Transaction tx-failed-onchain failed on the Stellar network (status: FAILED)',
+          400,
+          true,
+          undefined,
+          undefined,
+          {
+            txHash: 'tx-failed-onchain',
+            txStatus: 'FAILED',
+          },
+        ),
+      );
+      mockQuery.mockResolvedValueOnce({ rows: [] }); // UPDATE status = 'FAILED'
+      mockQuery.mockResolvedValueOnce({ rows: [] }); // INSERT INTO audit_logs
+
+      await expect(
+        service.submitTransfer({
+          transferId: awaitingTransfer.id,
+          signedTxXdr: 'signed-xdr',
+          submitter: AGENT_A,
+        }),
+      ).rejects.toThrow(/failed on the Stellar network/);
+
+      expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining("SET status = 'FAILED'"), [
+        awaitingTransfer.id,
+        'tx-failed-onchain',
+      ]);
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO audit_logs'),
+        expect.arrayContaining([
+          AGENT_A,
+          'AGENT_FLOAT_TRANSFER_FAILED',
+          `TransferID:${awaitingTransfer.id}`,
+          expect.stringContaining('"txStatus":"FAILED"'),
+        ]),
+      );
     });
 
     it('rejects a submitter who is not a participant or admin', async () => {

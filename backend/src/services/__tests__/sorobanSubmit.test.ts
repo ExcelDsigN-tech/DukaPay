@@ -104,15 +104,14 @@ describe('sorobanService.submitSignedTx', () => {
 });
 
 describe('sorobanService.validateTransferToAgentTx', () => {
-  it('accepts the exact approved vault invocation', () => {
-    expect(() =>
-      sorobanService.validateTransferToAgentTx(
-        transferXdr(),
-        source.publicKey(),
-        destination.publicKey(),
-        250_000_000n,
-      ),
-    ).not.toThrow();
+  it('accepts the exact approved vault invocation and returns its transaction hash', () => {
+    const txHash = sorobanService.validateTransferToAgentTx(
+      transferXdr(),
+      source.publicKey(),
+      destination.publicKey(),
+      250_000_000n,
+    );
+    expect(txHash).toMatch(/^[0-9a-f]{64}$/);
   });
 
   it.each([

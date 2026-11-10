@@ -489,6 +489,11 @@ export class AgentFloatService {
     if (transfer.status !== 'AWAITING_SIGNATURE') {
       throw AppError.badRequest(`Transfer is already in status '${transfer.status}'.`);
     }
+    if (transfer.tx_hash) {
+      throw AppError.conflict(
+        `Transfer '${transferId}' already has a pending transaction (${transfer.tx_hash}) awaiting reconciliation.`,
+      );
+    }
 
     const isParticipant = submitter === transfer.from_agent || submitter === transfer.to_agent;
     const isAdmin = userRole === 'admin' || userRole === 'super_admin';
@@ -502,14 +507,84 @@ export class AgentFloatService {
     }
 
     const amount = toStroops(String(transfer.amount));
-    sorobanService.validateTransferToAgentTx(
+    const validatedTxHash = sorobanService.validateTransferToAgentTx(
       signedTxXdr,
       transfer.from_agent,
       transfer.to_agent,
       amount,
     );
+    const pendingTxHash =
+      typeof validatedTxHash === 'string' && validatedTxHash.trim().length > 0
+        ? validatedTxHash.trim()
+        : crypto.createHash('sha256').update(signedTxXdr).digest('hex');
 
-    const stellarResult = await sorobanService.submitSignedTx(signedTxXdr);
+    // Persist the transaction hash on the transfer row before submitting and polling
+    // so that if the poll times out while the transaction lands on-chain later,
+    // the indexer can reconcile the row by tx_hash and duplicate submissions are blocked (#843).
+    const claimRes = await query(
+      `UPDATE agent_float_transfers
+       SET tx_hash = $2, updated_at = NOW()
+       WHERE id = $1 AND status = 'AWAITING_SIGNATURE' AND tx_hash IS NULL
+       RETURNING *`,
+      [transferId, pendingTxHash],
+    );
+    if (claimRes.rows.length === 0) {
+      throw AppError.conflict(
+        `Transfer '${transferId}' already has a pending transaction awaiting reconciliation.`,
+      );
+    }
+
+    let stellarResult: Awaited<ReturnType<typeof sorobanService.submitSignedTx>>;
+    try {
+      stellarResult = await sorobanService.submitSignedTx(signedTxXdr);
+    } catch (err) {
+      const details =
+        err instanceof AppError && err.details && typeof err.details === 'object'
+          ? (err.details as { txHash?: string; txStatus?: string })
+          : undefined;
+      const actualTxHash =
+        typeof details?.txHash === 'string' && details.txHash.length > 0
+          ? details.txHash
+          : pendingTxHash;
+
+      if (details?.txStatus === 'FAILED') {
+        await query(
+          `UPDATE agent_float_transfers
+           SET status = 'FAILED', tx_hash = $2, updated_at = NOW()
+           WHERE id = $1 AND status = 'AWAITING_SIGNATURE'`,
+          [transferId, actualTxHash],
+        );
+        await this.logAudit({
+          actor: submitter,
+          action: 'AGENT_FLOAT_TRANSFER_FAILED',
+          target: `TransferID:${transferId}`,
+          payload: {
+            fromAgent: transfer.from_agent,
+            toAgent: transfer.to_agent,
+            amount: transfer.amount,
+            txHash: actualTxHash,
+            txStatus: 'FAILED',
+          },
+          status: 400,
+        });
+      } else if (details?.txStatus === 'ERROR' || details?.txStatus === 'TRY_AGAIN_LATER') {
+        await query(
+          `UPDATE agent_float_transfers
+           SET tx_hash = NULL, updated_at = NOW()
+           WHERE id = $1 AND status = 'AWAITING_SIGNATURE'`,
+          [transferId],
+        );
+      } else if (actualTxHash !== pendingTxHash) {
+        await query(
+          `UPDATE agent_float_transfers
+           SET tx_hash = $2, updated_at = NOW()
+           WHERE id = $1 AND status = 'AWAITING_SIGNATURE'`,
+          [transferId, actualTxHash],
+        );
+      }
+      throw err;
+    }
+
     if (stellarResult.status !== 'SUCCESS') {
       throw AppError.internal('Float transfer was not confirmed on the Stellar network');
     }
@@ -522,6 +597,17 @@ export class AgentFloatService {
       [transferId, stellarResult.txHash],
     );
     if (updateRes.rows.length === 0) {
+      const currentRes = await query(`SELECT * FROM agent_float_transfers WHERE id = $1`, [
+        transferId,
+      ]);
+      const current = currentRes.rows[0] as AgentFloatTransferRow | undefined;
+      if (current?.status === 'COMPLETED' && current.tx_hash === stellarResult.txHash) {
+        return {
+          transfer: current,
+          executedOnChain: true,
+          txHash: stellarResult.txHash,
+        };
+      }
       throw AppError.conflict('Float transfer status changed while the transaction was submitted');
     }
 

@@ -427,6 +427,129 @@ describe('EventIndexer: agent registry / agent vault events', () => {
 
     expect(updates).toHaveLength(0);
   });
+
+  it('FloatTransferred reconciles a timed-out AWAITING_SIGNATURE transfer by tx_hash and emits AGENT_FLOAT_TRANSFER_EXECUTED (#843)', async () => {
+    const from = makeAddr();
+    const to = makeAddr();
+    const amount = 250_000_000n;
+    const reconciledHashes: string[] = [];
+    const auditEntries: unknown[][] = [];
+
+    mockQuery.mockImplementation(async (sql: string, params: unknown[] = []) => {
+      if (sql === 'BEGIN' || sql === 'COMMIT') return { rows: [], rowCount: 0 };
+      if (sql.includes('INSERT INTO loan_events')) {
+        return { rows: [{ event_id: params[0] }], rowCount: 1 };
+      }
+      if (sql.includes('UPDATE agent_vaults')) {
+        return { rows: [], rowCount: 1 };
+      }
+      if (
+        sql.includes('UPDATE agent_float_transfers') &&
+        sql.includes("SET status = 'COMPLETED'")
+      ) {
+        reconciledHashes.push(String(params[0]));
+        return {
+          rows: [
+            {
+              id: 'ft_timed_out_1',
+              from_agent: from,
+              to_agent: to,
+              amount: '25',
+              created_by: from,
+            },
+          ],
+          rowCount: 1,
+        };
+      }
+      if (sql.includes('INSERT INTO audit_logs')) {
+        auditEntries.push(params);
+        return { rows: [], rowCount: 1 };
+      }
+      return { rows: [], rowCount: 0 };
+    });
+
+    await makeIndexer().ingestRawEvents([transferEvent(from, to, amount)]);
+
+    expect(reconciledHashes).toEqual(['tx-evt-transfer']);
+    expect(auditEntries).toHaveLength(1);
+    const [actor, action, target, payloadJson, status] = auditEntries[0]!;
+    expect(actor).toBe(from);
+    expect(action).toBe('AGENT_FLOAT_TRANSFER_EXECUTED');
+    expect(target).toBe('TransferID:ft_timed_out_1');
+    expect(status).toBe(200);
+    const payload = JSON.parse(String(payloadJson));
+    expect(payload).toMatchObject({
+      eventId: 'evt-transfer',
+      fromAgent: from,
+      toAgent: to,
+      amount: '25',
+      txHash: 'tx-evt-transfer',
+      executedOnChain: true,
+      reconciledByIndexer: true,
+    });
+  });
+
+  it('reconcilePendingFloatTransfers moves pending transfers to COMPLETED or FAILED based on RPC status (#843)', async () => {
+    const from = makeAddr();
+    const to = makeAddr();
+    const statusUpdates: Array<{ sql: string; params: unknown[] }> = [];
+    const auditEntries: unknown[][] = [];
+
+    mockQuery.mockImplementation(async (sql: string, params: unknown[] = []) => {
+      if (sql === 'BEGIN' || sql === 'COMMIT') return { rows: [], rowCount: 0 };
+      if (sql.includes('SELECT id, from_agent, to_agent, amount, tx_hash')) {
+        return {
+          rows: [
+            {
+              id: 'ft_pending_ok',
+              from_agent: from,
+              to_agent: to,
+              amount: '50',
+              tx_hash: 'tx-ok',
+            },
+            {
+              id: 'ft_pending_fail',
+              from_agent: from,
+              to_agent: to,
+              amount: '75',
+              tx_hash: 'tx-fail',
+            },
+          ],
+          rowCount: 2,
+        };
+      }
+      if (sql.includes('UPDATE agent_float_transfers')) {
+        statusUpdates.push({ sql, params });
+        return { rows: [{ id: params[0] }], rowCount: 1 };
+      }
+      if (sql.includes('INSERT INTO audit_logs')) {
+        auditEntries.push(params);
+        return { rows: [], rowCount: 1 };
+      }
+      return { rows: [], rowCount: 0 };
+    });
+
+    const indexer = makeIndexer();
+    (
+      indexer as unknown as {
+        rpc: { getTransaction: (hash: string) => Promise<{ status: string }> };
+      }
+    ).rpc.getTransaction = jest.fn(async (hash: string) => ({
+      status: hash === 'tx-ok' ? 'SUCCESS' : 'FAILED',
+    }));
+
+    const summary = await indexer.reconcilePendingFloatTransfers();
+    expect(summary).toEqual({ completed: 1, failed: 1 });
+    expect(statusUpdates).toHaveLength(2);
+    expect(statusUpdates[0]?.sql).toContain("SET status = 'COMPLETED'");
+    expect(statusUpdates[0]?.params).toEqual(['ft_pending_ok', 'tx-ok']);
+    expect(statusUpdates[1]?.sql).toContain("SET status = 'FAILED'");
+    expect(statusUpdates[1]?.params).toEqual(['ft_pending_fail', 'tx-fail']);
+
+    expect(auditEntries).toHaveLength(2);
+    expect(auditEntries[0]?.[1]).toBe('AGENT_FLOAT_TRANSFER_EXECUTED');
+    expect(auditEntries[1]?.[1]).toBe('AGENT_FLOAT_TRANSFER_FAILED');
+  });
 });
 
 describe('EventIndexer: agent_vaults reorg rollback', () => {

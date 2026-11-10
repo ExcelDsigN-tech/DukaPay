@@ -197,6 +197,121 @@ export class EventIndexer {
     return this.storeEvents(events);
   }
 
+  /**
+   * Reconciles float transfers stuck in AWAITING_SIGNATURE with a stored tx_hash
+   * whose submit poll timed out (#843). Moves rows to COMPLETED or FAILED when
+   * the RPC reports a terminal transaction status and emits the corresponding audit event.
+   */
+  async reconcilePendingFloatTransfers(): Promise<{
+    completed: number;
+    failed: number;
+  }> {
+    const pendingRes = await query(
+      `SELECT id, from_agent, to_agent, amount, tx_hash
+       FROM agent_float_transfers
+       WHERE status = 'AWAITING_SIGNATURE' AND tx_hash IS NOT NULL`,
+    );
+
+    let completed = 0;
+    let failed = 0;
+
+    const getTransaction = (
+      this.rpc as unknown as {
+        getTransaction?: (hash: string) => Promise<{ status?: string }>;
+      }
+    ).getTransaction;
+    if (typeof getTransaction !== 'function') {
+      return { completed, failed };
+    }
+
+    for (const row of pendingRes.rows as Array<{
+      id: string;
+      from_agent: string;
+      to_agent: string;
+      amount: string;
+      tx_hash: string;
+    }>) {
+      let txStatus: string | undefined;
+      try {
+        const txResult = await getTransaction.call(this.rpc, row.tx_hash);
+        txStatus = txResult?.status;
+      } catch (error) {
+        logger.withContext().warn('Failed to fetch pending float transfer transaction status', {
+          transferId: row.id,
+          txHash: row.tx_hash,
+          error,
+        });
+        continue;
+      }
+
+      if (txStatus === 'SUCCESS') {
+        await withTransaction(async (client: PoolClient) => {
+          const updated = await client.query(
+            `UPDATE agent_float_transfers
+             SET status = 'COMPLETED', updated_at = CURRENT_TIMESTAMP
+             WHERE id = $1 AND status = 'AWAITING_SIGNATURE' AND tx_hash = $2
+             RETURNING id`,
+            [row.id, row.tx_hash],
+          );
+          if ((updated.rowCount ?? updated.rows.length) > 0) {
+            completed += 1;
+            await client.query(
+              `INSERT INTO audit_logs (actor, action, target, payload, status, created_at)
+               VALUES ($1, $2, $3, $4, $5, NOW())`,
+              [
+                row.from_agent,
+                'AGENT_FLOAT_TRANSFER_EXECUTED',
+                `TransferID:${row.id}`,
+                JSON.stringify({
+                  fromAgent: row.from_agent,
+                  toAgent: row.to_agent,
+                  amount: row.amount,
+                  txHash: row.tx_hash,
+                  executedOnChain: true,
+                  reconciledByIndexer: true,
+                }),
+                200,
+              ],
+            );
+          }
+        });
+      } else if (txStatus === 'FAILED') {
+        await withTransaction(async (client: PoolClient) => {
+          const updated = await client.query(
+            `UPDATE agent_float_transfers
+             SET status = 'FAILED', updated_at = CURRENT_TIMESTAMP
+             WHERE id = $1 AND status = 'AWAITING_SIGNATURE' AND tx_hash = $2
+             RETURNING id`,
+            [row.id, row.tx_hash],
+          );
+          if ((updated.rowCount ?? updated.rows.length) > 0) {
+            failed += 1;
+            await client.query(
+              `INSERT INTO audit_logs (actor, action, target, payload, status, created_at)
+               VALUES ($1, $2, $3, $4, $5, NOW())`,
+              [
+                row.from_agent,
+                'AGENT_FLOAT_TRANSFER_FAILED',
+                `TransferID:${row.id}`,
+                JSON.stringify({
+                  fromAgent: row.from_agent,
+                  toAgent: row.to_agent,
+                  amount: row.amount,
+                  txHash: row.tx_hash,
+                  txStatus: 'FAILED',
+                  reconciledByIndexer: true,
+                }),
+                400,
+              ],
+            );
+          }
+        });
+      }
+    }
+
+    return { completed, failed };
+  }
+
   isEventParseable(event: SorobanRawEvent): boolean {
     try {
       return this.parseEvent(event) !== null;
@@ -1110,6 +1225,46 @@ export class EventIndexer {
               `UPDATE agent_vaults SET float_balance = float_balance + $1, updated_at = CURRENT_TIMESTAMP WHERE agent_address = $2`,
               [amountBigInt.toString(), event.toAddress],
             );
+
+            // Reconcile any float transfer whose submit poll timed out before
+            // the transaction landed on-chain (#843), sharing the #774 path.
+            if (event.txHash) {
+              const reconciledTransfers = await client.query(
+                `UPDATE agent_float_transfers
+                 SET status = 'COMPLETED', updated_at = CURRENT_TIMESTAMP
+                 WHERE tx_hash = $1 AND status = 'AWAITING_SIGNATURE'
+                 RETURNING id, from_agent, to_agent, amount, created_by`,
+                [event.txHash],
+              );
+
+              for (const row of reconciledTransfers.rows as Array<{
+                id: string;
+                from_agent: string;
+                to_agent: string;
+                amount: string;
+                created_by?: string;
+              }>) {
+                await client.query(
+                  `INSERT INTO audit_logs (actor, action, target, payload, status, created_at)
+                   VALUES ($1, $2, $3, $4, $5, NOW())`,
+                  [
+                    row.from_agent,
+                    'AGENT_FLOAT_TRANSFER_EXECUTED',
+                    `TransferID:${row.id}`,
+                    JSON.stringify({
+                      eventId: event.eventId,
+                      fromAgent: row.from_agent,
+                      toAgent: row.to_agent,
+                      amount: row.amount,
+                      txHash: event.txHash,
+                      executedOnChain: true,
+                      reconciledByIndexer: true,
+                    }),
+                    200,
+                  ],
+                );
+              }
+            }
           }
 
           // Aggregate score deltas per borrower; a single bulk upsert at
