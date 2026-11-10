@@ -34,6 +34,18 @@ export interface RejectTransferInput {
   userRole?: string | undefined;
 }
 
+export interface RebuildTransferInput {
+  transferId: string;
+  requester: string;
+  userRole?: string | undefined;
+}
+
+export interface CancelTransferInput {
+  transferId: string;
+  canceller: string;
+  userRole?: string | undefined;
+}
+
 export interface SetLimitsInput {
   fromAgent: string;
   toAgent: string;
@@ -54,6 +66,7 @@ export interface AgentFloatTransferRow {
     | 'COMPLETED'
     | 'REJECTED'
     | 'CANCELLED'
+    | 'EXPIRED'
     | 'FAILED';
   required_approvals: number;
   approval_count: number;
@@ -597,6 +610,169 @@ export class AgentFloatService {
     });
 
     return updatedTransfer;
+  }
+
+  /**
+   * Rebuild the unsigned Soroban transaction XDR for an AWAITING_SIGNATURE transfer (#842).
+   * Applies the same contract configuration and participant/admin checks as initial build.
+   */
+  async rebuildTransferTx(input: RebuildTransferInput): Promise<{
+    transfer: AgentFloatTransferRow;
+    executedOnChain: false;
+    unsignedTxXdr: string;
+  }> {
+    const { transferId, requester, userRole } = input;
+
+    const transferRes = await query(`SELECT * FROM agent_float_transfers WHERE id = $1`, [
+      transferId,
+    ]);
+    if (transferRes.rows.length === 0) {
+      throw AppError.notFound(`Float transfer request '${transferId}' not found.`);
+    }
+
+    const transfer = transferRes.rows[0] as AgentFloatTransferRow;
+    if (transfer.status !== 'AWAITING_SIGNATURE') {
+      throw AppError.badRequest(`Transfer is already in status '${transfer.status}'.`);
+    }
+
+    const isParticipant = requester === transfer.from_agent || requester === transfer.to_agent;
+    const isAdmin = userRole === 'admin' || userRole === 'super_admin';
+    if (!isParticipant && !isAdmin) {
+      throw AppError.forbidden(
+        'Only the initiating agent, recipient agent, or an admin can rebuild this transfer transaction.',
+      );
+    }
+
+    if (!env.AGENT_VAULT_CONTRACT_ID?.trim()) {
+      throw AppError.internal('AGENT_VAULT_CONTRACT_ID is not configured');
+    }
+
+    const result = await sorobanService.buildTransferToAgentTx(
+      transfer.from_agent,
+      transfer.to_agent,
+      toStroops(String(transfer.amount)),
+    );
+
+    await this.logAudit({
+      actor: requester,
+      action: 'AGENT_FLOAT_TRANSFER_XDR_REBUILT',
+      target: `TransferID:${transferId}`,
+      payload: {
+        fromAgent: transfer.from_agent,
+        toAgent: transfer.to_agent,
+        amount: transfer.amount,
+        executedOnChain: false,
+      },
+      status: 200,
+    });
+
+    return {
+      transfer,
+      executedOnChain: false,
+      unsignedTxXdr: result.unsignedTxXdr,
+    };
+  }
+
+  /**
+   * Cancel an in-progress float transfer (AWAITING_SIGNATURE or PENDING_APPROVAL),
+   * moving it to CANCELLED and releasing its contribution toward pair limits (#842).
+   */
+  async cancelTransfer(input: CancelTransferInput): Promise<AgentFloatTransferRow> {
+    const { transferId, canceller, userRole } = input;
+
+    const transferRes = await query(`SELECT * FROM agent_float_transfers WHERE id = $1`, [
+      transferId,
+    ]);
+    if (transferRes.rows.length === 0) {
+      throw AppError.notFound(`Float transfer request '${transferId}' not found.`);
+    }
+
+    const transfer = transferRes.rows[0] as AgentFloatTransferRow;
+    if (transfer.status !== 'AWAITING_SIGNATURE' && transfer.status !== 'PENDING_APPROVAL') {
+      throw AppError.badRequest(`Transfer is already in status '${transfer.status}'.`);
+    }
+
+    const isParticipant = canceller === transfer.from_agent || canceller === transfer.to_agent;
+    const isAdmin = userRole === 'admin' || userRole === 'super_admin';
+    if (!isParticipant && !isAdmin) {
+      throw AppError.forbidden(
+        'Only the initiating agent, recipient agent, or an admin can cancel this transfer.',
+      );
+    }
+
+    const previousStatus = transfer.status;
+
+    const updateRes = await query(
+      `UPDATE agent_float_transfers
+       SET status = 'CANCELLED', updated_at = NOW()
+       WHERE id = $1 AND status IN ('PENDING_APPROVAL', 'AWAITING_SIGNATURE')
+       RETURNING *`,
+      [transferId],
+    );
+    if (updateRes.rows.length === 0) {
+      throw AppError.conflict('Float transfer status changed before cancellation completed');
+    }
+
+    const updatedTransfer = updateRes.rows[0] as AgentFloatTransferRow;
+
+    await this.logAudit({
+      actor: canceller,
+      action: 'AGENT_FLOAT_TRANSFER_CANCELLED',
+      target: `TransferID:${transferId}`,
+      payload: {
+        canceller,
+        previousStatus,
+        fromAgent: transfer.from_agent,
+        toAgent: transfer.to_agent,
+        amount: transfer.amount,
+      },
+      status: 200,
+    });
+
+    return updatedTransfer;
+  }
+
+  /**
+   * Expire AWAITING_SIGNATURE transfers older than the configured window (#842),
+   * recording an audit event for each and releasing their pair limits.
+   */
+  async expireStaleTransfers(
+    windowMs: number = env.FLOAT_TRANSFER_AWAITING_SIGNATURE_TTL_MS,
+  ): Promise<AgentFloatTransferRow[]> {
+    if (!Number.isFinite(windowMs) || windowMs <= 0) {
+      throw AppError.badRequest('Expiry window must be a positive number of milliseconds.');
+    }
+
+    const res = await query(
+      `UPDATE agent_float_transfers
+       SET status = 'EXPIRED', updated_at = NOW()
+       WHERE status = 'AWAITING_SIGNATURE'
+         AND updated_at <= NOW() - ($1::bigint * INTERVAL '1 millisecond')
+       RETURNING *`,
+      [Math.floor(windowMs)],
+    );
+
+    const expired = res.rows as AgentFloatTransferRow[];
+
+    await Promise.all(
+      expired.map((row) =>
+        this.logAudit({
+          actor: 'SYSTEM',
+          action: 'AGENT_FLOAT_TRANSFER_EXPIRED',
+          target: `TransferID:${row.id}`,
+          payload: {
+            fromAgent: row.from_agent,
+            toAgent: row.to_agent,
+            amount: row.amount,
+            previousStatus: 'AWAITING_SIGNATURE',
+            windowMs: Math.floor(windowMs),
+          },
+          status: 200,
+        }),
+      ),
+    );
+
+    return expired;
   }
 
   /**

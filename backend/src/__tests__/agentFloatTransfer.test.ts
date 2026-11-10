@@ -375,6 +375,70 @@ describe('Agent Float Transfer API (/api/agents/float-transfer)', () => {
     });
   });
 
+  describe('POST /api/agents/float-transfer/:id/rebuild & /cancel (#842)', () => {
+    it('rebuilds the unsigned XDR for an awaiting-signature transfer', async () => {
+      process.env.AGENT_VAULT_CONTRACT_ID = 'C123456789AGENTVAULT';
+      mockQuery.mockResolvedValueOnce({
+        rows: [
+          {
+            id: 'ft_12345',
+            from_agent: AGENT_A,
+            to_agent: AGENT_B,
+            amount: '5000',
+            status: 'AWAITING_SIGNATURE',
+          },
+        ],
+      });
+      mockBuildTransferToAgentTx.mockResolvedValueOnce({ unsignedTxXdr: 'REBUILT...XDR' });
+      mockQuery.mockResolvedValueOnce({ rows: [] });
+
+      const response = await request(app)
+        .post('/api/agents/float-transfer/ft_12345/rebuild')
+        .set(bearer(AGENT_A))
+        .send();
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.unsignedTxXdr).toBe('REBUILT...XDR');
+      expect(response.body.data.executedOnChain).toBe(false);
+    });
+
+    it('cancels an awaiting-signature transfer', async () => {
+      mockQuery.mockResolvedValueOnce({
+        rows: [
+          {
+            id: 'ft_12345',
+            from_agent: AGENT_A,
+            to_agent: AGENT_B,
+            amount: '5000',
+            status: 'AWAITING_SIGNATURE',
+          },
+        ],
+      });
+      mockQuery.mockResolvedValueOnce({
+        rows: [
+          {
+            id: 'ft_12345',
+            from_agent: AGENT_A,
+            to_agent: AGENT_B,
+            amount: '5000',
+            status: 'CANCELLED',
+          },
+        ],
+      });
+      mockQuery.mockResolvedValueOnce({ rows: [] });
+
+      const response = await request(app)
+        .post('/api/agents/float-transfer/ft_12345/cancel')
+        .set(bearer(AGENT_A))
+        .send();
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.transfer.status).toBe('CANCELLED');
+    });
+  });
+
   describe('GET /api/agents/float-transfer/limits & PUT /api/agents/float-transfer/limits', () => {
     it('gets configured or default pair limits', async () => {
       mockQuery.mockResolvedValueOnce({

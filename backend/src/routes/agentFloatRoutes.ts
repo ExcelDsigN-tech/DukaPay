@@ -232,6 +232,100 @@ router.post(
 
 /**
  * @swagger
+ * /agents/float-transfer/{id}/rebuild:
+ *   post:
+ *     summary: Rebuild the unsigned transaction XDR for an awaiting-signature float transfer
+ *     tags: [Agents]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Unsigned float transfer transaction XDR rebuilt.
+ *       400:
+ *         description: Invalid transfer status.
+ *       401:
+ *         description: Unauthorized.
+ *       403:
+ *         description: Forbidden.
+ *       404:
+ *         description: Transfer not found.
+ */
+router.post(
+  '/float-transfer/:id/rebuild',
+  requireJwtAuth,
+  validateParams(floatTransferIdParamsSchema),
+  validateQuery(emptyAgentQuerySchema),
+  validateBody(emptyAgentBodySchema),
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params.id as string;
+    const publicKey = (req as { user?: { publicKey?: string } }).user?.publicKey;
+    const role = (req as { user?: { role?: string } }).user?.role;
+
+    const result = await agentFloatService.rebuildTransferTx({
+      transferId: id,
+      requester: publicKey!,
+      userRole: role,
+    });
+
+    res.status(200).json({ success: true, data: result });
+  }),
+);
+
+/**
+ * @swagger
+ * /agents/float-transfer/{id}/cancel:
+ *   post:
+ *     summary: Cancel an awaiting-signature or pending float transfer and release pair limits
+ *     tags: [Agents]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Float transfer cancelled.
+ *       400:
+ *         description: Invalid transfer status.
+ *       401:
+ *         description: Unauthorized.
+ *       403:
+ *         description: Forbidden.
+ *       404:
+ *         description: Transfer not found.
+ */
+router.post(
+  '/float-transfer/:id/cancel',
+  requireJwtAuth,
+  validateParams(floatTransferIdParamsSchema),
+  validateQuery(emptyAgentQuerySchema),
+  validateBody(emptyAgentBodySchema),
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params.id as string;
+    const publicKey = (req as { user?: { publicKey?: string } }).user?.publicKey;
+    const role = (req as { user?: { role?: string } }).user?.role;
+
+    const result = await agentFloatService.cancelTransfer({
+      transferId: id,
+      canceller: publicKey!,
+      userRole: role,
+    });
+
+    res.status(200).json({ success: true, data: { transfer: result } });
+  }),
+);
+
+/**
+ * @swagger
  * /agents/float-transfer/limits:
  *   get:
  *     summary: Get pair limits for an agent pair

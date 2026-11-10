@@ -899,4 +899,301 @@ describe('AgentFloatService', () => {
       expect(result).toBeDefined();
     });
   });
+
+  describe('rebuildTransferTx (#842)', () => {
+    const awaitingTransfer = {
+      id: 'ft_rebuild_1',
+      from_agent: AGENT_A,
+      to_agent: AGENT_B,
+      amount: '40',
+      status: 'AWAITING_SIGNATURE',
+      required_approvals: 2,
+      approval_count: 2,
+      tx_hash: null,
+    } as const;
+
+    it('rebuilds the unsigned XDR for an AWAITING_SIGNATURE transfer and writes an audit log', async () => {
+      process.env.AGENT_VAULT_CONTRACT_ID = 'C123456789AGENTVAULT';
+      mockQuery.mockResolvedValueOnce({ rows: [awaitingTransfer] });
+      mockBuildTransferToAgentTx.mockResolvedValueOnce({ unsignedTxXdr: 'FRESH...XDR' });
+      mockQuery.mockResolvedValueOnce({ rows: [] });
+
+      const result = await service.rebuildTransferTx({
+        transferId: awaitingTransfer.id,
+        requester: AGENT_A,
+      });
+
+      expect(result.unsignedTxXdr).toBe('FRESH...XDR');
+      expect(result.executedOnChain).toBe(false);
+      expect(mockBuildTransferToAgentTx).toHaveBeenCalledWith(AGENT_A, AGENT_B, 400_000_000n);
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO audit_logs'),
+        expect.arrayContaining([
+          AGENT_A,
+          'AGENT_FLOAT_TRANSFER_XDR_REBUILT',
+          `TransferID:${awaitingTransfer.id}`,
+          expect.stringContaining('"executedOnChain":false'),
+        ]),
+      );
+    });
+
+    it('rejects rebuild when transfer is not in AWAITING_SIGNATURE status', async () => {
+      process.env.AGENT_VAULT_CONTRACT_ID = 'C123456789AGENTVAULT';
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ ...awaitingTransfer, status: 'PENDING_APPROVAL' }],
+      });
+
+      await expect(
+        service.rebuildTransferTx({
+          transferId: awaitingTransfer.id,
+          requester: AGENT_A,
+        }),
+      ).rejects.toThrow("Transfer is already in status 'PENDING_APPROVAL'.");
+
+      expect(mockBuildTransferToAgentTx).not.toHaveBeenCalled();
+    });
+
+    it('rejects rebuild by an unauthorized third party', async () => {
+      process.env.AGENT_VAULT_CONTRACT_ID = 'C123456789AGENTVAULT';
+      mockQuery.mockResolvedValueOnce({ rows: [awaitingTransfer] });
+
+      await expect(
+        service.rebuildTransferTx({
+          transferId: awaitingTransfer.id,
+          requester: THIRD_PARTY,
+        }),
+      ).rejects.toThrow(/Only the initiating agent, recipient agent, or an admin/);
+
+      expect(mockBuildTransferToAgentTx).not.toHaveBeenCalled();
+    });
+
+    it('fails closed when AGENT_VAULT_CONTRACT_ID is not configured', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [awaitingTransfer] });
+
+      await expect(
+        service.rebuildTransferTx({
+          transferId: awaitingTransfer.id,
+          requester: AGENT_A,
+        }),
+      ).rejects.toThrow('AGENT_VAULT_CONTRACT_ID is not configured');
+
+      expect(mockBuildTransferToAgentTx).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('cancelTransfer & expireStaleTransfers (#842)', () => {
+    it('cancels an AWAITING_SIGNATURE transfer, logs an audit entry, and releases pair limits', async () => {
+      const store: Array<{
+        id: string;
+        from_agent: string;
+        to_agent: string;
+        amount: string;
+        status: string;
+      }> = [
+        {
+          id: 'ft_stuck_1',
+          from_agent: AGENT_A,
+          to_agent: AGENT_B,
+          amount: '95000',
+          status: 'AWAITING_SIGNATURE',
+        },
+      ];
+
+      mockQuery.mockImplementation(async (sql: string, params: unknown[] = []) => {
+        if (sql.includes('SELECT * FROM agent_float_transfers WHERE id = $1')) {
+          return { rows: store.filter((r) => r.id === params[0]).map((r) => ({ ...r })) };
+        }
+        if (sql.includes("SET status = 'CANCELLED'")) {
+          const row = store.find((r) => r.id === params[0]);
+          if (!row) return { rows: [] };
+          row.status = 'CANCELLED';
+          return { rows: [{ ...row }] };
+        }
+        if (sql.includes('COALESCE(SUM(amount), 0) as total')) {
+          const activeStatuses = new Set(['PENDING_APPROVAL', 'AWAITING_SIGNATURE', 'COMPLETED']);
+          const sum = store
+            .filter(
+              (r) =>
+                r.from_agent === params[0] &&
+                r.to_agent === params[1] &&
+                activeStatuses.has(r.status),
+            )
+            .reduce((acc, r) => acc + Number(r.amount), 0);
+          return { rows: [{ total: String(sum) }] };
+        }
+        if (sql.includes('INSERT INTO agent_float_transfers')) {
+          const created = {
+            id: String(params[0]),
+            from_agent: String(params[1]),
+            to_agent: String(params[2]),
+            amount: String(params[3]),
+            status: 'PENDING_APPROVAL',
+          };
+          store.push(created);
+          return { rows: [created] };
+        }
+        if (sql.includes('INSERT INTO agent_float_transfer_approvals')) {
+          return {
+            rows: [{ id: 1, transfer_id: params[0], approver: params[1], role: params[2] }],
+          };
+        }
+        return { rows: [] };
+      });
+
+      // Before cancelling, a 10,000 transfer exceeds the 100,000 daily limit (95,000 + 10,000 > 100,000)
+      await expect(
+        service.initiateTransfer({
+          fromAgent: AGENT_A,
+          toAgent: AGENT_B,
+          amount: 10000,
+          createdBy: AGENT_A,
+        }),
+      ).rejects.toThrow(/exceeds daily limit/i);
+
+      // Cancel the stuck AWAITING_SIGNATURE transfer
+      const cancelled = await service.cancelTransfer({
+        transferId: 'ft_stuck_1',
+        canceller: AGENT_A,
+      });
+      expect(cancelled.status).toBe('CANCELLED');
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO audit_logs'),
+        expect.arrayContaining([
+          AGENT_A,
+          'AGENT_FLOAT_TRANSFER_CANCELLED',
+          'TransferID:ft_stuck_1',
+          expect.stringContaining('"previousStatus":"AWAITING_SIGNATURE"'),
+        ]),
+      );
+
+      // Now pair limit is released and the 10,000 transfer succeeds
+      const initiated = await service.initiateTransfer({
+        fromAgent: AGENT_A,
+        toAgent: AGENT_B,
+        amount: 10000,
+        createdBy: AGENT_A,
+      });
+      expect(initiated.transfer.status).toBe('PENDING_APPROVAL');
+    });
+
+    it('rejects cancellation by an unauthorized third party or on a completed transfer', async () => {
+      mockQuery.mockResolvedValueOnce({
+        rows: [
+          {
+            id: 'ft_cancel_unauth',
+            from_agent: AGENT_A,
+            to_agent: AGENT_B,
+            status: 'AWAITING_SIGNATURE',
+          },
+        ],
+      });
+
+      await expect(
+        service.cancelTransfer({
+          transferId: 'ft_cancel_unauth',
+          canceller: THIRD_PARTY,
+        }),
+      ).rejects.toThrow(/Only the initiating agent, recipient agent, or an admin/);
+
+      mockQuery.mockResolvedValueOnce({
+        rows: [
+          {
+            id: 'ft_cancel_done',
+            from_agent: AGENT_A,
+            to_agent: AGENT_B,
+            status: 'COMPLETED',
+          },
+        ],
+      });
+
+      await expect(
+        service.cancelTransfer({
+          transferId: 'ft_cancel_done',
+          canceller: AGENT_A,
+        }),
+      ).rejects.toThrow("Transfer is already in status 'COMPLETED'.");
+    });
+
+    it('expires stale AWAITING_SIGNATURE transfers, logs audit events, and releases pair limits', async () => {
+      const store: Array<{
+        id: string;
+        from_agent: string;
+        to_agent: string;
+        amount: string;
+        status: string;
+      }> = [
+        {
+          id: 'ft_stale_1',
+          from_agent: AGENT_A,
+          to_agent: AGENT_B,
+          amount: '95000',
+          status: 'AWAITING_SIGNATURE',
+        },
+      ];
+
+      mockQuery.mockImplementation(async (sql: string, params: unknown[] = []) => {
+        if (sql.includes("SET status = 'EXPIRED'")) {
+          const expiredRows = store
+            .filter((r) => r.status === 'AWAITING_SIGNATURE')
+            .map((r) => {
+              r.status = 'EXPIRED';
+              return { ...r };
+            });
+          return { rows: expiredRows };
+        }
+        if (sql.includes('COALESCE(SUM(amount), 0) as total')) {
+          const activeStatuses = new Set(['PENDING_APPROVAL', 'AWAITING_SIGNATURE', 'COMPLETED']);
+          const sum = store
+            .filter(
+              (r) =>
+                r.from_agent === params[0] &&
+                r.to_agent === params[1] &&
+                activeStatuses.has(r.status),
+            )
+            .reduce((acc, r) => acc + Number(r.amount), 0);
+          return { rows: [{ total: String(sum) }] };
+        }
+        if (sql.includes('INSERT INTO agent_float_transfers')) {
+          const created = {
+            id: String(params[0]),
+            from_agent: String(params[1]),
+            to_agent: String(params[2]),
+            amount: String(params[3]),
+            status: 'PENDING_APPROVAL',
+          };
+          store.push(created);
+          return { rows: [created] };
+        }
+        if (sql.includes('INSERT INTO agent_float_transfer_approvals')) {
+          return {
+            rows: [{ id: 1, transfer_id: params[0], approver: params[1], role: params[2] }],
+          };
+        }
+        return { rows: [] };
+      });
+
+      const expired = await service.expireStaleTransfers(60_000);
+      expect(expired).toHaveLength(1);
+      expect(expired[0]?.id).toBe('ft_stale_1');
+      expect(expired[0]?.status).toBe('EXPIRED');
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO audit_logs'),
+        expect.arrayContaining([
+          'SYSTEM',
+          'AGENT_FLOAT_TRANSFER_EXPIRED',
+          'TransferID:ft_stale_1',
+          expect.stringContaining('"windowMs":60000'),
+        ]),
+      );
+
+      // Pair limit is now released after expiry
+      const initiated = await service.initiateTransfer({
+        fromAgent: AGENT_A,
+        toAgent: AGENT_B,
+        amount: 10000,
+        createdBy: AGENT_A,
+      });
+      expect(initiated.transfer.status).toBe('PENDING_APPROVAL');
+    });
+  });
 });

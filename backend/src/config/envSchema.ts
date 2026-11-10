@@ -130,6 +130,7 @@ export const envShape = {
   STELLAR_EURC_ISSUER: optionalString(),
   STELLAR_PHP_ISSUER: optionalString(),
   PAUSE_STATE_REFRESH_MS: int(30000),
+  FLOAT_TRANSFER_AWAITING_SIGNATURE_TTL_MS: positiveInt(60 * 60 * 1000),
 
   // Governance
   GOVERNANCE_SIGNERS: list(),

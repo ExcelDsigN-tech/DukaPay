@@ -3423,6 +3423,86 @@
         }
       }
     },
+    "/agents/float-transfer/{id}/rebuild": {
+      "post": {
+        "summary": "Rebuild the unsigned transaction XDR for an awaiting-signature float transfer",
+        "tags": [
+          "Agents"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Unsigned float transfer transaction XDR rebuilt."
+          },
+          "400": {
+            "description": "Invalid transfer status."
+          },
+          "401": {
+            "description": "Unauthorized."
+          },
+          "403": {
+            "description": "Forbidden."
+          },
+          "404": {
+            "description": "Transfer not found."
+          }
+        }
+      }
+    },
+    "/agents/float-transfer/{id}/cancel": {
+      "post": {
+        "summary": "Cancel an awaiting-signature or pending float transfer and release pair limits",
+        "tags": [
+          "Agents"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Float transfer cancelled."
+          },
+          "400": {
+            "description": "Invalid transfer status."
+          },
+          "401": {
+            "description": "Unauthorized."
+          },
+          "403": {
+            "description": "Forbidden."
+          },
+          "404": {
+            "description": "Transfer not found."
+          }
+        }
+      }
+    },
     "/agents/float-transfer/limits": {
       "get": {
         "summary": "Get pair limits for an agent pair",
