@@ -213,10 +213,10 @@ impl AgentVault {
         Ok(())
     }
 
-    /// Require that `agent` is registered and `Active` before minting new
-    /// float for them (#788). A no-op when no registry is configured, so
-    /// existing deployments stay backward compatible until they wire one in
-    /// via `set_registry`.
+    /// Require that `agent` is registered and `Active` before minting or
+    /// transferring float (#788, #835, #865). A no-op when no registry is
+    /// configured, so existing deployments stay backward compatible until they
+    /// wire one in via `set_registry`.
     fn assert_agent_active(env: &Env, agent: &Address) -> Result<(), VaultError> {
         if let Some(registry) = env
             .storage()
@@ -227,6 +227,37 @@ impl AgentVault {
             let client = RegistryClient::new(env, &registry);
             match client.try_get_agent(agent) {
                 Ok(Ok(info)) if info.status == AgentStatus::Active => Ok(()),
+                _ => Err(VaultError::AgentNotFound),
+            }
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Require that `agent` holds a registry status permitted to unwind an
+    /// existing vault position (`Active`, `Suspended`, or `Expired`).
+    /// `Suspended` and `Expired` agents keep exit paths (`burn_float`,
+    /// `withdraw_collateral`, and non-positive `settle_net` deltas) so
+    /// customer redemptions and collateral exits are never trapped, while
+    /// `Pending` and unregistered agents are rejected (#865). A no-op when no
+    /// registry is configured.
+    fn assert_agent_can_exit(env: &Env, agent: &Address) -> Result<(), VaultError> {
+        if let Some(registry) = env
+            .storage()
+            .instance()
+            .get::<_, Option<Address>>(&DataKey::Registry)
+            .flatten()
+        {
+            let client = RegistryClient::new(env, &registry);
+            match client.try_get_agent(agent) {
+                Ok(Ok(info))
+                    if matches!(
+                        info.status,
+                        AgentStatus::Active | AgentStatus::Suspended | AgentStatus::Expired
+                    ) =>
+                {
+                    Ok(())
+                }
                 _ => Err(VaultError::AgentNotFound),
             }
         } else {
@@ -392,6 +423,7 @@ impl AgentVault {
     pub fn withdraw_collateral(env: Env, agent: Address, amount: i128) -> Result<(), VaultError> {
         agent.require_auth();
         Self::assert_circuit_ok(&env, Symbol::new(&env, "withdraw_collateral"))?;
+        Self::assert_agent_can_exit(&env, &agent)?;
         Self::acquire_lock(&env)?;
         if amount <= 0 {
             Self::release_lock(&env);
@@ -460,6 +492,7 @@ impl AgentVault {
     pub fn burn_float(env: Env, agent: Address, amount: i128) -> Result<(), VaultError> {
         agent.require_auth();
         Self::assert_circuit_ok(&env, Symbol::new(&env, "burn_float"))?;
+        Self::assert_agent_can_exit(&env, &agent)?;
         if amount <= 0 {
             return Err(VaultError::InvalidAmount);
         }
@@ -496,6 +529,7 @@ impl AgentVault {
         from.require_auth();
         to.require_auth();
         Self::assert_circuit_ok(&env, Symbol::new(&env, "transfer_float"))?;
+        Self::assert_agent_active(&env, &from)?;
         Self::assert_agent_active(&env, &to)?;
         if amount <= 0 {
             return Err(VaultError::InvalidAmount);
@@ -557,6 +591,8 @@ impl AgentVault {
             let delta = entry.1;
             if delta > 0 {
                 Self::assert_agent_active(&env, &agent)?;
+            } else {
+                Self::assert_agent_can_exit(&env, &agent)?;
             }
             let mut vault = Self::read_vault(&env, &agent);
             let new_float = vault

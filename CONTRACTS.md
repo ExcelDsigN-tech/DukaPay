@@ -80,6 +80,29 @@ Haircut parameters are updateable through the operator (DukaPay settlement
 backend). Future governance integration via `multisig_governance` contract
 is planned for parameter changes.
 
+### Registry Status Gate & Exit Paths (Issues #788, #835, #865)
+
+When an `agent_registry` contract is wired into `agent_vault` via `set_registry(Some(registry))`, value-moving operations enforce agent status checks so non-`Active` agents cannot take on new float or route float peer-to-peer, while `Suspended` and `Expired` agents retain safe exit paths to unwind existing liabilities and reclaim unlocked collateral:
+
+1. **Float Issuance & Peer Transfers Require `Active` Status**:
+   - `mint_float`, `settle_net` entries with `delta > 0`, and both the sender (`from`) and receiver (`to`) of `transfer_float` / `transfer_to_agent` require `AgentStatus::Active` (`VaultError::AgentNotFound` otherwise).
+   - A `Suspended` or `Expired` agent cannot send or receive float via peer-to-peer `transfer_float`.
+2. **Unwind / Exit Paths Stay Open for `Suspended` and `Expired` Agents**:
+   - `burn_float`, `withdraw_collateral` (subject to the solvency invariant and `min_collateral` floor), and `settle_net` entries with `delta <= 0` are permitted for `Active`, `Suspended`, and `Expired` agents.
+   - Keeping these three unwind paths open ensures customer cash-outs and end-of-day net-downs are never trapped when an agent is suspended or their license expires, and allows the agent to burn remaining float down to `0` so `withdraw_collateral` and `agent_registry::withdraw_bond` (which requires a non-`Active` status) can complete cleanly.
+3. **`Pending` and Unregistered Agents Rejected**:
+   - `Pending` and unregistered agents have never been activated to issue float and are rejected with `VaultError::AgentNotFound` across both issuance and exit paths when a registry is configured.
+
+| Entrypoint | `Active` | `Suspended` | `Expired` | `Pending` | Unregistered |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| `mint_float` | Allowed | `AgentNotFound` | `AgentNotFound` | `AgentNotFound` | `AgentNotFound` |
+| `transfer_float` / `transfer_to_agent` (`from`) | Allowed | `AgentNotFound` | `AgentNotFound` | `AgentNotFound` | `AgentNotFound` |
+| `transfer_float` / `transfer_to_agent` (`to`) | Allowed | `AgentNotFound` | `AgentNotFound` | `AgentNotFound` | `AgentNotFound` |
+| `settle_net` (`delta > 0`) | Allowed | `AgentNotFound` | `AgentNotFound` | `AgentNotFound` | `AgentNotFound` |
+| `settle_net` (`delta <= 0`) | Allowed | Allowed (unwind) | Allowed (unwind) | `AgentNotFound` | `AgentNotFound` |
+| `burn_float` | Allowed | Allowed (unwind) | Allowed (unwind) | `AgentNotFound` | `AgentNotFound` |
+| `withdraw_collateral` | Allowed | Allowed (unwind) | Allowed (unwind) | `AgentNotFound` | `AgentNotFound` |
+
 ---
 
 ## Contract Upgrade Governance (Issue #452)

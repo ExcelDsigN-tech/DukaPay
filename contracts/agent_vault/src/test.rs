@@ -564,12 +564,19 @@ impl MockRegistry {
             .set(&Symbol::new(&env, "status"), &status);
     }
 
-    pub fn get_agent(env: Env, _agent: Address) -> Result<crate::AgentInfo, crate::RegistryError> {
-        let status: Option<crate::AgentStatus> = env
-            .storage()
-            .instance()
-            .get(&Symbol::new(&env, "status"))
-            .unwrap();
+    pub fn set_agent_status(env: Env, agent: Address, status: Option<crate::AgentStatus>) {
+        env.storage().instance().set(&agent, &status);
+    }
+
+    pub fn get_agent(env: Env, agent: Address) -> Result<crate::AgentInfo, crate::RegistryError> {
+        let status: Option<crate::AgentStatus> = if env.storage().instance().has(&agent) {
+            env.storage().instance().get(&agent).unwrap()
+        } else {
+            env.storage()
+                .instance()
+                .get(&Symbol::new(&env, "status"))
+                .unwrap()
+        };
         status
             .map(|status| crate::AgentInfo {
                 status,
@@ -678,6 +685,107 @@ fn test_mint_float_allows_active_agent() {
     fund(&s, &a, 1_000);
     s.client.mint_float(&a, &100);
     assert_eq!(s.client.get_vault(&a).float, 100);
+}
+
+#[test]
+fn test_transfer_float_rejects_non_active_sender() {
+    for status in NON_ACTIVE_STATUSES {
+        let (s, a, b) = setup_with_float();
+        // Default registry status is Active so recipient `b` passes; override
+        // only sender `a` to isolate the sender status gate (#865).
+        let registry = mock_registry(&s.env, Some(crate::AgentStatus::Active));
+        MockRegistryClient::new(&s.env, &registry).set_agent_status(&a, &status);
+        s.client.set_registry(&Some(registry));
+
+        assert_eq!(
+            s.client.try_transfer_float(&a, &b, &100),
+            Err(Ok(VaultError::AgentNotFound))
+        );
+        assert_eq!(s.client.get_vault(&a).float, 300);
+        assert_eq!(s.client.get_vault(&b).float, 300);
+    }
+}
+
+#[test]
+fn test_burn_float_exit_paths_by_status() {
+    for status in [
+        Some(crate::AgentStatus::Active),
+        Some(crate::AgentStatus::Suspended),
+        Some(crate::AgentStatus::Expired),
+    ] {
+        let (s, a, _b) = setup_with_float();
+        s.client.set_registry(&Some(mock_registry(&s.env, status)));
+        s.client.burn_float(&a, &100);
+        assert_eq!(s.client.get_vault(&a).float, 200);
+    }
+
+    for status in [None, Some(crate::AgentStatus::Pending)] {
+        let (s, a, _b) = setup_with_float();
+        s.client.set_registry(&Some(mock_registry(&s.env, status)));
+        assert_eq!(
+            s.client.try_burn_float(&a, &100),
+            Err(Ok(VaultError::AgentNotFound))
+        );
+        assert_eq!(s.client.get_vault(&a).float, 300);
+    }
+}
+
+#[test]
+fn test_withdraw_collateral_exit_paths_by_status() {
+    for status in [
+        Some(crate::AgentStatus::Active),
+        Some(crate::AgentStatus::Suspended),
+        Some(crate::AgentStatus::Expired),
+    ] {
+        let (s, a, _b) = setup_with_float();
+        s.client.set_registry(&Some(mock_registry(&s.env, status)));
+        s.client.withdraw_collateral(&a, &200);
+        assert_eq!(s.client.get_vault(&a).collateral, 800);
+    }
+
+    for status in [None, Some(crate::AgentStatus::Pending)] {
+        let (s, a, _b) = setup_with_float();
+        s.client.set_registry(&Some(mock_registry(&s.env, status)));
+        assert_eq!(
+            s.client.try_withdraw_collateral(&a, &200),
+            Err(Ok(VaultError::AgentNotFound))
+        );
+        assert_eq!(s.client.get_vault(&a).collateral, 1_000);
+    }
+}
+
+#[test]
+fn test_settle_net_negative_delta_exit_paths_by_status() {
+    for status in [
+        Some(crate::AgentStatus::Active),
+        Some(crate::AgentStatus::Suspended),
+        Some(crate::AgentStatus::Expired),
+    ] {
+        let (s, a, b) = setup_with_float();
+        let registry = mock_registry(&s.env, Some(crate::AgentStatus::Active));
+        MockRegistryClient::new(&s.env, &registry).set_agent_status(&a, &status);
+        s.client.set_registry(&Some(registry));
+
+        let entries: Vec<(Address, i128)> = vec![&s.env, (a.clone(), -100), (b.clone(), 100)];
+        s.client.settle_net(&entries);
+        assert_eq!(s.client.get_vault(&a).float, 200);
+        assert_eq!(s.client.get_vault(&b).float, 400);
+    }
+
+    for status in [None, Some(crate::AgentStatus::Pending)] {
+        let (s, a, b) = setup_with_float();
+        let registry = mock_registry(&s.env, Some(crate::AgentStatus::Active));
+        MockRegistryClient::new(&s.env, &registry).set_agent_status(&a, &status);
+        s.client.set_registry(&Some(registry));
+
+        let entries: Vec<(Address, i128)> = vec![&s.env, (a.clone(), -100), (b.clone(), 100)];
+        assert_eq!(
+            s.client.try_settle_net(&entries),
+            Err(Ok(VaultError::AgentNotFound))
+        );
+        assert_eq!(s.client.get_vault(&a).float, 300);
+        assert_eq!(s.client.get_vault(&b).float, 300);
+    }
 }
 
 // ── Invariant checks ────────────────────────────────────────────────────────
