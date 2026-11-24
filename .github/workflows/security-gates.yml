@@ -179,6 +179,11 @@ jobs:
           NPM_RESULT: ${{ needs.npm-audit.result }}
           CARGO_RESULT: ${{ needs.cargo-audit.result }}
         run: |
+          # Only open an issue when a scan did not pass; all-green weeks are noise.
+          if [ "$SOCKET_RESULT $SEMGREP_RESULT $GITLEAKS_RESULT $TRIVY_RESULT $NPM_RESULT $CARGO_RESULT" = "success success success success success success" ]; then
+            echo "All scans passed; no report issue."
+            exit 0
+          fi
           title="Weekly vulnerability report - $(date -u +%Y-%m-%d)"
           body=$(cat <<EOF
           Automated security scan summary:
