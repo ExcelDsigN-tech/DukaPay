@@ -164,6 +164,41 @@ fn test_withdraw_flow() {
     assert_eq!(pool_client.get_deposit(&provider, &token_id), 2000);
 }
 
+/// Regression for the `lending_pool_fuzz` crash: share math multiplied in
+/// i128 before dividing, so `shares * total_managed_assets` above i128::MAX
+/// trapped `get_deposit` and `withdraw` and locked the holder's funds.
+#[test]
+fn test_large_deposit_share_math_does_not_overflow() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let token_admin = Address::generate(&env);
+    let (token_id, stellar_asset_client, token_client) = create_token_contract(&env, &token_admin);
+
+    let pool_id = env.register(LendingPool, (&token_admin,));
+    let pool_client = LendingPoolClient::new(&env, &pool_id);
+    pool_client.set_withdrawal_cooldown(&0);
+
+    // 2e19 * 2e19 = 4e38 > i128::MAX.
+    let big: i128 = 20_000_000_000_000_000_000;
+    let provider = Address::generate(&env);
+    stellar_asset_client.mint(&provider, &big);
+
+    pool_client.deposit(&provider, &token_id, &big, &0);
+    assert_eq!(pool_client.get_shares(&provider, &token_id), big);
+    assert_eq!(pool_client.get_deposit(&provider, &token_id), big);
+    assert_eq!(pool_client.preview_redeem(&token_id, &big), big);
+    assert_eq!(
+        pool_client.get_depositor_yield(&provider, &token_id),
+        (big, big)
+    );
+
+    pool_client.withdraw(&provider, &token_id, &big, &0);
+    assert_eq!(token_client.balance(&provider), big);
+    assert_eq!(token_client.balance(&pool_id), 0);
+    assert_eq!(pool_client.get_shares(&provider, &token_id), 0);
+}
+
 #[test]
 #[should_panic]
 fn test_negative_withdraw_panic() {
@@ -1837,15 +1872,20 @@ fn test_virtual_offset_prevents_first_depositor_inflation_attack() {
     // "total assets" figure were still manipulated, the offset alone
     // prevents the classic inflation attack of rounding a victim's minted
     // shares down to zero.
-    let attacker_shares = LendingPool::calc_shares_to_mint(1, 0, 0);
+    let env = Env::default();
+    let attacker_shares = LendingPool::calc_shares_to_mint(&env, 1, 0, 0);
     assert_eq!(attacker_shares, 1);
 
     // Hypothetical manipulated pricing input: 1 share backed by 1_000_001
     // (a) assets, as if a 1_000_000 donation had been counted.
     let manipulated_total_assets = 1_000_001;
 
-    let victim_shares =
-        LendingPool::calc_shares_to_mint(1_000_000, manipulated_total_assets, attacker_shares);
+    let victim_shares = LendingPool::calc_shares_to_mint(
+        &env,
+        1_000_000,
+        manipulated_total_assets,
+        attacker_shares,
+    );
     assert!(
         victim_shares > 0,
         "the virtual offset must prevent the victim's shares from rounding to zero"
@@ -1856,6 +1896,7 @@ fn test_virtual_offset_prevents_first_depositor_inflation_attack() {
     // the deposit is bounded by the offset to a dust-level share of the
     // pool -- ruinously unprofitable.
     let attacker_assets = LendingPool::calc_assets_to_redeem(
+        &env,
         attacker_shares,
         manipulated_total_assets + 1_000_000,
         attacker_shares + victim_shares,

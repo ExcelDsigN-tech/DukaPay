@@ -360,6 +360,7 @@ impl LendingPool {
     /// victim's minted shares down to zero. Rounds down, in the
     /// pool's favor.
     fn calc_shares_to_mint(
+        env: &Env,
         amount: i128,
         total_managed_assets_before: i128,
         cur_total_shares: i128,
@@ -370,13 +371,19 @@ impl LendingPool {
         let assets_den = total_managed_assets_before
             .checked_add(Self::VIRTUAL_ASSETS)
             .expect("virtual assets overflow");
-        let numerator = amount.checked_mul(shares_num).expect("share mint overflow");
         // Floor: minting fewer shares than the exact exchange rate would
         // imply protects existing holders from dilution by rounding in
-        // the protocol's favor, matching `money::round_div`'s Floor mode
-        // used identically for withdrawal-side redemption below.
-        money::round_div(numerator, assets_den, money::RoundingMode::Floor)
-            .expect("share mint overflow")
+        // the protocol's favor, matching the Floor mode used identically
+        // for withdrawal-side redemption below. `mul_div` keeps the
+        // `amount * shares_num` intermediate in 256 bits.
+        money::mul_div(
+            env,
+            amount,
+            shares_num,
+            assets_den,
+            money::RoundingMode::Floor,
+        )
+        .expect("share mint overflow")
     }
 
     /// Underlying assets redeemable for `shares` given current pool state.
@@ -386,6 +393,7 @@ impl LendingPool {
     /// `total_managed_assets` automatically includes any yield realized via
     /// `distribute_yield` since the shares were minted.
     fn calc_assets_to_redeem(
+        env: &Env,
         shares: i128,
         total_managed_assets: i128,
         cur_total_shares: i128,
@@ -396,14 +404,18 @@ impl LendingPool {
         let shares_den = cur_total_shares
             .checked_add(Self::VIRTUAL_SHARES)
             .expect("virtual shares overflow");
-        let numerator = shares
-            .checked_mul(assets_num)
-            .expect("share redeem overflow");
         // Floor: redeeming slightly fewer assets than the exact exchange
         // rate implies leaves the residual in the pool for remaining
-        // depositors rather than paying it out from thin air.
-        money::round_div(numerator, shares_den, money::RoundingMode::Floor)
-            .expect("share redeem overflow")
+        // depositors rather than paying it out from thin air. `mul_div`
+        // keeps the `shares * assets_num` intermediate in 256 bits.
+        money::mul_div(
+            env,
+            shares,
+            assets_num,
+            shares_den,
+            money::RoundingMode::Floor,
+        )
+        .expect("share redeem overflow")
     }
 
     fn assert_withdrawal_cooldown_elapsed(env: &Env, provider: &Address, token: &Address) {
@@ -446,7 +458,7 @@ impl LendingPool {
         // the live token balance; see `total_managed_assets`.
         let total_managed_before = Self::total_managed_assets(env, token);
         let assets_to_return =
-            Self::calc_assets_to_redeem(shares, total_managed_before, cur_total_shares);
+            Self::calc_assets_to_redeem(env, shares, total_managed_before, cur_total_shares);
 
         if assets_to_return <= 0 {
             return Err(PoolError::ZeroShares);
@@ -749,7 +761,7 @@ impl LendingPool {
         let cur_total_shares = Self::total_shares(&env, &token);
 
         let shares_to_mint =
-            Self::calc_shares_to_mint(amount, total_managed_before, cur_total_shares);
+            Self::calc_shares_to_mint(&env, amount, total_managed_before, cur_total_shares);
         if shares_to_mint <= 0 {
             let _ = Self::release_lock(&env);
             return Err(PoolError::ZeroShares);
@@ -838,7 +850,7 @@ impl LendingPool {
         }
         let total_managed = Self::total_managed_assets(&env, &token);
         let cur_total_shares = Self::total_shares(&env, &token);
-        Self::calc_shares_to_mint(amount, total_managed, cur_total_shares)
+        Self::calc_shares_to_mint(&env, amount, total_managed, cur_total_shares)
     }
 
     /// Read-only preview of the assets `redeem`/`withdraw` would return for
@@ -853,7 +865,7 @@ impl LendingPool {
             return 0;
         }
         let total_managed = Self::total_managed_assets(&env, &token);
-        Self::calc_assets_to_redeem(shares, total_managed, cur_total_shares)
+        Self::calc_assets_to_redeem(&env, shares, total_managed, cur_total_shares)
     }
 
     /// Recognize `amount` of `token` already transferred by `from` into the
@@ -918,6 +930,7 @@ impl LendingPool {
             return (shares, 0);
         }
         let asset_value = Self::calc_assets_to_redeem(
+            &env,
             shares,
             Self::total_managed_assets(&env, &token),
             cur_total_shares,
@@ -937,6 +950,7 @@ impl LendingPool {
             return 0;
         }
         Self::calc_assets_to_redeem(
+            &env,
             shares,
             Self::total_managed_assets(&env, &token),
             cur_total_shares,
