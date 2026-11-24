@@ -32,6 +32,11 @@ jobs:
         run: npm ci
         working-directory: frontend
 
+      # lighthouserc starts the app with `next start`, which needs a production build.
+      - name: Build
+        run: npm run build
+        working-directory: frontend
+
       - name: Run Lighthouse CI budgets
         run: npx @lhci/cli@0.14.x autorun --config=./lighthouserc.yml
         working-directory: frontend
