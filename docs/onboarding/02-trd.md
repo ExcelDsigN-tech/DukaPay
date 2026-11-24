@@ -10,7 +10,7 @@
 - Charts: Recharts (`CreditScoreTrendChart`, `RiskTierChart`, `YieldEarningsChart`)
 - Animation: Framer Motion, Lottie (`lottie-react`)
 - Wallet: `@stellar/freighter-api`, `@stellar/stellar-sdk`
-- Testing: Jest + Testing Library (unit), Playwright (e2e, `frontend/e2e`), axe-playwright (a11y), Lighthouse CI (perf budgets, `lighthouse-budget.json`)
+- Testing: Jest + Testing Library (unit), Playwright (e2e, `frontend/e2e`), axe-playwright (a11y), Lighthouse CI (perf budgets, `frontend/lighthouserc.yml`)
 - Observability: `@sentry/nextjs` (client/server/edge configs present)
 
 ## Backend

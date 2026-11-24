@@ -54,7 +54,7 @@ Not explicitly named anywhere in the repo. The Obsidian/neon palette and RPG fra
 
 ## Mobile Responsiveness
 
-- Confirmed: bottom tab navigation for mobile (`BottomNav.tsx`), install prompt for PWA (`InstallPrompt.tsx`), Lighthouse CI perf budgets (`lighthouse-budget.json`) enforced in CI (`lighthouse-ci.yml`). Mobile performance is actively gated, not just responsive-by-accident.
+- Confirmed: bottom tab navigation for mobile (`BottomNav.tsx`), install prompt for PWA (`InstallPrompt.tsx`), Lighthouse CI perf budgets (`frontend/lighthouserc.yml`) enforced in CI (`lighthouse-ci.yml`). Mobile performance is actively gated, not just responsive-by-accident.
 
 ## Accessibility
 
