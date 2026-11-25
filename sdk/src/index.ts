@@ -6,6 +6,7 @@ export {
   AgentsResource,
   AuthResource,
   LoansResource,
+  NotificationsResource,
   PoolResource,
   ScoresResource,
   RemittanceResource,

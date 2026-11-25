@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
+import { DukaPayClient } from './client.js';
 import type { HttpClient } from './http.js';
 import type { RemittanceList } from './types.js';
 import {
   AgentsResource,
   AuthResource,
   LoansResource,
+  NotificationsResource,
   PoolResource,
   ScoresResource,
   RemittanceResource,
@@ -687,5 +689,120 @@ describe('AgentsResource', () => {
         weeklyLimit: 800000,
       }),
     ).toThrow(ValidationError);
+  });
+});
+
+describe('NotificationsResource', () => {
+  it('lists notifications with filters', async () => {
+    const response = {
+      success: true,
+      data: { notifications: [], unreadCount: 0 },
+    };
+    const get = vi.fn().mockResolvedValue(response);
+    const resource = new NotificationsResource({ get } as unknown as HttpClient);
+
+    await expect(
+      resource.list({ type: 'repayment_due', status: 'unread', from: '2026-01-01', limit: 20 }),
+    ).resolves.toBe(response);
+    expect(get).toHaveBeenCalledWith('/notifications', {
+      query: {
+        type: 'repayment_due',
+        status: 'unread',
+        from: '2026-01-01',
+        to: undefined,
+        limit: 20,
+      },
+    });
+  });
+
+  it('lists notifications with no filters', async () => {
+    const get = vi.fn().mockResolvedValue({ success: true, data: { notifications: [] } });
+    const resource = new NotificationsResource({ get } as unknown as HttpClient);
+
+    await resource.list();
+
+    expect(get).toHaveBeenCalledWith('/notifications', {
+      query: { type: undefined, status: undefined, from: undefined, to: undefined, limit: undefined },
+    });
+  });
+
+  it('gets and updates preferences', async () => {
+    const preferences = {
+      emailEnabled: true,
+      smsEnabled: false,
+      phone: null,
+      perTypeOverrides: { repayment_due: true },
+    };
+    const get = vi.fn().mockResolvedValue(preferences);
+    const put = vi.fn().mockResolvedValue(preferences);
+    const resource = new NotificationsResource({ get, put } as unknown as HttpClient);
+
+    await expect(resource.getPreferences()).resolves.toBe(preferences);
+    expect(get).toHaveBeenCalledWith('/notifications/preferences');
+
+    await expect(resource.updatePreferences(preferences)).resolves.toBe(preferences);
+    expect(put).toHaveBeenCalledWith('/notifications/preferences', preferences);
+  });
+
+  it('rejects invalid preference values before sending', () => {
+    const put = vi.fn();
+    const resource = new NotificationsResource({ put } as unknown as HttpClient);
+
+    expect(() =>
+      resource.updatePreferences({
+        emailEnabled: true,
+        smsEnabled: true,
+        phone: null,
+      }),
+    ).toThrow(ValidationError);
+    expect(() =>
+      resource.updatePreferences({
+        emailEnabled: true,
+        smsEnabled: false,
+        perTypeOverrides: { repayment_due: 'yes' } as unknown as Record<string, boolean>,
+      }),
+    ).toThrow(ValidationError);
+    expect(put).not.toHaveBeenCalled();
+  });
+
+  it('marks notification ids as read', async () => {
+    const post = vi.fn().mockResolvedValue({ success: true });
+    const resource = new NotificationsResource({ post } as unknown as HttpClient);
+
+    await expect(resource.markRead([1, 2])).resolves.toEqual({ success: true });
+    expect(post).toHaveBeenCalledWith('/notifications/mark-read', { ids: [1, 2] });
+  });
+
+  it('rejects an empty ids array before sending', () => {
+    const post = vi.fn();
+    const resource = new NotificationsResource({ post } as unknown as HttpClient);
+
+    expect(() => resource.markRead([])).toThrow(ValidationError);
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it('rejects invalid ids before sending', () => {
+    const post = vi.fn();
+    const resource = new NotificationsResource({ post } as unknown as HttpClient);
+
+    expect(() => resource.markRead([1, -2])).toThrow(ValidationError);
+    expect(() => resource.markRead(Array.from({ length: 101 }, (_, i) => i + 1))).toThrow(
+      ValidationError,
+    );
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it('marks all notifications as read', async () => {
+    const post = vi.fn().mockResolvedValue({ success: true });
+    const resource = new NotificationsResource({ post } as unknown as HttpClient);
+
+    await expect(resource.markAllRead()).resolves.toEqual({ success: true });
+    expect(post).toHaveBeenCalledWith('/notifications/mark-all-read');
+  });
+
+  it('is exposed as client.notifications', () => {
+    const client = new DukaPayClient({ baseUrl: 'https://api.example.com' });
+
+    expect(client.notifications).toBeInstanceOf(NotificationsResource);
   });
 });

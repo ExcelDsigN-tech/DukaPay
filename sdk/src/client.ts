@@ -3,6 +3,7 @@ import {
   AgentsResource,
   AuthResource,
   LoansResource,
+  NotificationsResource,
   PoolResource,
   RemittanceResource,
   ScoresResource,
@@ -44,6 +45,7 @@ export class DukaPayClient {
   readonly scores: ScoresResource;
   readonly remittance: RemittanceResource;
   readonly agents: AgentsResource;
+  readonly notifications: NotificationsResource;
 
   private session: Session | null = null;
   private wallet?: WalletAdapter;
@@ -78,6 +80,7 @@ export class DukaPayClient {
     this.scores = new ScoresResource(this.http);
     this.remittance = new RemittanceResource(this.http);
     this.agents = new AgentsResource(this.http);
+    this.notifications = new NotificationsResource(this.http);
   }
 
   // ── Session ────────────────────────────────────────────────────────────────
