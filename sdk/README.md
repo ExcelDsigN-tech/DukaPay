@@ -41,6 +41,33 @@ await client.signAndSubmit(
   (xdr) => client.loans.submit(loans[0].loanId, xdr),
 );
 ```
+Request a loan (build → sign → submit)
+
+```ts
+const me = await client.address();
+
+// 1. Build: validates input client-side, then asks the backend for an unsigned transaction.
+//    Amounts are whole-token numbers (e.g. 500 = 500 USDC); `token` must be a contract address (C…).
+const unsigned = await client.loans.requestLoan({
+  borrowerPublicKey: me!,
+  token: process.env.NEXT_PUBLIC_POOL_TOKEN!,
+  amount: 500,
+  // ...remaining fields as defined by RequestLoanInput
+});
+
+// 2 + 3. Sign with the connected wallet, then submit the signed XDR.
+const result = await client.signAndSubmit(
+  { xdr: unsigned.unsignedTxXdr },
+  (xdr) => client.loans.submit(unsigned.loanId, xdr),
+);
+
+// Invalid input rejects before any request is sent:
+try {
+  await client.loans.requestLoan({ borrowerPublicKey: me!, token: 'GABC…', amount: 500 });
+} catch (err) {
+  // DukaPayError: a G… account is not a contract address
+}
+```
 
 ## Agent banking (`client.agents`)
 
