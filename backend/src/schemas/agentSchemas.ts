@@ -52,6 +52,18 @@ export const setPairLimitsBodySchema = z
   })
   .strict();
 
+export const agentApplicationBodySchema = z
+  .object({
+    kycRef: z.string().trim().min(1).max(32),
+    region: z.string().trim().min(1).max(16),
+    bond: positiveAmountSchema,
+  })
+  .strict();
+
+export const agentApplicationIdParamsSchema = z
+  .object({ applicationId: z.coerce.number().int().positive() })
+  .strict();
+
 export const agentPublicKeyParamsSchema = z
   .object({
     agentPublicKey: stellarWalletParamSchema,

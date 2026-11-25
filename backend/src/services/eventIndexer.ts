@@ -19,6 +19,7 @@ import { recordIndexerLedgers } from '../middleware/metrics.js';
 import { setPauseState } from '../middleware/pauseGuard.js';
 import { fromStroops } from '../money/decimal.js';
 import { env } from '../config/env.js';
+import { reconcileAgentFloatTransfer } from './agentFloatReconciliation.js';
 
 const EVENT_TYPE_ALIASES: Record<string, WebhookEventType> = {
   Mint: 'NFTMinted',
@@ -1088,6 +1089,14 @@ export class EventIndexer {
                 isActive,
               ],
             );
+            if (event.eventType === 'AgentRegistered') {
+              await client.query(
+                `UPDATE agent_applications
+                 SET status = 'REGISTERED', registration_xdr = NULL, updated_at = NOW()
+                 WHERE agent_public_key = $1 AND status = 'AWAITING_SIGNATURE'`,
+                [u.agentAddress],
+              );
+            }
           }
 
           // FloatTransferred carries no resulting balances, so it is the one
@@ -1110,6 +1119,13 @@ export class EventIndexer {
               `UPDATE agent_vaults SET float_balance = float_balance + $1, updated_at = CURRENT_TIMESTAMP WHERE agent_address = $2`,
               [amountBigInt.toString(), event.toAddress],
             );
+            await reconcileAgentFloatTransfer(client, {
+              txHash: event.txHash,
+              fromAgent: event.address,
+              toAgent: event.toAddress,
+              status: 'COMPLETED',
+              actor: 'system',
+            });
           }
 
           // Aggregate score deltas per borrower; a single bulk upsert at

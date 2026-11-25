@@ -126,6 +126,100 @@ router.post(
 
 /**
  * @swagger
+ * /agents/float-transfer/{id}/rebuild:
+ *   post:
+ *     summary: Rebuild an unsigned transaction for an awaiting float transfer
+ *     tags: [Agents]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Fresh unsigned transaction XDR.
+ *       400:
+ *         description: Transfer is not awaiting signature.
+ *       401:
+ *         description: Unauthorized.
+ *       403:
+ *         description: Forbidden.
+ *       404:
+ *         description: Transfer not found.
+ */
+router.post(
+  '/float-transfer/:id/rebuild',
+  requireJwtAuth,
+  validateParams(floatTransferIdParamsSchema),
+  validateQuery(emptyAgentQuerySchema),
+  validateBody(emptyAgentBodySchema),
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params.id as string;
+    const user = (req as { user?: { publicKey?: string; role?: string } }).user;
+    if (!user?.publicKey) {
+      throw AppError.unauthorized('Authentication required.');
+    }
+    const result = await agentFloatService.rebuildUnsignedTx({
+      transferId: id,
+      actor: user.publicKey,
+      userRole: user?.role,
+    });
+    res.status(200).json({ success: true, data: result });
+  }),
+);
+
+/**
+ * @swagger
+ * /agents/float-transfer/{id}/cancel:
+ *   post:
+ *     summary: Cancel an awaiting float transfer
+ *     tags: [Agents]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Float transfer cancelled.
+ *       400:
+ *         description: Transfer is not awaiting signature.
+ *       401:
+ *         description: Unauthorized.
+ *       403:
+ *         description: Forbidden.
+ *       404:
+ *         description: Transfer not found.
+ */
+router.post(
+  '/float-transfer/:id/cancel',
+  requireJwtAuth,
+  validateParams(floatTransferIdParamsSchema),
+  validateQuery(emptyAgentQuerySchema),
+  validateBody(emptyAgentBodySchema),
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params.id as string;
+    const user = (req as { user?: { publicKey?: string; role?: string } }).user;
+    if (!user?.publicKey) {
+      throw AppError.unauthorized('Authentication required.');
+    }
+    const result = await agentFloatService.cancelTransfer({
+      transferId: id,
+      actor: user.publicKey,
+      userRole: user?.role,
+    });
+    res.status(200).json({ success: true, data: { transfer: result } });
+  }),
+);
+
+/**
+ * @swagger
  * /agents/float-transfer/{id}/submit:
  *   post:
  *     summary: Submit a signed float transfer transaction

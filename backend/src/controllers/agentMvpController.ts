@@ -7,6 +7,12 @@ import { ErrorCode } from '../errors/errorCodes.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { query } from '../db/connection.js';
 import { env } from '../config/env.js';
+import {
+  decryptField,
+  deserializeEncryptedField,
+  encryptField,
+  serializeEncryptedField,
+} from '../services/piiCrypto.js';
 
 function publicKey(value: unknown, field: string): string {
   if (typeof value !== 'string' || !StrKey.isValidEd25519PublicKey(value)) {
@@ -189,4 +195,136 @@ export const submitAgentTransaction = asyncHandler(async (req: Request, res: Res
   }
   const result = await sorobanService.submitSignedTx(signedTxXdr);
   res.json({ success: true, ...result });
+});
+
+type AgentApplicationRow = {
+  id: number;
+  agent_public_key: string;
+  kyc_ref_encrypted: string;
+  region: string;
+  bond_stroops: string;
+  license_expiry: string;
+  status: string;
+  registration_xdr: string | null;
+  created_at: Date;
+  on_chain_status?: string | null;
+};
+
+async function decryptApplication(row: AgentApplicationRow, actor: string, req: Request) {
+  const encrypted = deserializeEncryptedField(row.kyc_ref_encrypted);
+  const requestId = req.headers['x-request-id']?.toString() || 'agent-application-review';
+  const kycRef = await decryptField(
+    String(row.id),
+    'agent_applications.kyc_ref',
+    encrypted.ciphertext,
+    encrypted.gcm_nonce,
+    encrypted.dek_wrapped,
+    encrypted.dek_kek_id,
+    actor,
+    'Review agent application',
+    requestId,
+  );
+  return {
+    id: row.id,
+    agentPublicKey: row.agent_public_key,
+    kycRef,
+    region: row.region,
+    bondStroops: row.bond_stroops,
+    licenseExpiry: row.license_expiry,
+    status: row.status,
+    registrationTxXdr: row.registration_xdr,
+    createdAt: row.created_at,
+    onChainStatus: row.on_chain_status ?? null,
+  };
+}
+
+export const applyAsAgent = asyncHandler(async (req: Request, res: Response) => {
+  const agent = req.user?.publicKey;
+  if (!agent) throw AppError.unauthorized('Authentication required.');
+  const kycRef = String(req.body.kycRef).trim();
+  const region = String(req.body.region).trim();
+  const bond = amount(req.body.bond);
+  const encryptedKycRef = serializeEncryptedField(await encryptField(kycRef));
+  const licenseExpiry = BigInt(Math.floor(Date.now() / 1000) + 365 * 24 * 60 * 60);
+  const result = await query(
+    `INSERT INTO agent_applications
+       (agent_public_key, kyc_ref_encrypted, region, bond_stroops, license_expiry)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (agent_public_key) DO NOTHING
+     RETURNING id, status`,
+    [agent, encryptedKycRef, region, bond.toString(), licenseExpiry.toString()],
+  );
+  if (result.rows.length === 0) {
+    throw AppError.conflict('An application already exists for this wallet.');
+  }
+  res.status(201).json({ success: true, data: result.rows[0] });
+});
+
+export const getMyAgentApplication = asyncHandler(async (req: Request, res: Response) => {
+  const agent = req.user?.publicKey;
+  if (!agent) throw AppError.unauthorized('Authentication required.');
+  const result = await query('SELECT * FROM agent_applications WHERE agent_public_key = $1', [
+    agent,
+  ]);
+  if (result.rows.length === 0) {
+    res.json({ success: true, data: null });
+    return;
+  }
+  const application = await decryptApplication(result.rows[0] as AgentApplicationRow, agent, req);
+  res.json({ success: true, data: application });
+});
+
+export const getPendingAgentApplications = asyncHandler(async (req: Request, res: Response) => {
+  const actor = requireOperator(req);
+  const result = await query(
+    `SELECT a.*, v.status AS on_chain_status
+     FROM agent_applications a
+     LEFT JOIN agent_vaults v ON v.agent_address = a.agent_public_key
+     ORDER BY a.created_at ASC`,
+  );
+  const applications = await Promise.all(
+    (result.rows as AgentApplicationRow[]).map((row) => decryptApplication(row, actor, req)),
+  );
+  res.json({ success: true, data: applications });
+});
+
+export const buildApplicationRegistration = asyncHandler(async (req: Request, res: Response) => {
+  const operator = requireOperator(req);
+  const applicationId = Number(req.params.applicationId);
+  const result = await query('SELECT * FROM agent_applications WHERE id = $1', [applicationId]);
+  if (result.rows.length === 0) throw AppError.notFound('Agent application not found.');
+  const row = result.rows[0] as AgentApplicationRow;
+  if (row.status !== 'PENDING') {
+    throw AppError.conflict(`Application is already in status '${row.status}'.`);
+  }
+  const { kycRef } = await decryptApplication(row, operator, req);
+  const transaction = await sorobanService.buildRegisterAgentTx(
+    row.agent_public_key,
+    kycRef,
+    row.region,
+    BigInt(row.bond_stroops),
+    BigInt(row.license_expiry),
+  );
+  const updated = await query(
+    `UPDATE agent_applications
+     SET status = 'AWAITING_SIGNATURE', registration_xdr = $2, updated_at = NOW()
+     WHERE id = $1 AND status = 'PENDING'
+     RETURNING id`,
+    [applicationId, transaction.unsignedTxXdr],
+  );
+  if (updated.rows.length === 0) {
+    throw AppError.conflict('Application changed while registration was being built.');
+  }
+  res.json({ success: true, ...transaction });
+});
+
+export const getMyAgentStatus = asyncHandler(async (req: Request, res: Response) => {
+  const agent = req.user?.publicKey;
+  if (!agent) throw AppError.unauthorized('Authentication required.');
+  const result = await query(
+    `SELECT status, bond_amount, region, license_expiry, is_active
+     FROM agent_vaults WHERE agent_address = $1`,
+    [agent],
+  );
+  res.json({ success: true, data: result.rows[0] ?? null });
 });

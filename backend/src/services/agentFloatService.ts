@@ -5,6 +5,7 @@ import logger from '../utils/logger.js';
 import { sorobanService } from './sorobanService.js';
 import { toStroops } from '../money/decimal.js';
 import { env } from '../config/env.js';
+import { reconcileAgentFloatTransfer } from './agentFloatReconciliation.js';
 
 export interface InitiateTransferInput {
   fromAgent: string;
@@ -34,6 +35,12 @@ export interface RejectTransferInput {
   userRole?: string | undefined;
 }
 
+export interface TransferActionInput {
+  transferId: string;
+  actor: string;
+  userRole?: string | undefined;
+}
+
 export interface SetLimitsInput {
   fromAgent: string;
   toAgent: string;
@@ -54,6 +61,7 @@ export interface AgentFloatTransferRow {
     | 'COMPLETED'
     | 'REJECTED'
     | 'CANCELLED'
+    | 'EXPIRED'
     | 'FAILED';
   required_approvals: number;
   approval_count: number;
@@ -489,6 +497,9 @@ export class AgentFloatService {
     if (transfer.status !== 'AWAITING_SIGNATURE') {
       throw AppError.badRequest(`Transfer is already in status '${transfer.status}'.`);
     }
+    if (transfer.tx_hash) {
+      throw AppError.conflict('A transaction is already pending reconciliation for this transfer.');
+    }
 
     const isParticipant = submitter === transfer.from_agent || submitter === transfer.to_agent;
     const isAdmin = userRole === 'admin' || userRole === 'super_admin';
@@ -509,42 +520,187 @@ export class AgentFloatService {
       amount,
     );
 
-    const stellarResult = await sorobanService.submitSignedTx(signedTxXdr);
+    let txHash: string | null = null;
+    let stellarResult: Awaited<ReturnType<typeof sorobanService.submitSignedTx>>;
+    try {
+      stellarResult = await sorobanService.submitSignedTx(signedTxXdr, async (submittedHash) => {
+        const pending = await query(
+          `UPDATE agent_float_transfers
+           SET tx_hash = $2, updated_at = NOW()
+           WHERE id = $1 AND status = 'AWAITING_SIGNATURE' AND tx_hash IS NULL
+           RETURNING id`,
+          [transferId, submittedHash],
+        );
+        if (pending.rows.length === 0) {
+          throw AppError.conflict(
+            'Float transfer status changed or another transaction is already pending',
+          );
+        }
+        txHash = submittedHash;
+      });
+    } catch (error) {
+      const txStatus = error instanceof AppError ? error.details?.txStatus : undefined;
+      if (txHash && ['FAILED', 'ERROR', 'TRY_AGAIN_LATER'].includes(String(txStatus))) {
+        const failedHash = txHash;
+        await withTransaction((client) =>
+          reconcileAgentFloatTransfer(client, {
+            txHash: failedHash,
+            fromAgent: transfer.from_agent,
+            toAgent: transfer.to_agent,
+            status: 'FAILED',
+            actor: 'system',
+          }),
+        );
+      }
+      throw error;
+    }
     if (stellarResult.status !== 'SUCCESS') {
       throw AppError.internal('Float transfer was not confirmed on the Stellar network');
     }
 
-    const updateRes = await query(
-      `UPDATE agent_float_transfers
-       SET status = 'COMPLETED', tx_hash = $2, updated_at = NOW()
-       WHERE id = $1 AND status = 'AWAITING_SIGNATURE'
-       RETURNING *`,
-      [transferId, stellarResult.txHash],
-    );
-    if (updateRes.rows.length === 0) {
-      throw AppError.conflict('Float transfer status changed while the transaction was submitted');
-    }
-
-    const updatedTransfer = updateRes.rows[0] as AgentFloatTransferRow;
-    await this.logAudit({
-      actor: submitter,
-      action: 'AGENT_FLOAT_TRANSFER_EXECUTED',
-      target: `TransferID:${transferId}`,
-      payload: {
+    const updatedTransfer = await withTransaction((client) =>
+      reconcileAgentFloatTransfer(client, {
+        txHash: stellarResult.txHash,
         fromAgent: transfer.from_agent,
         toAgent: transfer.to_agent,
-        amount: transfer.amount,
-        txHash: stellarResult.txHash,
-        executedOnChain: true,
-      },
-      status: 200,
-    });
+        status: 'COMPLETED',
+        actor: submitter,
+      }),
+    );
+    if (!updatedTransfer) {
+      throw AppError.conflict('Float transfer status changed while the transaction was submitted');
+    }
 
     return {
       transfer: updatedTransfer,
       executedOnChain: true,
       txHash: stellarResult.txHash,
     };
+  }
+
+  async rebuildUnsignedTx(input: TransferActionInput): Promise<{ unsignedTxXdr: string }> {
+    const { transferId, actor, userRole } = input;
+    await this.expireStaleTransfers();
+    const transferRes = await query('SELECT * FROM agent_float_transfers WHERE id = $1', [
+      transferId,
+    ]);
+    if (transferRes.rows.length === 0) {
+      throw AppError.notFound(`Float transfer request '${transferId}' not found.`);
+    }
+
+    const transfer = transferRes.rows[0] as AgentFloatTransferRow;
+    if (transfer.status !== 'AWAITING_SIGNATURE') {
+      throw AppError.badRequest(`Transfer is already in status '${transfer.status}'.`);
+    }
+    if (
+      actor !== transfer.from_agent &&
+      actor !== transfer.to_agent &&
+      userRole !== 'admin' &&
+      userRole !== 'super_admin'
+    ) {
+      throw AppError.forbidden('Only transfer participants or an admin can rebuild this transfer.');
+    }
+    if (transfer.tx_hash) {
+      throw AppError.conflict('A transaction is already pending reconciliation for this transfer.');
+    }
+    if (!env.AGENT_VAULT_CONTRACT_ID?.trim()) {
+      throw AppError.internal('AGENT_VAULT_CONTRACT_ID is not configured');
+    }
+
+    const result = await sorobanService.buildTransferToAgentTx(
+      transfer.from_agent,
+      transfer.to_agent,
+      toStroops(String(transfer.amount)),
+    );
+    await this.logAudit({
+      actor,
+      action: 'AGENT_FLOAT_TRANSFER_XDR_REBUILT',
+      target: `TransferID:${transferId}`,
+      payload: { status: transfer.status },
+      status: 200,
+    });
+    return { unsignedTxXdr: result.unsignedTxXdr };
+  }
+
+  async cancelTransfer(input: TransferActionInput): Promise<AgentFloatTransferRow> {
+    const { transferId, actor, userRole } = input;
+    const updateRes = await withTransaction(async (client) => {
+      const transferRes = await client.query(
+        'SELECT * FROM agent_float_transfers WHERE id = $1 FOR UPDATE',
+        [transferId],
+      );
+      if (transferRes.rows.length === 0) {
+        throw AppError.notFound(`Float transfer request '${transferId}' not found.`);
+      }
+
+      const transfer = transferRes.rows[0] as AgentFloatTransferRow;
+      if (transfer.status !== 'AWAITING_SIGNATURE') {
+        throw AppError.badRequest(`Transfer is already in status '${transfer.status}'.`);
+      }
+      if (
+        actor !== transfer.from_agent &&
+        actor !== transfer.to_agent &&
+        userRole !== 'admin' &&
+        userRole !== 'super_admin'
+      ) {
+        throw AppError.forbidden(
+          'Only transfer participants or an admin can cancel this transfer.',
+        );
+      }
+      if (transfer.tx_hash) {
+        throw AppError.conflict(
+          'A transaction is already pending reconciliation for this transfer.',
+        );
+      }
+
+      return client.query(
+        `UPDATE agent_float_transfers
+         SET status = 'CANCELLED', updated_at = NOW()
+         WHERE id = $1 AND status = 'AWAITING_SIGNATURE'
+         RETURNING *`,
+        [transferId],
+      );
+    });
+    const transfer = updateRes.rows[0] as AgentFloatTransferRow;
+    await this.logAudit({
+      actor,
+      action: 'AGENT_FLOAT_TRANSFER_CANCELLED',
+      target: `TransferID:${transferId}`,
+      payload: { status: transfer.status },
+      status: 200,
+    });
+    return transfer;
+  }
+
+  async expireStaleTransfers(): Promise<number> {
+    const expired = await query(
+      `UPDATE agent_float_transfers
+       SET status = 'EXPIRED', updated_at = NOW()
+       WHERE status = 'AWAITING_SIGNATURE'
+         AND tx_hash IS NULL
+         AND created_at < NOW() - ($1 * INTERVAL '1 hour')
+       RETURNING id, from_agent, to_agent, amount`,
+      [env.AGENT_FLOAT_TRANSFER_SIGNATURE_TTL_HOURS],
+    );
+    await Promise.all(
+      (
+        expired.rows as Array<{
+          id: string;
+          from_agent: string;
+          to_agent: string;
+          amount: string;
+        }>
+      ).map((row) =>
+        this.logAudit({
+          actor: 'system',
+          action: 'AGENT_FLOAT_TRANSFER_EXPIRED',
+          target: `TransferID:${row.id}`,
+          payload: { fromAgent: row.from_agent, toAgent: row.to_agent, amount: row.amount },
+          status: 200,
+        }),
+      ),
+    );
+    return expired.rows.length;
   }
 
   /**

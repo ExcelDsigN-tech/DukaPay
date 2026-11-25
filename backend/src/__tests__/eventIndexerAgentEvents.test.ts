@@ -389,15 +389,18 @@ describe('EventIndexer: agent registry / agent vault events', () => {
     return updates;
   }
 
-  function transferEvent(from: string, to: string, amount: bigint) {
-    return makeAgentEvent({
-      id: 'evt-transfer',
-      ledger: 10,
-      type: 'FloatTransferred',
-      contractId: AGENT_VAULT_CONTRACT,
-      topic: [scSymbol('FloatTransferred'), scAddress(from), scAddress(to)],
-      value: scI128(amount),
-    });
+  function transferEvent(from: string, to: string, amount: bigint, txHash = 'tx-evt-transfer') {
+    return {
+      ...makeAgentEvent({
+        id: 'evt-transfer',
+        ledger: 10,
+        type: 'FloatTransferred',
+        contractId: AGENT_VAULT_CONTRACT,
+        topic: [scSymbol('FloatTransferred'), scAddress(from), scAddress(to)],
+        value: scI128(amount),
+      }),
+      txHash,
+    };
   }
 
   it('FloatTransferred moves the exact amount from the sender to the receiver float', async () => {
@@ -426,6 +429,46 @@ describe('EventIndexer: agent registry / agent vault events', () => {
     await makeIndexer().ingestRawEvents([transferEvent(makeAddr(), makeAddr(), 1000n)]);
 
     expect(updates).toHaveLength(0);
+  });
+
+  it('reconciles an awaiting float transfer by transaction hash', async () => {
+    const from = makeAddr();
+    const to = makeAddr();
+    const transferUpdates: unknown[][] = [];
+    const auditEntries: unknown[][] = [];
+    mockQuery.mockImplementation(async (sql: string, params: unknown[] = []) => {
+      if (sql === 'BEGIN' || sql === 'COMMIT') return { rows: [], rowCount: 0 };
+      if (sql.includes('INSERT INTO contract_events')) {
+        return { rows: [{ event_id: params[0] }], rowCount: 1 };
+      }
+      if (sql.includes('UPDATE agent_float_transfers')) {
+        transferUpdates.push(params);
+        return {
+          rows: [
+            {
+              id: 'ft_pending',
+              from_agent: from,
+              to_agent: to,
+              amount: '25',
+              status: 'COMPLETED',
+            },
+          ],
+          rowCount: 1,
+        };
+      }
+      if (sql.includes('INSERT INTO audit_logs')) {
+        auditEntries.push(params);
+        return { rows: [], rowCount: 1 };
+      }
+      return { rows: [], rowCount: 1 };
+    });
+
+    await makeIndexer().ingestRawEvents([transferEvent(from, to, 250_000_000n, 'submitted-hash')]);
+
+    expect(transferUpdates).toEqual([['submitted-hash', from, to, 'COMPLETED']]);
+    expect(auditEntries[0]).toEqual(
+      expect.arrayContaining(['system', 'AGENT_FLOAT_TRANSFER_EXECUTED']),
+    );
   });
 });
 

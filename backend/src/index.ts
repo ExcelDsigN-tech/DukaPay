@@ -44,6 +44,10 @@ import { startLoanDueCheckCron, stopLoanDueCheckCron } from './cron/loanCheckCro
 import { startScoreDecayScheduler } from './cron/scoreDecayJob.js';
 import { initializePauseState, startPauseStateRefresh } from './middleware/pauseGuard.js';
 import { startAuditAnchorJob, stopAuditAnchorJob } from './cron/auditAnchorJob.js';
+import {
+  startAgentFloatTransferExpiry,
+  stopAgentFloatTransferExpiry,
+} from './cron/agentFloatTransferExpiry.js';
 import { env } from './config/env.js';
 
 const port = env.PORT;
@@ -106,6 +110,7 @@ const server = app.listen(port, () => {
 
   // Start loan due check cron
   startLoanDueCheckCron();
+  startAgentFloatTransferExpiry();
   startAuditAnchorJob();
 
   // Initialize Redis subscriber to receive events from other instances
@@ -140,6 +145,7 @@ const shutdown = async (signal: 'SIGTERM' | 'SIGINT') => {
     }
 
     stopLoanDueCheckCron();
+    stopAgentFloatTransferExpiry();
     stopAuditAnchorJob();
     await stopIndexer();
     stopDefaultCheckerScheduler();

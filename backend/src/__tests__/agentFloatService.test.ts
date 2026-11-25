@@ -647,14 +647,19 @@ describe('AgentFloatService', () => {
     it('completes only after the matching signed transaction is confirmed', async () => {
       process.env.AGENT_VAULT_CONTRACT_ID = 'C123456789AGENTVAULT';
       mockQuery.mockResolvedValueOnce({ rows: [awaitingTransfer] });
-      mockSubmitSignedTx.mockResolvedValueOnce({
-        txHash: 'confirmed-hash',
-        status: 'SUCCESS',
-      });
+      mockSubmitSignedTx.mockImplementationOnce(
+        async (_xdr: string, onSubmitted?: (hash: string) => Promise<void>) => {
+          await onSubmitted?.('confirmed-hash');
+          return { txHash: 'confirmed-hash', status: 'SUCCESS' };
+        },
+      );
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ id: awaitingTransfer.id }],
+      }); // persist hash before polling
       mockQuery.mockResolvedValueOnce({
         rows: [{ ...awaitingTransfer, status: 'COMPLETED', tx_hash: 'confirmed-hash' }],
       });
-      mockQuery.mockResolvedValueOnce({ rows: [] });
+      mockQuery.mockResolvedValueOnce({ rows: [] }); // audit
 
       const result = await service.submitTransfer({
         transferId: awaitingTransfer.id,
@@ -668,7 +673,7 @@ describe('AgentFloatService', () => {
         AGENT_B,
         255_000_000n,
       );
-      expect(mockSubmitSignedTx).toHaveBeenCalledWith('signed-xdr');
+      expect(mockSubmitSignedTx).toHaveBeenCalledWith('signed-xdr', expect.any(Function));
       expect(result.transfer.status).toBe('COMPLETED');
       expect(result.executedOnChain).toBe(true);
       expect(result.txHash).toBe('confirmed-hash');
@@ -683,10 +688,19 @@ describe('AgentFloatService', () => {
       );
     });
 
-    it('does not complete when Stellar does not confirm the transaction', async () => {
+    it('retains the submitted hash when polling times out for later reconciliation', async () => {
       process.env.AGENT_VAULT_CONTRACT_ID = 'C123456789AGENTVAULT';
       mockQuery.mockResolvedValueOnce({ rows: [awaitingTransfer] });
-      mockSubmitSignedTx.mockRejectedValueOnce(new Error('Transaction failed'));
+      mockQuery.mockResolvedValueOnce({ rows: [{ id: awaitingTransfer.id }] });
+      mockSubmitSignedTx.mockImplementationOnce(
+        async (_xdr: string, onSubmitted?: (hash: string) => Promise<void>) => {
+          await onSubmitted?.('pending-hash');
+          throw new AppError('Transaction not confirmed yet', 503, true, undefined, undefined, {
+            txHash: 'pending-hash',
+            txStatus: 'NOT_FOUND',
+          });
+        },
+      );
 
       await expect(
         service.submitTransfer({
@@ -694,9 +708,34 @@ describe('AgentFloatService', () => {
           signedTxXdr: 'signed-xdr',
           submitter: AGENT_A,
         }),
-      ).rejects.toThrow('Transaction failed');
+      ).rejects.toThrow('Transaction not confirmed yet');
 
-      expect(mockQuery).toHaveBeenCalledTimes(1);
+      expect(mockQuery).toHaveBeenCalledTimes(2);
+      expect(mockQuery).toHaveBeenLastCalledWith(expect.stringContaining('SET tx_hash = $2'), [
+        awaitingTransfer.id,
+        'pending-hash',
+      ]);
+      expect(mockQuery).not.toHaveBeenCalledWith(
+        expect.stringContaining("SET status = 'COMPLETED'"),
+        expect.anything(),
+      );
+    });
+
+    it('rejects a second submit while a transaction hash is pending', async () => {
+      process.env.AGENT_VAULT_CONTRACT_ID = 'C123456789AGENTVAULT';
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ ...awaitingTransfer, tx_hash: 'pending-hash' }],
+      });
+
+      await expect(
+        service.submitTransfer({
+          transferId: awaitingTransfer.id,
+          signedTxXdr: 'signed-xdr',
+          submitter: AGENT_A,
+        }),
+      ).rejects.toThrow('A transaction is already pending reconciliation');
+
+      expect(mockSubmitSignedTx).not.toHaveBeenCalled();
     });
 
     it('rejects a submitter who is not a participant or admin', async () => {
@@ -713,6 +752,114 @@ describe('AgentFloatService', () => {
 
       expect(mockValidateTransferToAgentTx).not.toHaveBeenCalled();
       expect(mockSubmitSignedTx).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('awaiting-signature lifecycle', () => {
+    it('rebuilds the unsigned transaction only for an authorized participant', async () => {
+      process.env.AGENT_VAULT_CONTRACT_ID = 'C123456789AGENTVAULT';
+      mockQuery.mockResolvedValueOnce({ rows: [] }); // no transfers to expire
+      mockQuery.mockResolvedValueOnce({
+        rows: [
+          {
+            id: 'ft_rebuild',
+            from_agent: AGENT_A,
+            to_agent: AGENT_B,
+            amount: '25.5',
+            status: 'AWAITING_SIGNATURE',
+          },
+        ],
+      });
+      mockBuildTransferToAgentTx.mockResolvedValueOnce({ unsignedTxXdr: 'fresh-xdr' });
+      mockQuery.mockResolvedValueOnce({ rows: [] }); // audit
+
+      const result = await service.rebuildUnsignedTx({
+        transferId: 'ft_rebuild',
+        actor: AGENT_B,
+      });
+
+      expect(result.unsignedTxXdr).toBe('fresh-xdr');
+      expect(mockBuildTransferToAgentTx).toHaveBeenCalledWith(AGENT_A, AGENT_B, 255_000_000n);
+    });
+
+    it('cancels a transfer and records an audit event', async () => {
+      mockQuery.mockResolvedValueOnce({
+        rows: [
+          {
+            id: 'ft_cancel',
+            from_agent: AGENT_A,
+            to_agent: AGENT_B,
+            status: 'AWAITING_SIGNATURE',
+          },
+        ],
+      });
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ id: 'ft_cancel', status: 'CANCELLED' }],
+      });
+      mockQuery.mockResolvedValueOnce({ rows: [] }); // audit
+
+      const result = await service.cancelTransfer({
+        transferId: 'ft_cancel',
+        actor: AGENT_A,
+      });
+
+      expect(result.status).toBe('CANCELLED');
+      expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining("SET status = 'CANCELLED'"), [
+        'ft_cancel',
+      ]);
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO audit_logs'),
+        expect.arrayContaining([AGENT_A, 'AGENT_FLOAT_TRANSFER_CANCELLED']),
+      );
+    });
+
+    it('expires stale transfers and records the expiry audit event', async () => {
+      mockQuery.mockResolvedValueOnce({
+        rows: [
+          {
+            id: 'ft_expired',
+            from_agent: AGENT_A,
+            to_agent: AGENT_B,
+            amount: '25',
+          },
+        ],
+      });
+      mockQuery.mockResolvedValueOnce({ rows: [] }); // audit
+
+      await expect(service.expireStaleTransfers()).resolves.toBe(1);
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining("SET status = 'EXPIRED'"),
+        [24],
+      );
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO audit_logs'),
+        expect.arrayContaining(['system', 'AGENT_FLOAT_TRANSFER_EXPIRED']),
+      );
+    });
+
+    it('does not count cancelled or expired transfers against pair limits', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [] }); // pair limits
+      mockQuery.mockResolvedValueOnce({ rows: [{ total: '0' }] }); // daily total
+      mockQuery.mockResolvedValueOnce({ rows: [{ total: '0' }] }); // weekly total
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ id: 'ft_new', from_agent: AGENT_A, to_agent: AGENT_B }],
+      });
+      mockQuery.mockResolvedValueOnce({ rows: [] }); // approval
+      mockQuery.mockResolvedValueOnce({ rows: [] }); // audit
+
+      await service.initiateTransfer({
+        fromAgent: AGENT_A,
+        toAgent: AGENT_B,
+        amount: 1,
+        createdBy: AGENT_A,
+      });
+
+      const limitQueries = mockQuery.mock.calls.filter(([sql]) =>
+        sql.includes("status IN ('PENDING_APPROVAL', 'AWAITING_SIGNATURE', 'COMPLETED')"),
+      );
+      expect(limitQueries).toHaveLength(2);
+      expect(limitQueries.every(([sql]) => !sql.includes('CANCELLED'))).toBe(true);
+      expect(limitQueries.every(([sql]) => !sql.includes('EXPIRED'))).toBe(true);
     });
   });
 
