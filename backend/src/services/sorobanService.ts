@@ -1051,7 +1051,10 @@ class SorobanService {
    * Submits a signed transaction XDR to the Stellar network and polls
    * for the result.
    */
-  async submitSignedTx(signedTxXdr: string): Promise<{
+  async submitSignedTx(
+    signedTxXdr: string,
+    onSubmitted?: (txHash: string) => Promise<void>,
+  ): Promise<{
     txHash: string;
     status: string;
     resultXdr?: string;
@@ -1066,6 +1069,8 @@ class SorobanService {
     if (!txHash) {
       throw AppError.internal('Transaction submission returned no hash');
     }
+
+    await onSubmitted?.(txHash);
 
     logger.withContext().info('Transaction submitted', {
       txHash,

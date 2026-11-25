@@ -201,6 +201,60 @@ describe('AuthResource', () => {
       { anonymous: true },
     );
   });
+
+  it('refreshes a session anonymously so a 401 cannot refresh again', async () => {
+    const post = vi.fn().mockResolvedValue({ token: 'next', expiresAt: '', address: '', scopes: [] });
+    const resource = new AuthResource({ post } as unknown as HttpClient);
+
+    await resource.refresh('refresh-token');
+
+    expect(post).toHaveBeenCalledWith('/auth/refresh', { refreshToken: 'refresh-token' }, { anonymous: true });
+  });
+
+  it('throws ValidationError when refreshToken is empty', () => {
+    const resource = new AuthResource({ post: vi.fn() } as unknown as HttpClient);
+
+    expect(() => resource.refresh('')).toThrow(ValidationError);
+  });
+
+  it('logs out every session via POST /auth/logout-all', async () => {
+    const post = vi.fn().mockResolvedValue(undefined);
+    const resource = new AuthResource({ post } as unknown as HttpClient);
+
+    await resource.logoutAll();
+
+    expect(post).toHaveBeenCalledWith('/auth/logout-all');
+  });
+
+  it('submits KYC to POST /auth/kyc', async () => {
+    const post = vi.fn().mockResolvedValue({ success: true, kycId: 'kyc_1' });
+    const resource = new AuthResource({ post } as unknown as HttpClient);
+
+    await resource.submitKyc({
+      firstName: 'Ada',
+      lastName: 'Lovelace',
+      countryCode: 'KE',
+      dateOfBirth: '1990-01-01',
+    });
+
+    expect(post).toHaveBeenCalledWith('/auth/kyc', {
+      firstName: 'Ada',
+      lastName: 'Lovelace',
+      countryCode: 'KE',
+      dateOfBirth: '1990-01-01',
+    });
+  });
+
+  it('throws ValidationError when KYC fields are incomplete', () => {
+    const resource = new AuthResource({ post: vi.fn() } as unknown as HttpClient);
+
+    expect(() => resource.submitKyc({ firstName: '', lastName: 'Lovelace', countryCode: 'KE' })).toThrow(
+      ValidationError,
+    );
+    expect(() => resource.submitKyc({ firstName: 'Ada', lastName: 'Lovelace', countryCode: 'KEN' })).toThrow(
+      ValidationError,
+    );
+  });
 });
 
 describe('LoansResource', () => {
@@ -288,6 +342,48 @@ describe('LoansResource', () => {
       amount: 100,
       borrowerPublicKey: VALID_ADDRESS,
     });
+  });
+
+  it.each([30, 60, 90] as const)('previews amortization for a %s day term', async (termDays) => {
+    const post = vi.fn().mockResolvedValue({ schedule: [] });
+    const resource = new LoansResource({ post } as unknown as HttpClient);
+
+    await resource.amortizationPreview({ amount: 250.5, termDays });
+
+    expect(post).toHaveBeenCalledWith('/loans/amortization-preview', { amount: 250.5, termDays });
+  });
+
+  it('throws ValidationError when termDays is not 30, 60, or 90', () => {
+    const resource = new LoansResource({ post: vi.fn() } as unknown as HttpClient);
+
+    expect(() => resource.amortizationPreview({ amount: 100, termDays: 45 as 30 })).toThrow(ValidationError);
+  });
+
+  it('loads an amortization schedule by loan id', async () => {
+    const get = vi.fn().mockResolvedValue({ loanId: 42, schedule: [] });
+    const resource = new LoansResource({ get } as unknown as HttpClient);
+
+    await resource.amortizationSchedule(42);
+
+    expect(get).toHaveBeenCalledWith('/loans/42/amortization-schedule');
+  });
+
+  it('loads a repayment preview by loan id', async () => {
+    const get = vi.fn().mockResolvedValue({ loanId: 42, amountDue: 10 });
+    const resource = new LoansResource({ get } as unknown as HttpClient);
+
+    await resource.repaymentPreview('42');
+
+    expect(get).toHaveBeenCalledWith('/loans/42/repayment-preview');
+  });
+
+  it('loads loan events by loan id', async () => {
+    const get = vi.fn().mockResolvedValue({ events: [] });
+    const resource = new LoansResource({ get } as unknown as HttpClient);
+
+    await resource.events(7);
+
+    expect(get).toHaveBeenCalledWith('/loans/7/events');
   });
 });
 
@@ -419,6 +515,41 @@ describe('ScoresResource', () => {
     await resource.get(VALID_ADDRESS);
 
     expect(get).toHaveBeenCalledWith(`/score/${VALID_ADDRESS}`);
+  });
+
+  it('reads score history from GET /score/:address/history', async () => {
+    const get = vi.fn().mockResolvedValue({ points: [] });
+    const resource = new ScoresResource({ get } as unknown as HttpClient);
+
+    await resource.history(VALID_ADDRESS);
+
+    expect(get).toHaveBeenCalledWith(`/score/${VALID_ADDRESS}/history`);
+  });
+
+  it('reads the score NFT from GET /score/:address/nft', async () => {
+    const get = vi.fn().mockResolvedValue({ tokenId: '1' });
+    const resource = new ScoresResource({ get } as unknown as HttpClient);
+
+    await resource.nft(VALID_ADDRESS);
+
+    expect(get).toHaveBeenCalledWith(`/score/${VALID_ADDRESS}/nft`);
+  });
+
+  it('reads a score breakdown from GET /score/:userId/breakdown', async () => {
+    const get = vi.fn().mockResolvedValue({ factors: [] });
+    const resource = new ScoresResource({ get } as unknown as HttpClient);
+
+    await resource.breakdown(VALID_ADDRESS);
+
+    expect(get).toHaveBeenCalledWith(`/score/${VALID_ADDRESS}/breakdown`);
+  });
+
+  it('throws ValidationError when history, nft, or breakdown receive an invalid address', () => {
+    const resource = new ScoresResource({ get: vi.fn() } as unknown as HttpClient);
+
+    expect(() => resource.history('not-an-address')).toThrow(ValidationError);
+    expect(() => resource.nft('not-an-address')).toThrow(ValidationError);
+    expect(() => resource.breakdown('not-an-address')).toThrow(ValidationError);
   });
 });
 

@@ -34,6 +34,13 @@ interface AgentDashboardData {
     totalDebt: number;
     ratio: number;
   };
+  vault: {
+    collateral: number;
+    float: number;
+    maxFloat: number;
+    headroom: number;
+    haircutBps: number;
+  };
   recentTransactions: Array<{
     type: string;
     amount: number;
@@ -71,6 +78,7 @@ export const getAgentDashboard = asyncHandler(async (req: Request, res: Response
     settlementsResult,
     collateralResult,
     transactionsResult,
+    vaultResult,
   ] = await Promise.all([
     // Float utilization: total deposits allocated vs pool size
     query(
@@ -145,6 +153,12 @@ export const getAgentDashboard = asyncHandler(async (req: Request, res: Response
        LIMIT 20`,
       [agentPublicKey],
     ),
+    query(
+      `SELECT collateral_balance, float_balance, haircut_bps
+         FROM agent_vaults
+        WHERE agent_address = $1`,
+      [agentPublicKey],
+    ).catch(() => ({ rows: [{}] })),
   ]);
 
   const floatRow = floatResult.rows[0] as Record<string, unknown>;
@@ -152,6 +166,7 @@ export const getAgentDashboard = asyncHandler(async (req: Request, res: Response
   const portfolioRow = portfolioResult.rows[0] as Record<string, unknown> | undefined;
   const settlementsRow = settlementsResult.rows[0] as Record<string, unknown>;
   const collateralRow = collateralResult.rows[0] as Record<string, unknown>;
+  const vaultRow = vaultResult.rows[0] as Record<string, unknown> | undefined;
 
   // contract_events amounts are stroops; the API returns whole tokens.
   const totalFloat = stroopsToAmount(floatRow.total_float as string | number | null);
@@ -162,6 +177,13 @@ export const getAgentDashboard = asyncHandler(async (req: Request, res: Response
   const totalDebt = stroopsToAmount(collateralRow.total_debt as string | number | null);
   const totalCollateral = stroopsToAmount(collateralRow.total_collateral as string | number | null);
   const collateralRatio = totalDebt > 0 ? totalCollateral / totalDebt : 0;
+
+  const vaultCollateralStroops = BigInt(String(vaultRow?.collateral_balance ?? 0));
+  const vaultFloatStroops = BigInt(String(vaultRow?.float_balance ?? 0));
+  const vaultHaircutBps = BigInt(String(vaultRow?.haircut_bps ?? 0));
+  const maxFloatStroops = (vaultCollateralStroops * vaultHaircutBps) / 10_000n;
+  const headroomStroops =
+    maxFloatStroops > vaultFloatStroops ? maxFloatStroops - vaultFloatStroops : 0n;
 
   const dashboardData: AgentDashboardData = {
     agentPublicKey,
@@ -194,6 +216,13 @@ export const getAgentDashboard = asyncHandler(async (req: Request, res: Response
       totalCollateral,
       totalDebt,
       ratio: Math.round(collateralRatio * 10000) / 10000,
+    },
+    vault: {
+      collateral: stroopsToAmount(vaultCollateralStroops),
+      float: stroopsToAmount(vaultFloatStroops),
+      maxFloat: stroopsToAmount(maxFloatStroops),
+      headroom: stroopsToAmount(headroomStroops),
+      haircutBps: Number(vaultHaircutBps),
     },
     recentTransactions: transactionsResult.rows.map((row) => {
       const r = row as Record<string, unknown>;

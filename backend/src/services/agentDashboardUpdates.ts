@@ -128,18 +128,19 @@ export async function publishAgentDashboardUpdates(): Promise<void> {
       (row) => (row as { public_key: string }).public_key,
     );
 
-    let published = 0;
-    for (const agentPublicKey of agentPublicKeys) {
-      const summary = await fetchAgentDashboardSummary(agentPublicKey);
-      if (summary) {
+    const results = await Promise.all(
+      agentPublicKeys.map(async (agentPublicKey) => {
+        const summary = await fetchAgentDashboardSummary(agentPublicKey);
+        if (!summary) return false;
         await pubsubService.publish({
           type: 'agent_dashboard_update',
           agentPublicKey,
           data: summary,
         });
-        published++;
-      }
-    }
+        return true;
+      }),
+    );
+    const published = results.filter(Boolean).length;
 
     logger.withContext().info('Published agent dashboard updates', {
       agentCount: agentPublicKeys.length,

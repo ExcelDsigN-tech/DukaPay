@@ -1,4 +1,5 @@
 use super::*;
+use soroban_sdk::testutils::storage::Instance as _;
 use soroban_sdk::testutils::{Address as _, Ledger, LedgerInfo};
 use soroban_sdk::{Address, BytesN, Env, IntoVal, Symbol, Val, Vec};
 #[allow(deprecated)]
@@ -105,6 +106,18 @@ fn finalize_succeeds_and_updates_local_and_remote_state() {
 fn initialize_sets_admin() {
     let (_env, client, admin, _) = setup();
     assert_eq!(client.get_current_admin(), admin);
+}
+
+#[test]
+fn read_entrypoint_reextends_instance_ttl() {
+    let (env, client, admin, _) = setup();
+    let contract_id = client.address.clone();
+    env.ledger()
+        .set_sequence_number(env.ledger().sequence() + 510_000);
+
+    assert_eq!(client.get_admin(), admin);
+    let ttl_after = env.as_contract(&contract_id, || env.storage().instance().get_ttl());
+    assert!(ttl_after > 400_000);
 }
 
 #[test]

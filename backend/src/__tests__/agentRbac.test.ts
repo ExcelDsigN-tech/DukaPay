@@ -22,6 +22,7 @@ jest.unstable_mockModule('../controllers/agentController.js', () => ({
 }));
 
 jest.unstable_mockModule('../db/connection.js', () => ({
+  default: { query: jest.fn(async () => ({ rows: [], rowCount: 0 })) },
   query: jest.fn(async () => ({ rows: [], rowCount: 0 })),
 }));
 

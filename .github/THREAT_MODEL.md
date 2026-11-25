@@ -51,6 +51,25 @@ This threat model documents the trust boundaries, threat surface, potential atta
 - **Compromised Backend Application Server**: An attacker gaining root access on an API node attempting to decrypt all historical PII.
   - *Mitigation*: KEK is stored in cloud KMS / HSM with restrictive IAM policy. Even with local server memory compromise, historical DEK rotation limits breach blast radius.
 
+### 3.1.1 Minimum repayment administrator controls (#918)
+
+`set_min_repayment_amount` is an admin-only contract operation. The caller must
+authorize as the configured loan-manager administrator, and the contract bounds
+the value above the 100-stroop `DUST_THRESHOLD` and at or below 10 USDC. A
+compromised admin key could therefore raise the minimum and deny otherwise
+valid small repayments, or lower it toward the dust boundary; it cannot bypass
+the contract's upper bound or move funds by this setting alone. The existing
+`contracts/loan_manager/src/test.rs` coverage includes the admin-auth and
+boundary checks (`test_set_min_repayment_amount_requires_admin_auth` and
+`test_set_min_repayment_amount_rejects_values_outside_bounds`).
+
+Already-deployed instances retain their stored minimum. If that value is at or
+below the dust threshold, the deployed contract must be updated through its
+normal admin/migration process or the administrator must call the setter after
+upgrade; changing the source default does not rewrite existing storage. Until
+then, repayment paths should treat the stored value as a residual deployment
+risk and monitor it explicitly.
+
 ### 3.2 Rate Limits and Failure Behavior
 - Public API endpoints return HTTP `429 Too Many Requests` when limits are breached.
 - Database connection pool exhaustion triggers fail-closed behavior (requests fail securely without exposing internal stack traces).
