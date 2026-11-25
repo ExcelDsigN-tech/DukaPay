@@ -2,7 +2,7 @@
 # Runs the Lighthouse performance budget gate against the deployed staging
 # site and against a fresh production build on scheduled runs. PR gates are
 # enforced by the bundle-size budget in ci.yml (no server required); this
-# workflow asserts the runtime budgets (LCP/TTI/CLS per lighthouse-budget.json)
+# workflow asserts the runtime budgets (LCP/TTI/CLS assertions in frontend/lighthouserc.yml)
 # against a real running app.
 
 name: lighthouse-ci
@@ -32,6 +32,11 @@ jobs:
         run: npm ci
         working-directory: frontend
 
+      # lighthouserc starts the app with `next start`, which needs a production build.
+      - name: Build
+        run: npm run build
+        working-directory: frontend
+
       - name: Run Lighthouse CI budgets
         run: npx @lhci/cli@0.14.x autorun --config=./lighthouserc.yml
         working-directory: frontend
@@ -39,7 +44,3 @@ jobs:
           LHCI_GITHUB_APP_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Set STAGING_URL in repo settings; falls back to a local build below.
           URL: ${{ vars.STAGING_URL || 'http://localhost:3000/' }}
-
-      - name: Assert budget thresholds (LCP<2.5s, TTI<3.5s, CLS<0.1)
-        run: npx @lhci/cli@0.14.x assert --config=./lighthouserc.yml --budgetsFile=./lighthouse-budget.json
-        working-directory: frontend

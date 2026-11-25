@@ -59,6 +59,6 @@ This phase reads as a project moving from "feature-complete MVP" to "production-
 
 - All CI workflows green: `ci.yml` (supply-chain audit, money-policy drift check, presumably build/lint/test), `codeql.yml`, `dast.yml`, `verify-contracts.yml`, `drift-check.yml`.
 - `cargo test` passes across all 9 workspace contracts, plus fuzz suite for `agent_vault`.
-- Lighthouse budget (`lighthouse-budget.json`) and a11y audit pass for any frontend change.
+- Lighthouse budget (`frontend/lighthouserc.yml`) and a11y audit pass for any frontend change.
 - No RLS/RBAC regressions: the RBAC test suite (`tenantAccessRbac.test.ts`, `agentRbac.test.ts`, `poolRouteScopes.test.ts`, `indexerRouteScopes.test.ts`) must stay green.
 - OpenAPI spec (`backend/src/swagger/openapi.json`) kept in sync with implementation (there's a dedicated CI concern for this per commit #487).

@@ -3,10 +3,11 @@
 import { useTranslations } from "next-intl";
 import { useLocale } from "next-intl";
 import { useUserStore } from "../../../stores/useUserStore";
-import { useAgentDashboard } from "../../../hooks/useApi";
+import { clearAgentDashboardCache, useAgentDashboard } from "../../../hooks/useApi";
 import { formatCurrency } from "../../../utils/formatLocale";
 import { AgentVaultActions } from "../../../components/agent/AgentVaultActions";
 import { AgentApplicationPanel } from "../../../components/agent/AgentApplicationPanel";
+import { useAgentVaultStream } from "../../../hooks/useAgentVaultStream";
 
 function formatPercent(value: number): string {
   return `${value.toFixed(2)}%`;
@@ -22,6 +23,7 @@ export default function AgentDashboardPage() {
   const locale = useLocale();
   const role = useUserStore((state) => state.user?.role);
   const { data, isLoading, isError, refetch } = useAgentDashboard();
+  const streamStatus = useAgentVaultStream(data?.agentPublicKey);
 
   if (role && (role === "borrower" || role === "lender")) {
     return (
@@ -88,6 +90,35 @@ export default function AgentDashboardPage() {
               <p className="mt-1 text-xs text-zinc-500">
                 {formatCurrency(data.collateralRatio.totalCollateral, locale)} /{" "}
                 {formatCurrency(data.collateralRatio.totalDebt, locale)}
+              </p>
+            </div>
+          </section>
+
+          <section className="grid gap-4 md:grid-cols-4">
+            <div className="rounded-2xl border border-zinc-200 p-5 dark:border-zinc-800">
+              <p className="text-xs uppercase tracking-wide text-zinc-500">
+                {t("vaultCollateral")}
+              </p>
+              <p className="mt-2 text-xl font-semibold text-zinc-950 dark:text-zinc-50">
+                {formatCurrency(data.vault.collateral, locale)}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-zinc-200 p-5 dark:border-zinc-800">
+              <p className="text-xs uppercase tracking-wide text-zinc-500">{t("vaultFloat")}</p>
+              <p className="mt-2 text-xl font-semibold text-zinc-950 dark:text-zinc-50">
+                {formatCurrency(data.vault.float, locale)}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-zinc-200 p-5 dark:border-zinc-800">
+              <p className="text-xs uppercase tracking-wide text-zinc-500">{t("vaultMaxFloat")}</p>
+              <p className="mt-2 text-xl font-semibold text-zinc-950 dark:text-zinc-50">
+                {formatCurrency(data.vault.maxFloat, locale)}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-zinc-200 p-5 dark:border-zinc-800">
+              <p className="text-xs uppercase tracking-wide text-zinc-500">{t("vaultHeadroom")}</p>
+              <p className="mt-2 text-xl font-semibold text-zinc-950 dark:text-zinc-50">
+                {formatCurrency(data.vault.headroom, locale)}
               </p>
             </div>
           </section>
@@ -164,9 +195,21 @@ export default function AgentDashboardPage() {
             >
               {t("refresh")}
             </button>
-            <span className="text-xs text-zinc-400">{t("autoRefresh")}: 10s</span>
+            <span className="text-xs text-zinc-400">
+              {t("autoRefresh")}:{" "}
+              {streamStatus === "connected"
+                ? t("liveConnected")
+                : streamStatus === "polling"
+                  ? t("livePolling")
+                  : t("liveConnecting")}
+            </span>
           </section>
-          <AgentVaultActions />
+          <AgentVaultActions
+            onSubmitted={async () => {
+              await clearAgentDashboardCache();
+              await refetch();
+            }}
+          />
         </>
       )}
     </div>

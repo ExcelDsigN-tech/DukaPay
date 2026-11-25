@@ -73,8 +73,11 @@ fuzz_target!(|data: FuzzAction| {
                 return;
             }
 
-            // Mint tokens to user
-            stellar_asset_client.mint(&user, &amount);
+            // Mint tokens to user. Setup only: skip amounts the token contract
+            // itself refuses to mint.
+            if stellar_asset_client.try_mint(&user, &amount).is_err() {
+                return;
+            }
 
             let result = rcall!(&env, pool_client, "deposit", (user, amount));
 
@@ -106,7 +109,10 @@ fuzz_target!(|data: FuzzAction| {
                 Some(v) => v,
                 None => return,
             };
-            stellar_asset_client.mint(&user, &deposit_amount);
+            // Setup only: skip amounts the token contract itself refuses to mint.
+            if stellar_asset_client.try_mint(&user, &deposit_amount).is_err() {
+                return;
+            }
             pool_client.deposit(&user, &token_id, &deposit_amount, &0);
 
             let balance_before = pool_client.get_deposit(&user, &token_id);
@@ -151,7 +157,10 @@ fuzz_target!(|data: FuzzAction| {
                         continue;
                     }
 
-                    stellar_asset_client.mint(&user_addr, &op.amount);
+                    // Setup only: skip amounts the token contract itself refuses to mint.
+                    if stellar_asset_client.try_mint(&user_addr, &op.amount).is_err() {
+                        continue;
+                    }
                     let result = rcall!(&env, pool_client, "deposit", (user_addr, op.amount));
                     if result.is_ok() {
                         total_expected_deposits += op.amount;

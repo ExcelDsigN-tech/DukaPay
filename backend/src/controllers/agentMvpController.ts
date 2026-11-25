@@ -3,6 +3,7 @@ import { StrKey } from '@stellar/stellar-sdk';
 import { stroopsToAmount, toStroops } from '../money/decimal.js';
 import { sorobanService } from '../services/sorobanService.js';
 import { AppError } from '../errors/AppError.js';
+import { ErrorCode } from '../errors/errorCodes.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { query } from '../db/connection.js';
 import { env } from '../config/env.js';
@@ -49,6 +50,17 @@ function requireOperator(req: Request): string {
     throw AppError.forbidden('Only the configured agent operator can perform this action');
   }
   return operator;
+}
+
+function translateVaultError(error: unknown): unknown {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/SolvencyViolated|Error\(Contract, #8\)/.test(message)) {
+    return AppError.withCode(ErrorCode.SOLVENCY_VIOLATED);
+  }
+  if (/InsufficientFloat|Error\(Contract, #7\)/.test(message)) {
+    return AppError.withCode(ErrorCode.INSUFFICIENT_FLOAT);
+  }
+  return error;
 }
 
 // The registry requires operator auth on `register` so the operator vets each
@@ -110,12 +122,17 @@ export const buildAgentVaultAction = (
       requireSelf(req, agent);
       source = agent;
     }
-    const result = await sorobanService.buildAgentVaultTx(
-      source,
-      action,
-      agent,
-      amount(req.body.amount),
-    );
+    let result: Awaited<ReturnType<typeof sorobanService.buildAgentVaultTx>>;
+    try {
+      result = await sorobanService.buildAgentVaultTx(
+        source,
+        action,
+        agent,
+        amount(req.body.amount),
+      );
+    } catch (error) {
+      throw translateVaultError(error);
+    }
     res.json({ success: true, ...result });
   });
 

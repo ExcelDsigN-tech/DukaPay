@@ -111,6 +111,9 @@ describe('SDK paths against the backend OpenAPI spec', () => {
     await auth.login({ publicKey: ADDRESS, message: 'msg', signature: 'sig' });
     await auth.verify();
     await auth.logout();
+    await auth.refresh('refresh-token');
+    await auth.logoutAll();
+    await auth.submitKyc({ firstName: 'Ada', lastName: 'Lovelace', countryCode: 'KE' });
 
     await loans.config();
     await loans.list({ borrower: ADDRESS, status: 'active', limit: 20 });
@@ -118,6 +121,10 @@ describe('SDK paths against the backend OpenAPI spec', () => {
     await loans.buildRepay(42, 100, ADDRESS);
     await loans.buildCancel(42);
     await loans.submit(42, 'signed-xdr');
+    await loans.amortizationPreview({ amount: 250, termDays: 30 });
+    await loans.amortizationSchedule(42);
+    await loans.repaymentPreview(42);
+    await loans.events(42);
 
     await pool.stats(ADDRESS);
     await pool.analytics();
@@ -128,6 +135,9 @@ describe('SDK paths against the backend OpenAPI spec', () => {
     await pool.buildWithdraw({ token: ADDRESS, shares: '50', from: ADDRESS });
 
     await scores.get(ADDRESS);
+    await scores.history(ADDRESS);
+    await scores.nft(ADDRESS);
+    await scores.breakdown(ADDRESS);
 
     await remittance.list({ status: 'pending', limit: 10 });
     await remittance.get('remittance-id');
@@ -163,7 +173,7 @@ describe('SDK paths against the backend OpenAPI spec', () => {
 
     // Sanity check on the fixture itself: a renamed SDK method would otherwise
     // silently stop being exercised.
-    expect(calls.length).toBeGreaterThanOrEqual(33);
+    expect(calls.length).toBeGreaterThanOrEqual(43);
 
     const mismatches = calls
       .map((call) => {
