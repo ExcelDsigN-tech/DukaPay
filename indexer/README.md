@@ -71,6 +71,7 @@ Kafka support requires building with `--features kafka`.
 - `indexer_failed_events_total`, `indexer_dead_letter_events_total`: exhausted event retries and durable dead-letter writes
 - `indexer_sink_writes_total`
 - `indexer_lag_ok`: 1/0 against `INDEXER_LAG_ALERT_THRESHOLD`
+- `indexer_ready`: 1/0, mirrors `/readyz`
 
 ## Deployment status
 
