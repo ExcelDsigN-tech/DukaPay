@@ -48,6 +48,28 @@ The invariant is checked at **every state-mutating operation**:
 | `settle_net`          | Verified for each entry in the batch                 |
 | `set_haircut`         | Verified with new haircut ratio                      |
 
+### Agent Status Exit Paths (Issue #865)
+
+When an `AgentRegistry` is configured, the vault requires an **Active** agent
+before any operation that increases float: `mint_float`, receiving a
+`transfer_float`, and positive `settle_net` deltas. Pending, Suspended,
+Expired, and unregistered agents keep exit-only paths so customers are never
+trapped:
+
+| Path                                    | Non-Active agent                         |
+| --------------------------------------- | ---------------------------------------- |
+| `burn_float`                            | Allowed (reduces the agent's own float)  |
+| `withdraw_collateral`                   | Allowed (solvency and floor still apply) |
+| Sending `transfer_float`                | Allowed (recipient must still be Active) |
+| Negative `settle_net` delta             | Allowed (batch must still sum to zero)   |
+| `mint_float`                            | Rejected with `AgentNotFound`            |
+| Receiving `transfer_float`              | Rejected with `AgentNotFound`            |
+| Positive `settle_net` delta             | Rejected with `AgentNotFound`            |
+
+This is the recorded rule for #865: a non-Active agent can reduce or move
+existing float out, but cannot take on new float. While float is outstanding,
+`withdraw_collateral` still enforces `min_collateral` and the solvency bound.
+
 ### View Functions for Off-Chain Verification
 
 - **`check_invariant(agent)`**: Returns `(holds, float, max_allowed)` for a
