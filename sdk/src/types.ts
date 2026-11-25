@@ -494,3 +494,63 @@ export interface SetAgentPairLimitsResponse {
   };
 }
 
+export type NotificationType =
+  | 'loan_approved'
+  | 'repayment_due'
+  | 'repayment_confirmed'
+  | 'loan_defaulted'
+  | 'loan_liquidated'
+  | 'score_changed';
+
+export type NotificationStatus = 'unread' | 'read' | 'archived';
+
+export interface Notification {
+  id: number;
+  userId: Address;
+  type: NotificationType;
+  title: string;
+  message: string;
+  loanId?: number;
+  actionUrl?: string | null;
+  read: boolean;
+  status: NotificationStatus;
+  createdAt: string;
+}
+
+export interface NotificationPreferences {
+  emailEnabled: boolean;
+  smsEnabled: boolean;
+  phone: string | null;
+  perTypeOverrides: Record<string, boolean>;
+  digestFrequency?: 'off' | 'daily' | 'weekly';
+}
+
+export interface UpdateNotificationPreferences {
+  emailEnabled: boolean;
+  smsEnabled: boolean;
+  phone?: string | null;
+  perTypeOverrides?: Record<string, boolean>;
+}
+
+export interface GetNotificationsParams {
+  type?: NotificationType;
+  status?: NotificationStatus;
+  from?: string;
+  to?: string;
+  limit?: number;
+}
+
+export interface NotificationsData {
+  notifications: Notification[];
+  unreadCount: number;
+}
+
+export interface NotificationsResponse {
+  success: boolean;
+  data: NotificationsData;
+}
+
+export interface NotificationSuccessResponse {
+  success: boolean;
+}
+

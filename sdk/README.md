@@ -3,7 +3,7 @@
 TypeScript SDK for the [DukaPay](https://github.com/ExcelDsigN-tech/dukapay)
 lending & remittance protocol.
 
-- **`DukaPayClient`**: typed client for every API resource (loans, pool, scores, remittance, agents, auth)
+- **`DukaPayClient`**: typed client for every API resource (loans, pool, scores, remittance, agents, notifications, auth)
 - **Wallet adapters**: `FreighterAdapter`, `AlbedoAdapter`, or your own via the `WalletAdapter` interface
 - **`ContractHelpers`**: stroop/bps conversions, address formatting, network constants
 - **React hooks**: `useWallet`, `useLoans`, `useFloat` (import from `@dukapay/sdk/react`)
@@ -107,6 +107,21 @@ await client.agents.setPairLimits({
   dailyLimit: 200000,
   weeklyLimit: 800000,
 });
+```
+
+## Notifications (`client.notifications`)
+
+```ts
+const { data } = await client.notifications.list({ status: 'unread', limit: 20 });
+const preferences = await client.notifications.getPreferences();
+await client.notifications.updatePreferences({
+  emailEnabled: true,
+  smsEnabled: false,
+  phone: null,
+  perTypeOverrides: {},
+});
+await client.notifications.markRead(data.notifications.map((n) => n.id));
+await client.notifications.markAllRead();
 ```
 
 ## React

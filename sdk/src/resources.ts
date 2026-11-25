@@ -15,6 +15,10 @@ import type {
   Loan,
   LoanConfig,
   LoanEvents,
+  GetNotificationsParams,
+  NotificationPreferences,
+  NotificationSuccessResponse,
+  NotificationsResponse,
   PoolAnalyticsResponse,
   PoolStats,
   RejectFloatTransferResponse,
@@ -33,6 +37,7 @@ import type {
   SetAgentPairLimitsResponse,
   SubmitFloatTransferResponse,
   UnsignedTransaction,
+  UpdateNotificationPreferences,
   YieldHistoryPoint,
 } from './types.js';
 import { ValidationError } from './errors.js';
@@ -618,6 +623,59 @@ export class AgentsResource {
       dailyLimit: params.dailyLimit,
       weeklyLimit: params.weeklyLimit,
     });
+  }
+}
+
+export class NotificationsResource {
+  constructor(private http: HttpClient) {}
+
+  list(params: GetNotificationsParams = {}): Promise<NotificationsResponse> {
+    return this.http.get('/notifications', {
+      query: {
+        type: params.type,
+        status: params.status,
+        from: params.from,
+        to: params.to,
+        limit: params.limit,
+      },
+    });
+  }
+
+  getPreferences(): Promise<NotificationPreferences> {
+    return this.http.get('/notifications/preferences');
+  }
+
+  updatePreferences(preferences: UpdateNotificationPreferences): Promise<NotificationPreferences> {
+    if (typeof preferences.emailEnabled !== 'boolean' || typeof preferences.smsEnabled !== 'boolean') {
+      throw new ValidationError('emailEnabled and smsEnabled must be booleans');
+    }
+    if (preferences.smsEnabled && !preferences.phone) {
+      throw new ValidationError('phone is required when smsEnabled is true');
+    }
+    if (
+      preferences.perTypeOverrides &&
+      Object.values(preferences.perTypeOverrides).some((enabled) => typeof enabled !== 'boolean')
+    ) {
+      throw new ValidationError('perTypeOverrides values must be booleans');
+    }
+    return this.http.put('/notifications/preferences', preferences);
+  }
+
+  markRead(ids: number[]): Promise<NotificationSuccessResponse> {
+    if (!Array.isArray(ids) || ids.length === 0) {
+      throw new ValidationError('ids must be a non-empty array of notification IDs');
+    }
+    if (ids.length > 100) {
+      throw new ValidationError('ids cannot contain more than 100 notification IDs');
+    }
+    if (ids.some((id) => !Number.isInteger(id) || id <= 0)) {
+      throw new ValidationError('ids must contain positive integers');
+    }
+    return this.http.post('/notifications/mark-read', { ids });
+  }
+
+  markAllRead(): Promise<NotificationSuccessResponse> {
+    return this.http.post('/notifications/mark-all-read');
   }
 }
 

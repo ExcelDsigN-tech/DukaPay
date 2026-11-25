@@ -19,6 +19,7 @@ import {
   AgentsResource,
   AuthResource,
   LoansResource,
+  NotificationsResource,
   PoolResource,
   ScoresResource,
   RemittanceResource,
@@ -106,6 +107,7 @@ describe('SDK paths against the backend OpenAPI spec', () => {
     const scores = new ScoresResource(http);
     const remittance = new RemittanceResource(http);
     const agents = new AgentsResource(http);
+    const notifications = new NotificationsResource(http);
 
     await auth.challenge(ADDRESS);
     await auth.login({ publicKey: ADDRESS, message: 'msg', signature: 'sig' });
@@ -171,9 +173,20 @@ describe('SDK paths against the backend OpenAPI spec', () => {
       weeklyLimit: 800000,
     });
 
+    await notifications.list({ type: 'repayment_due', status: 'unread', limit: 10 });
+    await notifications.getPreferences();
+    await notifications.updatePreferences({
+      emailEnabled: true,
+      smsEnabled: false,
+      phone: null,
+      perTypeOverrides: {},
+    });
+    await notifications.markRead([1, 2]);
+    await notifications.markAllRead();
+
     // Sanity check on the fixture itself: a renamed SDK method would otherwise
     // silently stop being exercised.
-    expect(calls.length).toBeGreaterThanOrEqual(43);
+    expect(calls.length).toBeGreaterThanOrEqual(48);
 
     const mismatches = calls
       .map((call) => {
