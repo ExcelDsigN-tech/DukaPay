@@ -298,6 +298,8 @@ async fn worker_loop(
 /// decoding still lives in the TypeScript consumer; here we pass through the
 /// base64 topics/value and the event type symbol so the pipeline stays cheap.
 fn decode(raw: &RawEvent, shard: u32) -> Result<DecodedEvent> {
+    anyhow::ensure!(!raw.id.trim().is_empty(), "event id is empty");
+    anyhow::ensure!(!raw.contract_id.trim().is_empty(), "contract id is empty");
     let event_type = raw
         .topic
         .first()
@@ -345,11 +347,10 @@ mod tests {
         let checkpoint_store = FileCheckpointStore::new(checkpoint_path.to_string_lossy())
             .await
             .unwrap();
-        let sink_file = std::fs::OpenOptions::new()
-            .write(true)
-            .open("/dev/full")
-            .unwrap();
-        let sink = Sink::File(Arc::new(Mutex::new(tokio::fs::File::from_std(sink_file))));
+        let sink_path = root.join("readonly-sink.ndjson");
+        tokio::fs::write(&sink_path, b"").await.unwrap();
+        let sink_file = tokio::fs::File::open(&sink_path).await.unwrap();
+        let sink = Sink::File(Arc::new(Mutex::new(sink_file)));
         let cfg = Arc::new(Config {
             rpc_url: "http://localhost".to_string(),
             contract_ids: vec!["contract".to_string()],
@@ -420,5 +421,128 @@ mod tests {
             .await
             .unwrap());
         tokio::fs::remove_dir_all(root).await.unwrap();
+    }
+
+    fn test_config(root: &std::path::Path, max_event_retries: u32) -> Config {
+        Config {
+            rpc_url: "http://localhost".to_string(),
+            contract_ids: vec!["contract".to_string()],
+            finality_depth: 1,
+            poll_interval: Duration::from_millis(1),
+            batch_size: 1,
+            worker_concurrency: 1,
+            max_event_retries,
+            dead_letter_file: root
+                .join("dead-letter.ndjson")
+                .to_string_lossy()
+                .into_owned(),
+            channel_capacity: 1,
+            shard: (0, 1),
+            checkpoint: CheckpointBackend::File {
+                path: root.join("checkpoints.json").to_string_lossy().into_owned(),
+            },
+            sink: SinkBackend::Stdout,
+            metrics_port: 0,
+            lag_alert_threshold: 100,
+        }
+    }
+
+    #[tokio::test]
+    async fn empty_batch_advances_checkpoint_without_writing_dead_letters() {
+        let dir = tempfile::tempdir().unwrap();
+        let cfg = Arc::new(test_config(dir.path(), 1));
+        let dead_letter_path = cfg.dead_letter_file.clone();
+        let checkpoint_store =
+            FileCheckpointStore::new(dir.path().join("checkpoints.json").to_string_lossy())
+                .await
+                .unwrap();
+        let dead_letters = DeadLetterQueue::new(dead_letter_path.clone())
+            .await
+            .unwrap();
+        let (tx, rx) = mpsc::channel(1);
+        let worker = tokio::spawn(worker_loop(
+            0,
+            Arc::new(Mutex::new(rx)),
+            Sink::Stdout,
+            AnyCheckpointStore::File(checkpoint_store.clone()),
+            dead_letters,
+            cfg,
+        ));
+        let (done_tx, done_rx) = tokio::sync::oneshot::channel();
+
+        tx.send(Batch {
+            contract_id: "contract".to_string(),
+            through_ledger: 99,
+            events: Vec::new(),
+            done: done_tx,
+        })
+        .await
+        .unwrap();
+
+        assert!(done_rx.await.unwrap());
+        drop(tx);
+        worker.await.unwrap().unwrap();
+        assert_eq!(
+            checkpoint_store.load(0, "contract").await.unwrap(),
+            Some(99)
+        );
+        assert!(tokio::fs::metadata(&dead_letter_path).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn decode_failure_is_dead_lettered_without_advancing_checkpoint() {
+        let dir = tempfile::tempdir().unwrap();
+        let cfg = Arc::new(test_config(dir.path(), 0));
+        let dead_letter_path = cfg.dead_letter_file.clone();
+        let checkpoint_store =
+            FileCheckpointStore::new(dir.path().join("checkpoints.json").to_string_lossy())
+                .await
+                .unwrap();
+        let dead_letters = DeadLetterQueue::new(dead_letter_path.clone())
+            .await
+            .unwrap();
+        let (tx, rx) = mpsc::channel(1);
+        let worker = tokio::spawn(worker_loop(
+            0,
+            Arc::new(Mutex::new(rx)),
+            Sink::Stdout,
+            AnyCheckpointStore::File(checkpoint_store.clone()),
+            dead_letters,
+            cfg,
+        ));
+        let (done_tx, done_rx) = tokio::sync::oneshot::channel();
+        let raw_event = RawEvent {
+            kind: "contract".to_string(),
+            ledger: 43,
+            ledger_closed_at: "2026-11-25T00:00:00Z".to_string(),
+            contract_id: "contract".to_string(),
+            id: String::new(),
+            paging_token: String::new(),
+            topic: vec!["LoanCreated".to_string()],
+            value: serde_json::Value::Null,
+            tx_hash: String::new(),
+        };
+
+        tx.send(Batch {
+            contract_id: "contract".to_string(),
+            through_ledger: 43,
+            events: vec![raw_event],
+            done: done_tx,
+        })
+        .await
+        .unwrap();
+
+        assert!(!done_rx.await.unwrap());
+        drop(tx);
+        worker.await.unwrap().unwrap();
+        assert_eq!(checkpoint_store.load(0, "contract").await.unwrap(), None);
+
+        let contents = tokio::fs::read_to_string(&dead_letter_path).await.unwrap();
+        let record: serde_json::Value = serde_json::from_str(contents.trim()).unwrap();
+        assert_eq!(record["attempts"], 1);
+        assert!(record["error"]
+            .as_str()
+            .unwrap()
+            .contains("event id is empty"));
     }
 }
