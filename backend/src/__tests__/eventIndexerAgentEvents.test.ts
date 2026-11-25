@@ -149,7 +149,7 @@ function captureAgentVaultUpserts(): unknown[][] {
   const upserts: unknown[][] = [];
   mockQuery.mockImplementation(async (sql: string, params: unknown[] = []) => {
     if (sql === 'BEGIN' || sql === 'COMMIT') return { rows: [], rowCount: 0 };
-    if (sql.includes('INSERT INTO loan_events')) {
+    if (sql.includes('INSERT INTO contract_events')) {
       return { rows: [{ event_id: params[0] }], rowCount: 1 };
     }
     if (sql.includes('INSERT INTO agent_vaults')) {
@@ -263,7 +263,7 @@ describe('EventIndexer: agent registry / agent vault events', () => {
     const insertedLoanEvents: unknown[][] = [];
     mockQuery.mockImplementation(async (sql: string, params: unknown[] = []) => {
       if (sql === 'BEGIN' || sql === 'COMMIT') return { rows: [], rowCount: 0 };
-      if (sql.includes('INSERT INTO loan_events')) {
+      if (sql.includes('INSERT INTO contract_events')) {
         insertedLoanEvents.push(params);
         return { rows: [{ event_id: params[0] }], rowCount: 1 };
       }
@@ -372,7 +372,7 @@ describe('EventIndexer: agent registry / agent vault events', () => {
     const updates: unknown[][] = [];
     mockQuery.mockImplementation(async (sql: string, params: unknown[] = []) => {
       if (sql === 'BEGIN' || sql === 'COMMIT') return { rows: [], rowCount: 0 };
-      if (sql.includes('INSERT INTO loan_events')) {
+      if (sql.includes('INSERT INTO contract_events')) {
         return inserted
           ? { rows: [{ event_id: params[0] }], rowCount: 1 }
           : { rows: [], rowCount: 0 };
