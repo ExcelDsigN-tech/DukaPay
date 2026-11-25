@@ -158,9 +158,11 @@ mod test {
         let root = BytesN::from_array(&env, &[9; 32]);
         // No auth provided → require_auth() returns an auth error.
         let result = client.try_anchor(&1, &root, &1);
-        assert!(
-            result.is_err(),
-            "anchor without owner auth must be rejected"
-        );
+        // Ensure the error is an authentication failure, not just any error.
+        assert!(result.is_err(), "anchor without owner auth must be rejected");
+        let err = result.unwrap_err();
+        // The HostError string should contain "auth" indicating an auth failure.
+        let err_str = format!("{:?}", err).to_lowercase();
+        assert!(err_str.contains("auth"), "expected auth error, got: {:?}", err);
     }
 }
