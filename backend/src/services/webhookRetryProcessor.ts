@@ -4,6 +4,7 @@ import { WebhookService } from './webhookService.js';
 import { jobMetricsService } from './jobMetricsService.js';
 
 let retryProcessorInterval: NodeJS.Timeout | null = null;
+let retryRunInProgress = false;
 
 /**
  * Starts the webhook retry processor.
@@ -30,6 +31,11 @@ export function startWebhookRetryProcessor(): void {
 
   // Run retry processor every 10 seconds
   retryProcessorInterval = setInterval(async () => {
+    if (retryRunInProgress) {
+      logger.debug('Skipping webhook retry tick while the previous run is active');
+      return;
+    }
+    retryRunInProgress = true;
     const startTime = Date.now();
     const jobName = 'webhookRetryProcessor';
 
@@ -44,6 +50,8 @@ export function startWebhookRetryProcessor(): void {
       const durationMs = Date.now() - startTime;
       jobMetricsService.recordFailure(jobName, error as Error | string, durationMs);
       logger.withContext().error('Error in webhook retry processor interval', { error });
+    } finally {
+      retryRunInProgress = false;
     }
   }, 10 * 1000);
 }
@@ -56,5 +64,6 @@ export function stopWebhookRetryProcessor(): void {
     logger.withContext().info('Stopping webhook retry processor');
     clearInterval(retryProcessorInterval);
     retryProcessorInterval = null;
+    retryRunInProgress = false;
   }
 }
