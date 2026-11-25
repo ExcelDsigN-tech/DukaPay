@@ -115,6 +115,15 @@ export class TransactionSimulationService {
     sourceAccount: string,
     skipCache = false,
   ): Promise<SimulationResult> {
+    if (!function_.trim()) {
+      throw AppError.badRequest('Contract function is required');
+    }
+    if (!Array.isArray(args)) {
+      throw AppError.badRequest('Simulation arguments must be an array');
+    }
+    if (!StrKey.isValidEd25519PublicKey(sourceAccount)) {
+      throw AppError.badRequest('Invalid source account format');
+    }
     // Validate contract address
     if (!StrKey.isValidContract(contractId)) {
       throw AppError.badRequest('Invalid contract ID format');
