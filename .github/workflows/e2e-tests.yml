@@ -9,7 +9,8 @@ jobs:
   e2e-tests:
     name: Playwright E2E Tests
     timeout-minutes: 20
-    runs-on: ubuntu-latest
+    # Playwright 1.58 can't install Chromium on ubuntu-latest (26.04). Unpin when Playwright supports it.
+    runs-on: ubuntu-24.04
     continue-on-error: true
     strategy:
       fail-fast: false
@@ -68,7 +69,8 @@ jobs:
   flaky-tests:
     name: Flaky Tests (Non-blocking)
     timeout-minutes: 15
-    runs-on: ubuntu-latest
+    # Playwright 1.58 can't install Chromium on ubuntu-latest (26.04). Unpin when Playwright supports it.
+    runs-on: ubuntu-24.04
     continue-on-error: true
     
     steps:
