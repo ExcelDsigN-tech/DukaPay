@@ -84,17 +84,19 @@ describeIfDb('EventIndexer insert target against the real schema (#847)', () => 
   });
 
   it('exposes the same events through the loan_events view as `borrower`', async () => {
-    const viaView = await query(
-      `SELECT borrower FROM loan_events WHERE event_id LIKE $1`,
-      [`${EVENT_PREFIX}%`],
-    );
+    const viaView = await query(`SELECT borrower FROM loan_events WHERE event_id LIKE $1`, [
+      `${EVENT_PREFIX}%`,
+    ]);
     expect(viaView.rows.length).toBeGreaterThan(0);
     expect(viaView.rows.every((r: { borrower: string }) => r.borrower === borrower)).toBe(true);
   });
 
   it('cannot take the same insert through the loan_events view (why #847 happened)', async () => {
     await expect(
-      query(insertInto('loan_events'), params(`${EVENT_PREFIX}view`, 'LoanRequested', 848, borrower)),
+      query(
+        insertInto('loan_events'),
+        params(`${EVENT_PREFIX}view`, 'LoanRequested', 848, borrower),
+      ),
     ).rejects.toThrow(/address|loan_events/);
   });
 });
