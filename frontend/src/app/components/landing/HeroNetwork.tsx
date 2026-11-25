@@ -489,8 +489,16 @@ export function HeroNetwork() {
   }, []);
 
   return (
-    <figure className="m-0 flex min-w-0 flex-col gap-3.5" aria-labelledby="hero-network-caption">
-      <div ref={stageRef} className="relative w-full max-w-full" />
+    <figure
+      className="@container m-0 flex min-w-0 flex-col gap-3.5"
+      aria-labelledby="hero-network-caption"
+    >
+      {/* The SVG is drawn after hydration. Reserve its box (LAYOUTS w/h, switched at the same
+          520px stage width as build()) so the log below doesn't shift down (CLS, issue #941). */}
+      <div
+        ref={stageRef}
+        className="relative aspect-[360/490] w-full max-w-full @min-[520px]:aspect-[720/590]"
+      />
       <div className="flex flex-col gap-3">
         <ol
           ref={logRef}

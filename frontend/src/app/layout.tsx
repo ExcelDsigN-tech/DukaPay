@@ -4,9 +4,7 @@ import "./[locale]/globals.css";
 import { QueryProvider } from "./components/providers/QueryProvider";
 import { WalletProvider } from "./components/providers/WalletProvider";
 import { DashboardShell } from "./components/global_ui/DashboardShell";
-import { Toaster } from "./components/ui/Toaster";
-import { LevelUpModal } from "./components/gamification/LevelUpModal";
-import { GlobalXPGain } from "./components/global_ui/GlobalXPGain";
+import { GlobalOverlays } from "./components/global_ui/GlobalOverlays";
 import { StaleServiceWorkerCleanup } from "./components/dev/StaleServiceWorkerCleanup";
 import { ErrorBoundary } from "./components/global_ui/ErrorBoundary";
 import { NextIntlClientProvider } from "next-intl";
@@ -74,9 +72,7 @@ export default async function RootLayout({
                 </ErrorBoundary>
               </DashboardShell>
             </WalletProvider>
-            <Toaster />
-            <LevelUpModal />
-            <GlobalXPGain />
+            <GlobalOverlays />
             <StaleServiceWorkerCleanup />
           </QueryProvider>
         </NextIntlClientProvider>
