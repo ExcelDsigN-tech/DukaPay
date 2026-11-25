@@ -33,6 +33,7 @@ const config: Config = {
       testPathIgnorePatterns: [
         'database\\.test\\.ts$',
         'score\\.integration\\.test\\.ts$',
+        'eventIndexerSchema\\.test\\.ts$',
         'loanDisputesSchema\\.test\\.ts$',
         'migration\\.test\\.ts$',
         'scoresService\\.test\\.ts$',
@@ -45,6 +46,7 @@ const config: Config = {
       testMatch: [
         '<rootDir>/src/__tests__/database.test.ts',
         '<rootDir>/src/__tests__/integration/score.integration.test.ts',
+        '<rootDir>/src/__tests__/eventIndexerSchema.test.ts',
         '<rootDir>/src/__tests__/loanDisputesSchema.test.ts',
         '<rootDir>/src/__tests__/migration.test.ts',
         '<rootDir>/src/__tests__/scoresService.test.ts',
