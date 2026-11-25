@@ -142,6 +142,21 @@ function Dashboard() {
 }
 ```
 
+## Session refresh
+
+Authenticated requests that come back `401` refresh the session once, then retry that request once. Concurrent `401`s share a single refresh call, so a burst of expired requests does not stampede `/auth/refresh`.
+
+`client.auth.refresh()` posts anonymously. A `401` from `/auth/refresh` itself is returned immediately and does not start another refresh, so the client cannot wait on its own refresh.
+
+If the refresh call fails, the in-memory session is cleared and `onSession` is called with `null`.
+
+`client.auth.logoutAll()` revokes every session for the account (`POST /auth/logout-all`). It leaves the in-memory session in place, so clear it after a successful call:
+
+```ts
+await client.auth.logoutAll();
+client.setSession(null);
+```
+
 ## Errors
 
 Every call rejects with a `DukaPayError` carrying `status`, `code`, `requestId`
