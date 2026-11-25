@@ -52,19 +52,11 @@ jest.unstable_mockModule('../services/sorobanService.js', () => ({
   },
 }));
 
-// Mock DB connection to avoid real DB access
-jest.mock('../db/connection.js', () => ({
-  default: { query: jest.fn().mockResolvedValue({ rows: [], rowCount: 0 }) },
-  query: jest.fn().mockResolvedValue({ rows: [], rowCount: 0 }),
-  getClient: jest.fn(),
-  withTransaction: jest.fn(),
-}));
-
-import { userOrIpKey } from '../middleware/rateLimiter.js';
-import { errorHandler } from '../middleware/errorHandler.js';
-import adminRoutes from '../routes/adminRoutes.js';
-import poolRoutes from '../routes/poolRoutes.js';
-import scoreRoutes from '../routes/scoreRoutes.js';
+const { userOrIpKey } = await import('../middleware/rateLimiter.js');
+const { errorHandler } = await import('../middleware/errorHandler.js');
+const { default: adminRoutes } = await import('../routes/adminRoutes.js');
+const { default: poolRoutes } = await import('../routes/poolRoutes.js');
+const { default: scoreRoutes } = await import('../routes/scoreRoutes.js');
 
 const app = express();
 app.use(express.json());
@@ -126,11 +118,7 @@ describe('userOrIpKey', () => {
   });
 });
 
-// Increase Jest timeout for slow tests
-jest.setTimeout(20000);
-
-// Skip admin read endpoints tests that require DB connections
-describe.skip('admin read endpoints (per-admin limits)', () => {
+describe('admin read endpoints (per-admin limits)', () => {
   it('GET /api/admin/audit-logs: 30 per minute', async () => {
     await expectLimitOf('/api/admin/audit-logs', 30, adminToken(ADMINS[0]!));
   });

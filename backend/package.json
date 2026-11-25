@@ -55,7 +55,6 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "jest-circus": "^30.4.2",
     "@types/compression": "^1.8.1",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
