@@ -309,7 +309,13 @@ describe('Agent Float Transfer API (/api/agents/float-transfer)', () => {
           },
         ],
       });
-      mockSubmitSignedTx.mockResolvedValueOnce({ txHash: 'confirmed-hash', status: 'SUCCESS' });
+      mockSubmitSignedTx.mockImplementationOnce(
+        async (_xdr: string, onSubmitted?: (hash: string) => Promise<void>) => {
+          await onSubmitted?.('confirmed-hash');
+          return { txHash: 'confirmed-hash', status: 'SUCCESS' };
+        },
+      );
+      mockQuery.mockResolvedValueOnce({ rows: [{ id: 'ft_12345' }] });
       mockQuery.mockResolvedValueOnce({
         rows: [
           {
@@ -319,7 +325,7 @@ describe('Agent Float Transfer API (/api/agents/float-transfer)', () => {
           },
         ],
       });
-      mockQuery.mockResolvedValueOnce({ rows: [] });
+      mockQuery.mockResolvedValueOnce({ rows: [] }); // audit
 
       const response = await request(app)
         .post('/api/agents/float-transfer/ft_12345/submit')

@@ -91,7 +91,9 @@ impl AuditAnchor {
 #[cfg(test)]
 mod test {
     use super::*;
-    use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, IntoVal, Symbol, Val};
+    use soroban_sdk::testutils::storage::Instance as _;
+    use soroban_sdk::testutils::{Address as _, Ledger as _};
+    use soroban_sdk::{Address, BytesN, Env, IntoVal, Symbol, Val};
 
     fn setup() -> (Env, AuditAnchorClient<'static>, Address) {
         let env = Env::default();
@@ -119,6 +121,18 @@ mod test {
     fn get_root_returns_none_for_unanchored_epoch() {
         let (_env, client, _owner) = setup();
         assert_eq!(client.get_root(&99), None);
+    }
+
+    #[test]
+    fn anchor_reextends_instance_ttl() {
+        let (env, client, _owner) = setup();
+        let contract_id = client.address.clone();
+        env.ledger()
+            .set_sequence_number(env.ledger().sequence() + 510_000);
+
+        client.anchor(&1, &BytesN::from_array(&env, &[7; 32]), &1);
+
+        assert!(env.as_contract(&contract_id, || env.storage().instance().get_ttl()) > 400_000);
     }
 
     // ── EmptyEpoch ───────────────────────────────────────────────────────────

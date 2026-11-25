@@ -52,6 +52,7 @@ middleware that activates when `DEMO_MODE=true` implements limit capping
 | `POOL_TOKEN_ADDRESS` | ✓ | ✓ | ✓ | — | Pool token contract address | `backend/src/config/stellar.ts` |
 | `AGENT_REGISTRY_CONTRACT_ID` | ✓ | ✓ | ✓ | — | Deployed agent registry contract address | `scripts/deploy.ts` |
 | `AGENT_VAULT_CONTRACT_ID` | ✓ | ✓ | ✓ | — | Deployed agent vault contract address | `scripts/deploy.ts` |
+| `AGENT_FLOAT_TRANSFER_SIGNATURE_TTL_HOURS` | ✓ | ✓ | ✓ | `24` | Hours before an awaiting-signature agent float transfer expires and releases pair limits | `backend/src/config/envSchema.ts` |
 | `AGENT_OPERATOR_PUBLIC_KEY` | — | ✓ | ✓ | — | Agent registry operator wallet; only this admin wallet can build register, activate, top-up and mint-float transactions | `backend/src/controllers/agentMvpController.ts` |
 | `AGENT_OPERATOR_SECRET` | — | ✓ | ✓ | — | Operator secret that signs the operator auth entry on agent registration. Keep it in the deployment secret store | `backend/src/services/sorobanService.ts` |
 | `STELLAR_USDC_ISSUER` | — | ✓ | ✓ | — | USDC asset issuer address | `backend/src/config/stellar.ts` |

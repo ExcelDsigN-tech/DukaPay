@@ -15,6 +15,8 @@ import {
   emptyAgentParamsSchema,
   emptyAgentQuerySchema,
   removeBorrowerParamsSchema,
+  agentApplicationBodySchema,
+  agentApplicationIdParamsSchema,
 } from '../schemas/agentSchemas.js';
 import {
   getAgentDashboard,
@@ -27,6 +29,11 @@ import {
   buildAgentVaultAction,
   getPublicSolvency,
   submitAgentTransaction,
+  applyAsAgent,
+  getMyAgentApplication,
+  getPendingAgentApplications,
+  buildApplicationRegistration,
+  getMyAgentStatus,
 } from '../controllers/agentMvpController.js';
 
 const router = Router();
@@ -43,6 +50,118 @@ const router = Router();
  */
 router.get('/solvency', getPublicSolvency);
 
+/**
+ * @swagger
+ * /agents/applications:
+ *   post:
+ *     summary: Submit an agent application
+ *     tags: [Agents]
+ *     security: [{ BearerAuth: [] }]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [kycRef, region, bond]
+ *             properties:
+ *               kycRef: { type: string, maxLength: 32 }
+ *               region: { type: string, maxLength: 16 }
+ *               bond: { type: string, description: Initial bond in whole tokens }
+ *     responses:
+ *       201: { description: Application submitted }
+ *       409: { description: Application already exists }
+ */
+router.post(
+  '/applications',
+  requireJwtAuth,
+  validateParams(emptyAgentParamsSchema),
+  validateQuery(emptyAgentQuerySchema),
+  validateBody(agentApplicationBodySchema),
+  applyAsAgent,
+);
+
+/**
+ * @swagger
+ * /agents/applications/me:
+ *   get:
+ *     summary: Get the authenticated wallet's application and registration transaction
+ *     tags: [Agents]
+ *     security: [{ BearerAuth: [] }]
+ *     responses:
+ *       200: { description: Agent application or null }
+ */
+router.get(
+  '/applications/me',
+  requireJwtAuth,
+  validateParams(emptyAgentParamsSchema),
+  validateQuery(emptyAgentQuerySchema),
+  getMyAgentApplication,
+);
+
+/**
+ * @swagger
+ * /agents/applications/pending:
+ *   get:
+ *     summary: List agent applications for operator review
+ *     tags: [Agents]
+ *     security: [{ BearerAuth: [] }]
+ *     responses:
+ *       200: { description: Agent applications with indexed status }
+ *       403: { description: Configured operator required }
+ */
+router.get(
+  '/applications/pending',
+  requireJwtAuth,
+  requireRole('admin'),
+  validateParams(emptyAgentParamsSchema),
+  validateQuery(emptyAgentQuerySchema),
+  getPendingAgentApplications,
+);
+
+/**
+ * @swagger
+ * /agents/applications/{applicationId}/register:
+ *   post:
+ *     summary: Build and persist an unsigned agent registration for the applicant
+ *     tags: [Agents]
+ *     security: [{ BearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: applicationId
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200: { description: Unsigned transaction }
+ *       403: { description: Configured operator required }
+ */
+router.post(
+  '/applications/:applicationId/register',
+  requireJwtAuth,
+  requireRole('admin'),
+  validateParams(agentApplicationIdParamsSchema),
+  validateQuery(emptyAgentQuerySchema),
+  validateBody(emptyAgentBodySchema),
+  buildApplicationRegistration,
+);
+
+/**
+ * @swagger
+ * /agents/status:
+ *   get:
+ *     summary: Get the authenticated wallet's indexed agent status
+ *     tags: [Agents]
+ *     security: [{ BearerAuth: [] }]
+ *     responses:
+ *       200: { description: Indexed agent status or null }
+ */
+router.get(
+  '/status',
+  requireJwtAuth,
+  validateParams(emptyAgentParamsSchema),
+  validateQuery(emptyAgentQuerySchema),
+  getMyAgentStatus,
+);
 /**
  * @swagger
  * /agents/submit:

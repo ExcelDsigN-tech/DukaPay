@@ -120,6 +120,7 @@ export const envShape = {
   SETTLEMENT_NETTER_CONTRACT_ID: optionalString(),
   AGENT_REGISTRY_CONTRACT_ID: optionalString(),
   AGENT_VAULT_CONTRACT_ID: optionalString(),
+  AGENT_FLOAT_TRANSFER_SIGNATURE_TTL_HOURS: positiveInt(24),
   AGENT_OPERATOR_PUBLIC_KEY: optionalString(),
   AGENT_OPERATOR_SECRET: optionalString(),
   POOL_TOKEN_ADDRESS: optionalString(),

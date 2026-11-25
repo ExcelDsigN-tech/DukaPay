@@ -6,6 +6,7 @@ import { useUserStore } from "../../../stores/useUserStore";
 import { useAgentDashboard } from "../../../hooks/useApi";
 import { formatCurrency } from "../../../utils/formatLocale";
 import { AgentVaultActions } from "../../../components/agent/AgentVaultActions";
+import { AgentApplicationPanel } from "../../../components/agent/AgentApplicationPanel";
 
 function formatPercent(value: number): string {
   return `${value.toFixed(2)}%`;
@@ -25,9 +26,7 @@ export default function AgentDashboardPage() {
   if (role && (role === "borrower" || role === "lender")) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-10">
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
-          {t("forbidden")}
-        </div>
+        <AgentApplicationPanel />
       </div>
     );
   }
@@ -38,6 +37,8 @@ export default function AgentDashboardPage() {
         <h1 className="text-2xl font-semibold text-zinc-950 dark:text-zinc-50">{t("title")}</h1>
         <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">{t("description")}</p>
       </div>
+
+      <AgentApplicationPanel />
 
       {isLoading ? (
         <p className="text-sm text-zinc-500">{t("loading")}</p>

@@ -341,6 +341,7 @@ impl CircuitBreaker {
     pub fn pause_all(env: Env, caller: Address) -> Result<(), CircuitBreakerError> {
         caller.require_auth();
         Self::require_signer(&env, &caller)?;
+        Self::bump_instance_ttl(&env);
         let expires_at = Self::pause_expiry(&env);
         env.storage().instance().set(&KEY_GLOBAL, &expires_at);
         let now = env.ledger().timestamp();
@@ -366,6 +367,7 @@ impl CircuitBreaker {
     ) -> Result<(), CircuitBreakerError> {
         caller.require_auth();
         Self::require_signer(&env, &caller)?;
+        Self::bump_instance_ttl(&env);
         let expires_at = Self::pause_expiry(&env);
         let wildcard = Self::wildcard(&env);
         Self::set_pause(&env, &contract, &wildcard, expires_at);
@@ -393,6 +395,7 @@ impl CircuitBreaker {
     ) -> Result<(), CircuitBreakerError> {
         caller.require_auth();
         Self::require_signer(&env, &caller)?;
+        Self::bump_instance_ttl(&env);
         let expires_at = Self::pause_expiry(&env);
         Self::set_pause(&env, &contract, &function, expires_at);
         let now = env.ledger().timestamp();

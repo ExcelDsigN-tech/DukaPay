@@ -75,6 +75,7 @@ jest.unstable_mockModule('../config/stellar.js', () => ({
 }));
 
 jest.unstable_mockModule('../db/connection.js', () => ({
+  default: { query: jest.fn(async () => ({ rows: [], rowCount: 0 })) },
   query: jest.fn(async () => ({ rows: [], rowCount: 0 })),
 }));
 
@@ -107,6 +108,13 @@ function register(caller: string) {
     .send(body);
 }
 
+function agentAction(caller: string, method: 'activate' | 'top-up-bond') {
+  const req = request(buildApp())
+    .post(`/api/agents/${AGENT}/${method}`)
+    .auth(generateJwtToken(caller), { type: 'bearer' });
+  return method === 'top-up-bond' ? req.send({ amount: '25' }) : req.send({});
+}
+
 describe('POST /api/agents/register', () => {
   beforeEach(() => jest.clearAllMocks());
 
@@ -131,4 +139,25 @@ describe('POST /api/agents/register', () => {
     expect(signature(auth[0])).not.toBe(xdr.ScValType.scvVoid());
     expect(signature(auth[1])).toBe(xdr.ScValType.scvVoid());
   });
+});
+
+describe('agent activation and bond routes', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it.each(['activate', 'top-up-bond'] as const)(
+    'builds the %s transaction for the configured operator',
+    async (action) => {
+      const response = await agentAction(OPERATOR.publicKey(), action);
+      expect(response.status).toBe(200);
+      expect(typeof response.body.unsignedTxXdr).toBe('string');
+    },
+  );
+
+  it.each(['activate', 'top-up-bond'] as const)(
+    'returns 403 for a non-operator admin on %s',
+    async (action) => {
+      const response = await agentAction(OTHER_ADMIN, action);
+      expect(response.status).toBe(403);
+    },
+  );
 });
