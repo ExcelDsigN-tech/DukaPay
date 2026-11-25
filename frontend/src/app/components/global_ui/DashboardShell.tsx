@@ -1,20 +1,15 @@
 "use client";
 
 import type { ReactNode } from "react";
-import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 import { useLocale } from "next-intl";
 import { useWalletStore, selectIsWalletConnected } from "../../stores/useWalletStore";
-
-// Split out so the signed-out landing page, which never renders the app chrome, doesn't
-// download and evaluate it (home page LCP/TBT, issues #939 and #940). Still server-rendered
-// on every other route.
-const Sidebar = dynamic(() => import("./Sidebar").then((m) => m.Sidebar));
-const BottomNav = dynamic(() => import("./BottomNav").then((m) => m.BottomNav));
-const Header = dynamic(() => import("./Header").then((m) => m.Header));
-const Breadcrumbs = dynamic(() => import("./Breadcrumbs").then((m) => m.Breadcrumbs));
-const OfflineBanner = dynamic(() => import("./OfflineBanner").then((m) => m.OfflineBanner));
-const PauseBanner = dynamic(() => import("./PauseBanner").then((m) => m.PauseBanner));
+import { Sidebar } from "./Sidebar";
+import { BottomNav } from "./BottomNav";
+import { Header } from "./Header";
+import { Breadcrumbs } from "./Breadcrumbs";
+import { OfflineBanner } from "./OfflineBanner";
+import { PauseBanner } from "./PauseBanner";
 
 interface DashboardShellProps {
   children: ReactNode;
