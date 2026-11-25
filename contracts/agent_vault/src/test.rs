@@ -655,48 +655,53 @@ fn test_settle_net_rejects_non_active_positive_delta() {
     }
 }
 
-#[soroban_sdk::contract]
-struct MockSplitRegistry;
+// Own module: the contract macros generate module-level items that would
+// clash with `MockRegistry` above.
+mod split_registry {
+    use super::*;
 
-#[soroban_sdk::contractimpl]
-impl MockSplitRegistry {
-    pub fn __constructor(
-        env: Env,
-        status: Option<crate::AgentStatus>,
-        active: Address,
-    ) {
-        env.storage()
-            .instance()
-            .set(&Symbol::new(&env, "status"), &status);
-        env.storage()
-            .instance()
-            .set(&Symbol::new(&env, "active"), &active);
-    }
+    #[soroban_sdk::contract]
+    pub struct MockSplitRegistry;
 
-    pub fn get_agent(env: Env, agent: Address) -> Result<crate::AgentInfo, crate::RegistryError> {
-        let active: Address = env
-            .storage()
-            .instance()
-            .get(&Symbol::new(&env, "active"))
-            .unwrap();
-        let status = if agent == active {
-            Some(crate::AgentStatus::Active)
-        } else {
+    #[soroban_sdk::contractimpl]
+    impl MockSplitRegistry {
+        pub fn __constructor(env: Env, status: Option<crate::AgentStatus>, active: Address) {
             env.storage()
                 .instance()
-                .get(&Symbol::new(&env, "status"))
-                .unwrap()
-        };
-        status
-            .map(|status| crate::AgentInfo {
-                status,
-                kyc_ref: Symbol::new(&env, "kyc"),
-                bond_amount: 1,
-                license_expiry: 0,
-                region: Symbol::new(&env, "KE"),
-                reputation: 0,
-            })
-            .ok_or(crate::RegistryError::AgentNotFound)
+                .set(&Symbol::new(&env, "status"), &status);
+            env.storage()
+                .instance()
+                .set(&Symbol::new(&env, "active"), &active);
+        }
+
+        pub fn get_agent(
+            env: Env,
+            agent: Address,
+        ) -> Result<crate::AgentInfo, crate::RegistryError> {
+            let active: Address = env
+                .storage()
+                .instance()
+                .get(&Symbol::new(&env, "active"))
+                .unwrap();
+            let status = if agent == active {
+                Some(crate::AgentStatus::Active)
+            } else {
+                env.storage()
+                    .instance()
+                    .get(&Symbol::new(&env, "status"))
+                    .unwrap()
+            };
+            status
+                .map(|status| crate::AgentInfo {
+                    status,
+                    kyc_ref: Symbol::new(&env, "kyc"),
+                    bond_amount: 1,
+                    license_expiry: 0,
+                    region: Symbol::new(&env, "KE"),
+                    reputation: 0,
+                })
+                .ok_or(crate::RegistryError::AgentNotFound)
+        }
     }
 }
 
@@ -705,7 +710,7 @@ fn mock_registry_with_active(
     status: Option<crate::AgentStatus>,
     active: &Address,
 ) -> Address {
-    env.register(MockSplitRegistry, (status, active.clone()))
+    env.register(split_registry::MockSplitRegistry, (status, active.clone()))
 }
 
 #[test]
@@ -734,7 +739,8 @@ fn test_non_active_agents_can_withdraw_collateral() {
 fn test_non_active_sender_can_transfer_float_to_active_recipient() {
     for status in NON_ACTIVE_STATUSES {
         let (s, a, b) = setup_with_float();
-        s.client.set_registry(&Some(mock_registry_with_active(&s.env, status, &b)));
+        s.client
+            .set_registry(&Some(mock_registry_with_active(&s.env, status, &b)));
         s.client.transfer_float(&a, &b, &100);
         assert_eq!(s.client.get_vault(&a).float, 200);
         assert_eq!(s.client.get_vault(&b).float, 400);
@@ -745,7 +751,8 @@ fn test_non_active_sender_can_transfer_float_to_active_recipient() {
 fn test_settle_net_allows_non_active_negative_delta() {
     for status in NON_ACTIVE_STATUSES {
         let (s, a, b) = setup_with_float();
-        s.client.set_registry(&Some(mock_registry_with_active(&s.env, status, &b)));
+        s.client
+            .set_registry(&Some(mock_registry_with_active(&s.env, status, &b)));
         let entries: Vec<(Address, i128)> = vec![&s.env, (a.clone(), -100), (b.clone(), 100)];
         s.client.settle_net(&entries);
         assert_eq!(s.client.get_vault(&a).float, 200);

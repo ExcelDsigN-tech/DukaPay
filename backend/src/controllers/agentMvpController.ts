@@ -187,11 +187,6 @@ export const submitAgentTransaction = asyncHandler(async (req: Request, res: Res
   if (typeof signedTxXdr !== 'string' || signedTxXdr.length === 0) {
     throw AppError.badRequest('signedTxXdr is required');
   }
-  let result: Awaited<ReturnType<typeof sorobanService.submitSignedTx>>;
-  try {
-    result = await sorobanService.submitSignedTx(signedTxXdr);
-  } catch (error) {
-    throw translateVaultError(error);
-  }
+  const result = await sorobanService.submitSignedTx(signedTxXdr);
   res.json({ success: true, ...result });
 });

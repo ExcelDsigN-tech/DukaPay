@@ -95,7 +95,9 @@ export default function AgentDashboardPage() {
 
           <section className="grid gap-4 md:grid-cols-4">
             <div className="rounded-2xl border border-zinc-200 p-5 dark:border-zinc-800">
-              <p className="text-xs uppercase tracking-wide text-zinc-500">{t("vaultCollateral")}</p>
+              <p className="text-xs uppercase tracking-wide text-zinc-500">
+                {t("vaultCollateral")}
+              </p>
               <p className="mt-2 text-xl font-semibold text-zinc-950 dark:text-zinc-50">
                 {formatCurrency(data.vault.collateral, locale)}
               </p>

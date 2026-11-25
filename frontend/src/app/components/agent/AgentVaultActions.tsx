@@ -101,7 +101,7 @@ export function AgentVaultActions({
           aria-label={t("vaultAgentKey")}
           value={agentPublicKey}
           onChange={(event) => setAgentPublicKey(event.target.value)}
-          placeholder={requireTarget ? t("vaultAgentKey") : address ?? t("vaultAgentKey")}
+          placeholder={requireTarget ? t("vaultAgentKey") : (address ?? t("vaultAgentKey"))}
           className="rounded border p-2 dark:bg-zinc-900"
         />
         <input

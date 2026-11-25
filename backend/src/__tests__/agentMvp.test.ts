@@ -11,7 +11,6 @@ import {
   Address,
   Keypair,
   Networks,
-  scValToNative,
   StrKey,
   TransactionBuilder,
   xdr,
@@ -154,8 +153,8 @@ describe('POST /api/agents/vault', () => {
     expect(res.status).toBe(200);
 
     const tx = TransactionBuilder.fromXDR(res.body.unsignedTxXdr, Networks.TESTNET);
-    const invoke = tx.toEnvelope().v1().tx().operations()[0].body().invokeHostFunctionOp();
-    expect(scValToNative(invoke.functionName())).toBe(functionName);
+    const op = tx.operations[0] as unknown as { func: xdr.HostFunction };
+    expect(op.func.invokeContract().functionName().toString()).toBe(functionName);
   });
 
   it('returns 403 when an admin that is not the operator builds a cash-in', async () => {

@@ -30,35 +30,33 @@ describe("AgentVaultActions", () => {
     jest.clearAllMocks();
   });
 
-  it.each([
-    "deposit-collateral",
-    "withdraw-collateral",
-    "burn-float",
-    "mint-float",
-  ] as const)("normalizes and submits %s", async (action) => {
-    const user = userEvent.setup();
-    const onSubmitted = jest.fn();
-    mockApiFetch
-      .mockResolvedValueOnce({ unsignedTxXdr: "unsigned-xdr" })
-      .mockResolvedValueOnce({ success: true });
-    mockSignTransaction.mockResolvedValue("signed-xdr");
+  it.each(["deposit-collateral", "withdraw-collateral", "burn-float", "mint-float"] as const)(
+    "normalizes and submits %s",
+    async (action) => {
+      const user = userEvent.setup();
+      const onSubmitted = jest.fn();
+      mockApiFetch
+        .mockResolvedValueOnce({ unsignedTxXdr: "unsigned-xdr" })
+        .mockResolvedValueOnce({ success: true });
+      mockSignTransaction.mockResolvedValue("signed-xdr");
 
-    render(<AgentVaultActions actions={[action]} requireTarget onSubmitted={onSubmitted} />);
+      render(<AgentVaultActions actions={[action]} requireTarget onSubmitted={onSubmitted} />);
 
-    await user.type(screen.getByLabelText("vaultAgentKey"), AGENT);
-    await user.type(screen.getByLabelText("vaultAmount"), "1.25");
-    await user.click(screen.getByRole("button", { name: "vaultBuild" }));
+      await user.type(screen.getByLabelText("vaultAgentKey"), AGENT);
+      await user.type(screen.getByLabelText("vaultAmount"), "1.25");
+      await user.click(screen.getByRole("button", { name: "vaultBuild" }));
 
-    await waitFor(() => expect(mockApiFetch).toHaveBeenCalledTimes(2));
-    expect(mockApiFetch.mock.calls[0][0]).toBe(`/agents/vault/${action}`);
-    expect(JSON.parse(mockApiFetch.mock.calls[0][1].body)).toEqual({
-      agentPublicKey: AGENT,
-      amount: "1.2500000",
-    });
-    expect(mockSignTransaction).toHaveBeenCalledWith("unsigned-xdr");
-    expect(JSON.parse(mockApiFetch.mock.calls[1][1].body)).toEqual({ signedTxXdr: "signed-xdr" });
-    expect(onSubmitted).toHaveBeenCalledTimes(1);
-  });
+      await waitFor(() => expect(mockApiFetch).toHaveBeenCalledTimes(2));
+      expect(mockApiFetch.mock.calls[0][0]).toBe(`/agents/vault/${action}`);
+      expect(JSON.parse(mockApiFetch.mock.calls[0][1].body)).toEqual({
+        agentPublicKey: AGENT,
+        amount: "1.2500000",
+      });
+      expect(mockSignTransaction).toHaveBeenCalledWith("unsigned-xdr");
+      expect(JSON.parse(mockApiFetch.mock.calls[1][1].body)).toEqual({ signedTxXdr: "signed-xdr" });
+      expect(onSubmitted).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it("shows the mapped vault error message", async () => {
     const user = userEvent.setup();
