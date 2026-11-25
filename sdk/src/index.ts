@@ -5,7 +5,9 @@ export { ContractHelpers, NETWORK_PASSPHRASE, DEFAULT_RPC_URL } from './contract
 export {
   AuthResource,
   LoansResource,
+  NotificationsResource,
   PoolResource,
+  PrivacyResource,
   ScoresResource,
   RemittanceResource,
 } from './resources.js';

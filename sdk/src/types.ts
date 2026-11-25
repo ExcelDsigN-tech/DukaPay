@@ -106,6 +106,51 @@ export interface Score {
   tier: string;
 }
 
+// ── Notifications ─────────────────────────────────────────────────────────────
+
+export type NotificationType =
+  | 'loan_approved'
+  | 'loan_repayment_due'
+  | 'loan_defaulted'
+  | 'pool_deposit_confirmed'
+  | 'pool_withdrawal_confirmed'
+  | 'remittance_claimed'
+  | 'score_updated';
+
+export interface Notification {
+  id: string;
+  type: NotificationType;
+  read: boolean;
+  payload: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface NotificationEvent {
+  id?: string;
+  event?: string;
+  data: Notification;
+}
+
+// ── Privacy / DSAR ────────────────────────────────────────────────────────────
+
+export type DsarStatus = 'pending' | 'processing' | 'completed' | 'rejected';
+
+export interface DsarRequest {
+  id: string;
+  type: 'access' | 'deletion' | 'anonymize' | 'export';
+  status: DsarStatus;
+  publicKey: Address;
+  reason?: string;
+  createdAt: string;
+  completedAt: string | null;
+}
+
+export interface DataExport {
+  publicKey: Address;
+  exportedAt: string;
+  data: Record<string, unknown>;
+}
+
 // ── Remittance ────────────────────────────────────────────────────────────────
 
 export interface Remittance {

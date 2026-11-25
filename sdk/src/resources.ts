@@ -1,9 +1,14 @@
 import type { HttpClient } from './http.js';
+import { DukaPayError } from './errors.js';
 import type {
   Challenge,
+  DataExport,
   DepositorPortfolio,
+  DsarRequest,
   Loan,
   LoanConfig,
+  Notification,
+  NotificationEvent,
   Paginated,
   PoolStats,
   Remittance,
@@ -12,6 +17,14 @@ import type {
   UnsignedTransaction,
   YieldHistoryPoint,
 } from './types.js';
+
+const STELLAR_ADDRESS_RE = /^G[A-Z2-7]{55}$/;
+
+function validateStellarAddress(value: string, label: string): void {
+  if (!STELLAR_ADDRESS_RE.test(value)) {
+    throw new DukaPayError(`${label} must be a valid Stellar public key (G…)`);
+  }
+}
 
 export class AuthResource {
   constructor(private http: HttpClient) {}
@@ -65,6 +78,49 @@ export class LoansResource {
   submit(loanId: number | string, signedXdr: string): Promise<Loan> {
     return this.http.post(`/loans/${loanId}/submit`, { signedXdr });
   }
+
+  requestLoan(params: { amount: string; borrowerPublicKey: string }): Promise<Loan> {
+    return this.http.post('/loans/request', params);
+  }
+
+  buildDepositCollateral(
+    loanId: number | string,
+    params: { amount: string; borrowerPublicKey: string },
+  ): Promise<UnsignedTransaction> {
+    return this.http.post(`/loans/${loanId}/build-deposit-collateral`, params);
+  }
+
+  buildReleaseCollateral(
+    loanId: number | string,
+    params: { borrowerPublicKey: string },
+  ): Promise<UnsignedTransaction> {
+    return this.http.post(`/loans/${loanId}/build-release-collateral`, params);
+  }
+
+  buildRefinance(
+    loanId: number | string,
+    params: { newAmount: string; newTerm: number; borrowerPublicKey: string },
+  ): Promise<UnsignedTransaction> {
+    return this.http.post(`/loans/${loanId}/build-refinance`, params);
+  }
+
+  buildExtend(
+    loanId: number | string,
+    params: { extraLedgers: number; borrowerPublicKey: string },
+  ): Promise<UnsignedTransaction> {
+    return this.http.post(`/loans/${loanId}/build-extend`, params);
+  }
+
+  /**
+   * Contest a defaulted loan. `reason` must be one of the valid dispute reasons
+   * accepted by the backend.
+   */
+  contestDefault(loanId: number | string, reason: string): Promise<Loan> {
+    if (!reason || typeof reason !== 'string' || reason.trim().length === 0) {
+      throw new DukaPayError('contestDefault: reason must be a non-empty string');
+    }
+    return this.http.post(`/loans/${loanId}/contest-default`, { reason });
+  }
 }
 
 export class PoolResource {
@@ -97,6 +153,14 @@ export class PoolResource {
   buildWithdraw(params: { token: string; shares: string; from: string }): Promise<UnsignedTransaction> {
     return this.http.post('/pool/build-withdraw', params);
   }
+
+  buildEmergencyWithdraw(params: {
+    depositorPublicKey: string;
+    token: string;
+    shares: string;
+  }): Promise<UnsignedTransaction> {
+    return this.http.post('/pool/build-emergency-withdraw', params);
+  }
 }
 
 export class ScoresResource {
@@ -124,5 +188,159 @@ export class RemittanceResource {
 
   buildSend(params: { recipient: string; amount: string; from: string }): Promise<UnsignedTransaction> {
     return this.http.post('/remittance/build-send', params);
+  }
+}
+
+export class NotificationsResource {
+  constructor(private http: HttpClient) {}
+
+  list(params: { page?: number; pageSize?: number } = {}): Promise<Paginated<Notification>> {
+    return this.http.get('/notifications', { query: params });
+  }
+
+  markRead(ids: string[]): Promise<void> {
+    return this.http.post('/notifications/mark-read', { ids });
+  }
+
+  markAllRead(): Promise<void> {
+    return this.http.post('/notifications/mark-all-read');
+  }
+
+  /**
+   * Open a Server-Sent Events stream for real-time notifications.
+   *
+   * Parses `event`, `id`, and multi-line `data` fields from the SSE stream.
+   * Comment and heartbeat frames (lines starting with `:`) are silently skipped.
+   * The stream stops cleanly when `signal` is aborted — the `onEvent` callback
+   * will not be called after abort.
+   *
+   * ```ts
+   * const ctrl = new AbortController();
+   * await client.notifications.stream((evt) => console.log(evt), { signal: ctrl.signal });
+   * // Later:
+   * ctrl.abort();
+   * ```
+   */
+  async stream(
+    onEvent: (event: NotificationEvent) => void,
+    options: { signal?: AbortSignal } = {},
+  ): Promise<void> {
+    const { signal } = options;
+
+    const token =
+      typeof (this.http as unknown as { token?: unknown }).token === 'function'
+        ? await (this.http as unknown as { token: () => string | null })
+            .token()
+        : (this.http as unknown as { token?: string }).token;
+
+    const baseUrl = (this.http as unknown as { baseUrl: string }).baseUrl;
+    const url = `${baseUrl}/notifications/stream`;
+
+    const res = await fetch(url, {
+      headers: {
+        Accept: 'text/event-stream',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      signal,
+    });
+
+    if (!res.ok) {
+      throw new DukaPayError(
+        `SSE stream request failed: ${res.status} ${res.statusText}`,
+      );
+    }
+
+    if (!res.body) {
+      throw new DukaPayError('SSE stream: response body is null');
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let currentEvent: Partial<NotificationEvent> = {};
+
+    const flush = () => {
+      if (currentEvent.data !== undefined) {
+        onEvent(currentEvent as NotificationEvent);
+      }
+      currentEvent = {};
+    };
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+
+        for (const raw of lines) {
+          const line = raw.trimEnd();
+
+          if (line === '') {
+            flush();
+            continue;
+          }
+
+          if (line.startsWith(':')) continue; // comment / heartbeat
+
+          const colonIdx = line.indexOf(':');
+          if (colonIdx === -1) continue;
+
+          const field = line.slice(0, colonIdx);
+          const val = line.slice(colonIdx + 1).replace(/^ /, '');
+
+          if (field === 'id') {
+            currentEvent.id = val;
+          } else if (field === 'event') {
+            currentEvent.event = val;
+          } else if (field === 'data') {
+            try {
+              currentEvent.data = JSON.parse(val) as Notification;
+            } catch {
+              // non-JSON data frame — skip
+            }
+          }
+        }
+      }
+    } catch (err) {
+      if (signal?.aborted) return; // clean stop
+      throw err;
+    } finally {
+      reader.releaseLock();
+    }
+  }
+}
+
+export class PrivacyResource {
+  constructor(private http: HttpClient) {}
+
+  requestAccess(params: { publicKey: string; reason: string }): Promise<DsarRequest> {
+    validateStellarAddress(params.publicKey, 'publicKey');
+    return this.http.post('/privacy/dsar/access', params);
+  }
+
+  requestDeletion(params: {
+    publicKey: string;
+    reason: string;
+    confirmDeletion: true;
+  }): Promise<DsarRequest> {
+    validateStellarAddress(params.publicKey, 'publicKey');
+    return this.http.post('/privacy/dsar/delete', params);
+  }
+
+  anonymize(params: { publicKey: string; reason: string }): Promise<DsarRequest> {
+    validateStellarAddress(params.publicKey, 'publicKey');
+    return this.http.post('/privacy/anonymize', params);
+  }
+
+  getRequest(dsarId: string): Promise<DsarRequest> {
+    return this.http.get(`/privacy/dsar/${dsarId}`);
+  }
+
+  export(publicKey: string): Promise<DataExport> {
+    validateStellarAddress(publicKey, 'publicKey');
+    return this.http.get(`/privacy/export/${publicKey}`);
   }
 }

@@ -2,7 +2,9 @@ import { HttpClient, type HttpClientOptions } from './http.js';
 import {
   AuthResource,
   LoansResource,
+  NotificationsResource,
   PoolResource,
+  PrivacyResource,
   RemittanceResource,
   ScoresResource,
 } from './resources.js';
@@ -42,6 +44,8 @@ export class DukaPayClient {
   readonly pool: PoolResource;
   readonly scores: ScoresResource;
   readonly remittance: RemittanceResource;
+  readonly notifications: NotificationsResource;
+  readonly privacy: PrivacyResource;
 
   private session: Session | null = null;
   private wallet?: WalletAdapter;
@@ -63,6 +67,8 @@ export class DukaPayClient {
     this.pool = new PoolResource(this.http);
     this.scores = new ScoresResource(this.http);
     this.remittance = new RemittanceResource(this.http);
+    this.notifications = new NotificationsResource(this.http);
+    this.privacy = new PrivacyResource(this.http);
   }
 
   // ── Session ────────────────────────────────────────────────────────────────

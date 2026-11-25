@@ -72,6 +72,69 @@ function Dashboard() {
 }
 ```
 
+## client.notifications
+
+`client.notifications` provides access to real-time and paginated notifications.
+
+```ts
+// List recent notifications (paginated)
+const { items } = await client.notifications.list({ page: 1, pageSize: 20 });
+
+// Mark specific notifications read
+await client.notifications.markRead(['notif-id-1', 'notif-id-2']);
+
+// Mark all read
+await client.notifications.markAllRead();
+
+// Stream notifications over SSE
+const ctrl = new AbortController();
+await client.notifications.stream(
+  (event) => {
+    console.log('New notification:', event.data.type);
+  },
+  { signal: ctrl.signal },
+);
+// Stop the stream:
+ctrl.abort();
+```
+
+The `stream` method parses SSE frames from `GET /notifications/stream`, skips
+heartbeat/comment frames, and resolves cleanly when the `AbortSignal` fires.
+
+## client.privacy
+
+`client.privacy` exposes the user-facing DSAR (Data Subject Access Request) endpoints.
+
+```ts
+// Request data access
+const request = await client.privacy.requestAccess({
+  publicKey: 'GABC…',
+  reason: 'I would like to review my stored data',
+});
+
+// Request account deletion
+await client.privacy.requestDeletion({
+  publicKey: 'GABC…',
+  reason: 'I no longer use this service',
+  confirmDeletion: true,
+});
+
+// Anonymize analytics data
+await client.privacy.anonymize({
+  publicKey: 'GABC…',
+  reason: 'I want my data removed from analytics',
+});
+
+// Get status of an existing DSAR
+const status = await client.privacy.getRequest('dsar-id');
+
+// Export raw user data (requires valid Stellar G-address)
+const exported = await client.privacy.export('GABC…');
+```
+
+`requestAccess`, `requestDeletion`, `anonymize`, and `export` validate that
+`publicKey` is a valid Stellar G-address before sending any request.
+
 ## Errors
 
 Every call rejects with a `DukaPayError` carrying `status`, `code`, `requestId`
