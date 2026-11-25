@@ -32,7 +32,7 @@ export function startWebhookRetryProcessor(): void {
   // Run retry processor every 10 seconds
   retryProcessorInterval = setInterval(async () => {
     if (retryRunInProgress) {
-      logger.withContext().debug('Skipping webhook retry tick while the previous run is active');
+      logger.debug('Skipping webhook retry tick while the previous run is active');
       return;
     }
     retryRunInProgress = true;
