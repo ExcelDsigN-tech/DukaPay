@@ -2321,6 +2321,13 @@ export interface AgentDashboardData {
     totalDebt: number;
     ratio: number;
   };
+  vault: {
+    collateral: number;
+    float: number;
+    maxFloat: number;
+    headroom: number;
+    haircutBps: number;
+  };
   recentTransactions: Array<{
     type: string;
     amount: number;

@@ -69,6 +69,13 @@ export default function AdminDashboardPage() {
       descKey: "governanceDesc",
       roles: ["admin", "super_admin", "ops"],
     },
+    {
+      key: "agentVault",
+      href: `/${locale}/admin/agent-vault`,
+      titleKey: "agentVaultTitle",
+      descKey: "agentVaultDesc",
+      roles: ["admin"],
+    },
   ];
 
   const accessibleSections = sections.filter((s) => !role || s.roles.includes(role));

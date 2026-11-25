@@ -19,14 +19,16 @@ import {
 const OPERATOR = Keypair.random();
 const OTHER_ADMIN = Keypair.random().publicKey();
 const AGENT = Keypair.random().publicKey();
+const OTHER_AGENT = Keypair.random().publicKey();
 const BORROWER = Keypair.random().publicKey();
 
 process.env.JWT_SECRET = 'test-jwt-secret-min-32-chars-long!!';
 process.env.ADMIN_WALLETS = `${OPERATOR.publicKey()},${OTHER_ADMIN}`;
-process.env.AGENT_WALLETS = AGENT;
+process.env.AGENT_WALLETS = `${AGENT},${OTHER_AGENT}`;
 process.env.AGENT_OPERATOR_PUBLIC_KEY = OPERATOR.publicKey();
 process.env.AGENT_OPERATOR_SECRET = OPERATOR.secret();
 process.env.AGENT_REGISTRY_CONTRACT_ID = StrKey.encodeContract(Buffer.alloc(32, 7));
+process.env.AGENT_VAULT_CONTRACT_ID = StrKey.encodeContract(Buffer.alloc(32, 8));
 
 function addressAuth(publicKey: string): xdr.SorobanAuthorizationEntry {
   return new xdr.SorobanAuthorizationEntry({
@@ -107,6 +109,13 @@ function register(caller: string) {
     .send(body);
 }
 
+function vaultAction(caller: string, route: string, agentPublicKey = AGENT) {
+  return request(buildApp())
+    .post(`/api/agents/vault/${route}`)
+    .set('Authorization', `Bearer ${generateJwtToken(caller)}`)
+    .send({ agentPublicKey, amount: '1.5' });
+}
+
 describe('POST /api/agents/register', () => {
   beforeEach(() => jest.clearAllMocks());
 
@@ -130,5 +139,43 @@ describe('POST /api/agents/register', () => {
 
     expect(signature(auth[0])).not.toBe(xdr.ScValType.scvVoid());
     expect(signature(auth[1])).toBe(xdr.ScValType.scvVoid());
+  });
+});
+
+describe('POST /api/agents/vault', () => {
+  it.each([
+    ['deposit-collateral', 'deposit_collateral', AGENT],
+    ['withdraw-collateral', 'withdraw_collateral', AGENT],
+    ['burn-float', 'burn_float', AGENT],
+    ['mint-float', 'mint_float', OPERATOR.publicKey()],
+  ])('builds %s', async (route, functionName, caller) => {
+    const res = await vaultAction(caller, route);
+    expect(res.status).toBe(200);
+
+    const tx = TransactionBuilder.fromXDR(res.body.unsignedTxXdr, Networks.TESTNET);
+    const op = tx.operations[0] as unknown as { func: xdr.HostFunction };
+    expect(op.func.invokeContract().functionName().toString()).toBe(functionName);
+  });
+
+  it('returns 403 when an admin that is not the operator builds a cash-in', async () => {
+    const res = await vaultAction(OTHER_ADMIN, 'mint-float');
+    expect(res.status).toBe(403);
+  });
+
+  it('returns 403 when an agent builds an action for another wallet', async () => {
+    const res = await vaultAction(AGENT, 'deposit-collateral', OTHER_AGENT);
+    expect(res.status).toBe(403);
+  });
+
+  it('maps vault contract errors to machine-readable codes', async () => {
+    const { sorobanService } = await import('../services/sorobanService.js');
+    const spy = jest
+      .spyOn(sorobanService, 'buildAgentVaultTx')
+      .mockRejectedValueOnce(new Error('HostError: SolvencyViolated'));
+
+    const res = await vaultAction(AGENT, 'deposit-collateral');
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('SOLVENCY_VIOLATED');
+    spy.mockRestore();
   });
 });
