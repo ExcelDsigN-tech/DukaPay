@@ -53,6 +53,27 @@ const ADMIN_CONFIG_EVENT_TYPES: ReadonlySet<WebhookEventType> = new Set([
   'RateOracleUpdated',
 ]);
 
+export const CONTRACT_EVENTS_INSERT_COLUMNS = [
+  'event_id',
+  'event_type',
+  'loan_id',
+  'address',
+  'amount',
+  'ledger',
+  'ledger_closed_at',
+  'tx_hash',
+  'contract_id',
+  'topics',
+  'value',
+  'interest_rate_bps',
+  'term_ledgers',
+] as const;
+
+const CONTRACT_EVENTS_INSERT_COLUMN_LIST = CONTRACT_EVENTS_INSERT_COLUMNS.join(', ');
+const CONTRACT_EVENTS_INSERT_PLACEHOLDERS = CONTRACT_EVENTS_INSERT_COLUMNS.map(
+  (_, index) => `$${index + 1}`,
+).join(', ');
+
 export interface SorobanRawEvent {
   id: string;
   pagingToken: string;
@@ -496,6 +517,7 @@ export class EventIndexer {
     'CollateralWithdrawn',
     'FloatMinted',
     'FloatBurned',
+    'FloatTransferred',
     'VaultSettled',
   ]);
 
@@ -503,7 +525,7 @@ export class EventIndexer {
     const contract = this.getContractId();
     await withTransaction(async (client: PoolClient) => {
       const orphanedEvents = await client.query(
-        `SELECT event_type, address
+        `SELECT event_type, address, topics
          FROM contract_events
          WHERE contract_id = ANY($1::text[]) AND ledger >= $2`,
         [this.contractIds, ledger],
@@ -512,17 +534,23 @@ export class EventIndexer {
       const { repaymentDelta, defaultPenalty } = sorobanService.getScoreConfig();
       const affectedAgents = new Set<string>();
       for (const row of orphanedEvents.rows) {
+        const eventType = row.event_type as string;
         const address = typeof row.address === 'string' ? row.address : '';
-        if (!address) continue;
-        if (row.event_type === 'LoanRepaid') {
-          scoreRollbacks.set(address, (scoreRollbacks.get(address) ?? 0) - repaymentDelta);
-        } else if (
-          row.event_type === 'LoanDefaulted' ||
-          row.event_type === 'CollateralLiquidated'
-        ) {
-          scoreRollbacks.set(address, (scoreRollbacks.get(address) ?? 0) + defaultPenalty);
-        } else if (EventIndexer.AGENT_PROJECTION_EVENT_TYPES.has(row.event_type as string)) {
-          affectedAgents.add(address);
+        if (eventType === 'LoanRepaid') {
+          if (address) {
+            scoreRollbacks.set(address, (scoreRollbacks.get(address) ?? 0) - repaymentDelta);
+          }
+        } else if (eventType === 'LoanDefaulted' || eventType === 'CollateralLiquidated') {
+          if (address) {
+            scoreRollbacks.set(address, (scoreRollbacks.get(address) ?? 0) + defaultPenalty);
+          }
+        } else if (eventType === 'FloatTransferred') {
+          const from = address || this.decodeTopicAddress(row.topics, 1);
+          const to = this.decodeTopicAddress(row.topics, 2);
+          if (from) affectedAgents.add(from);
+          if (to) affectedAgents.add(to);
+        } else if (EventIndexer.AGENT_PROJECTION_EVENT_TYPES.has(eventType)) {
+          if (address) affectedAgents.add(address);
         }
       }
       await client.query(
@@ -608,13 +636,7 @@ export class EventIndexer {
       },
     );
 
-    const floatBalance = await this.latestAgentFieldValue(
-      client,
-      agentAddress,
-      ['FloatMinted', 'FloatBurned', 'VaultSettled'],
-      (_eventType, data) =>
-        Array.isArray(data) && typeof data[1] === 'bigint' ? data[1].toString() : undefined,
-    );
+    const floatBalance = await this.recomputeAgentFloatBalance(client, agentAddress);
 
     const collateralBalance = await this.latestAgentFieldValue(
       client,
@@ -643,11 +665,119 @@ export class EventIndexer {
         // from, so it's intentionally reset rather than preserved: a stale
         // post-rollback license_expiry would be worse than a missing one.
         null,
-        floatBalance ?? '0',
+        floatBalance,
         collateralBalance ?? '0',
         status === 'Active',
       ],
     );
+  }
+
+  /**
+   * Rebuilds one agent's float balance using bigint arithmetic:
+   * take the latest surviving resulting-balance event (`FloatMinted`,
+   * `FloatBurned`, or `VaultSettled`) as the anchor (0n if none), then replay
+   * every surviving `FloatTransferred` after it in `(ledger, event_id)` order.
+   */
+  private async recomputeAgentFloatBalance(
+    client: PoolClient,
+    agentAddress: string,
+  ): Promise<string> {
+    const anchorResult = await client.query(
+      `SELECT event_type, value, ledger, event_id
+       FROM contract_events
+       WHERE address = $1 AND event_type = ANY($2::text[])
+       ORDER BY ledger DESC, event_id DESC
+       LIMIT 1`,
+      [agentAddress, ['FloatMinted', 'FloatBurned', 'VaultSettled']],
+    );
+
+    const anchorRow = anchorResult.rows[0] as
+      | { value?: unknown; ledger?: unknown; event_id?: unknown }
+      | undefined;
+
+    let floatBalance = 0n;
+    if (anchorRow && typeof anchorRow.value === 'string') {
+      try {
+        const data = this.decodeStoredEventValue(anchorRow.value);
+        if (Array.isArray(data) && typeof data[1] === 'bigint') {
+          floatBalance = data[1];
+        }
+      } catch {
+        floatBalance = 0n;
+      }
+    }
+
+    const hasAnchorCursor =
+      anchorRow !== undefined &&
+      anchorRow.ledger !== null &&
+      anchorRow.ledger !== undefined &&
+      typeof anchorRow.event_id === 'string';
+
+    const transfersResult = await client.query(
+      hasAnchorCursor
+        ? `SELECT event_id, ledger, address, topics, amount, value
+           FROM contract_events
+           WHERE event_type = 'FloatTransferred'
+             AND (ledger > $1 OR (ledger = $1 AND event_id > $2))
+           ORDER BY ledger ASC, event_id ASC`
+        : `SELECT event_id, ledger, address, topics, amount, value
+           FROM contract_events
+           WHERE event_type = 'FloatTransferred'
+           ORDER BY ledger ASC, event_id ASC`,
+      hasAnchorCursor ? [anchorRow.ledger, anchorRow.event_id] : [],
+    );
+
+    for (const row of transfersResult.rows) {
+      const from =
+        (typeof row.address === 'string' && row.address) || this.decodeTopicAddress(row.topics, 1);
+      const to = this.decodeTopicAddress(row.topics, 2);
+      if (from !== agentAddress && to !== agentAddress) continue;
+
+      const amount = this.parseNumericBigInt(row.amount, row.value);
+      if (amount === undefined) continue;
+
+      if (to === agentAddress) floatBalance += amount;
+      if (from === agentAddress) floatBalance -= amount;
+    }
+
+    return floatBalance.toString();
+  }
+
+  private decodeTopicAddress(topics: unknown, index: number): string | undefined {
+    let list: unknown = topics;
+    if (typeof topics === 'string') {
+      try {
+        list = JSON.parse(topics);
+      } catch {
+        return undefined;
+      }
+    }
+    if (!Array.isArray(list) || typeof list[index] !== 'string') {
+      return undefined;
+    }
+    try {
+      return this.decodeAddress(xdr.ScVal.fromXDR(list[index], 'base64'));
+    } catch {
+      return undefined;
+    }
+  }
+
+  private parseNumericBigInt(raw: unknown, valueXdr?: unknown): bigint | undefined {
+    if (typeof raw === 'bigint') return raw;
+    if (typeof raw === 'string') {
+      const trimmed = raw.trim();
+      if (/^-?\d+$/.test(trimmed)) {
+        return BigInt(trimmed);
+      }
+    }
+    if (typeof valueXdr === 'string') {
+      try {
+        return BigInt(this.decodeAmount(xdr.ScVal.fromXDR(valueXdr, 'base64')));
+      } catch {
+        return undefined;
+      }
+    }
+    return undefined;
   }
 
   /**
@@ -668,10 +798,10 @@ export class EventIndexer {
       contractFilter
         ? `SELECT event_type, value FROM contract_events
            WHERE address = $1 AND event_type = ANY($2::text[]) AND contract_id = ANY($3::text[])
-           ORDER BY ledger DESC LIMIT 1`
+           ORDER BY ledger DESC, event_id DESC LIMIT 1`
         : `SELECT event_type, value FROM contract_events
            WHERE address = $1 AND event_type = ANY($2::text[])
-           ORDER BY ledger DESC LIMIT 1`,
+           ORDER BY ledger DESC, event_id DESC LIMIT 1`,
       contractFilter ? [agentAddress, eventTypes, [...contractFilter]] : [agentAddress, eventTypes],
     );
     const row = result.rows[0];
@@ -960,22 +1090,8 @@ export class EventIndexer {
     await withTransaction(async (client: PoolClient) => {
       for (const event of parsedEvents) {
         const insertResult = await client.query(
-          `INSERT INTO contract_events (
-            event_id,
-            event_type,
-            loan_id,
-            address,
-            amount,
-            ledger,
-            ledger_closed_at,
-            tx_hash,
-            contract_id,
-            topics,
-            value,
-            interest_rate_bps,
-            term_ledgers
-          )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+          `INSERT INTO contract_events (${CONTRACT_EVENTS_INSERT_COLUMN_LIST})
+          VALUES (${CONTRACT_EVENTS_INSERT_PLACEHOLDERS})
           ON CONFLICT DO NOTHING
           RETURNING event_id`,
           [

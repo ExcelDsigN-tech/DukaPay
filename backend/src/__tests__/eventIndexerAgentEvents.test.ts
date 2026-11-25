@@ -527,4 +527,300 @@ describe('EventIndexer: agent_vaults reorg rollback', () => {
     expect(floatBalance).toBe('4200'); // recomputed from the surviving FloatMinted event
     expect(collateralBalance).toBe('0'); // no surviving collateral event; reset to default
   });
+
+  interface StoredReorgRow {
+    event_id: string;
+    event_type: string;
+    address: string;
+    ledger: number;
+    contract_id: string;
+    topics: string[];
+    value: string;
+    amount: string | null;
+  }
+
+  /** Simulates `contract_events` + `agent_vaults` queries in memory for reorg tests. */
+  function setupReorgContractEventsMock(initialRows: StoredReorgRow[]) {
+    let rows = [...initialRows];
+    const upserts = new Map<string, unknown[]>();
+
+    mockQuery.mockImplementation(async (sql: string, params: unknown[] = []) => {
+      if (sql === 'BEGIN' || sql === 'COMMIT') return { rows: [], rowCount: 0 };
+
+      if (sql.includes('SELECT event_type, address') && sql.includes('FROM contract_events')) {
+        const minLedger = params[1] as number;
+        return {
+          rows: rows
+            .filter((r) => r.ledger >= minLedger)
+            .map((r) => ({ event_type: r.event_type, address: r.address, topics: r.topics })),
+          rowCount: 1,
+        };
+      }
+
+      if (sql.startsWith('DELETE FROM contract_events')) {
+        const minLedger = params[1] as number;
+        rows = rows.filter((r) => r.ledger < minLedger);
+        return { rows: [], rowCount: 1 };
+      }
+
+      if (
+        sql.includes("event_type = 'AgentRegistered'") &&
+        sql.includes('ORDER BY ledger DESC LIMIT 1')
+      ) {
+        const agent = params[0] as string;
+        const match = rows
+          .filter((r) => r.address === agent && r.event_type === 'AgentRegistered')
+          .sort((a, b) => b.ledger - a.ledger)[0];
+        return { rows: match ? [{ value: match.value }] : [], rowCount: match ? 1 : 0 };
+      }
+
+      if (sql.includes('event_type = ANY($2::text[])')) {
+        const agent = params[0] as string;
+        const eventTypes = params[1] as string[];
+        const match = rows
+          .filter((r) => r.address === agent && eventTypes.includes(r.event_type))
+          .sort((a, b) =>
+            b.ledger !== a.ledger ? b.ledger - a.ledger : b.event_id.localeCompare(a.event_id),
+          )[0];
+        return {
+          rows: match
+            ? [
+                {
+                  event_type: match.event_type,
+                  value: match.value,
+                  ledger: match.ledger,
+                  event_id: match.event_id,
+                },
+              ]
+            : [],
+          rowCount: match ? 1 : 0,
+        };
+      }
+
+      if (sql.includes("event_type = 'FloatTransferred'")) {
+        const anchorLedger = params[0] as number | undefined;
+        const anchorEventId = params[1] as string | undefined;
+        const matching = rows
+          .filter((r) => {
+            if (r.event_type !== 'FloatTransferred') return false;
+            if (anchorLedger === undefined || anchorEventId === undefined) return true;
+            return (
+              r.ledger > anchorLedger || (r.ledger === anchorLedger && r.event_id > anchorEventId)
+            );
+          })
+          .sort((a, b) =>
+            a.ledger !== b.ledger ? a.ledger - b.ledger : a.event_id.localeCompare(b.event_id),
+          );
+        return { rows: matching, rowCount: matching.length };
+      }
+
+      if (sql.includes('INSERT INTO agent_vaults')) {
+        upserts.set(params[0] as string, params);
+        return { rows: [], rowCount: 1 };
+      }
+
+      return { rows: [], rowCount: 0 };
+    });
+
+    return upserts;
+  }
+
+  it('replays surviving FloatTransferred in and out after the anchor and updates both orphaned agents (#862)', async () => {
+    const agentA = makeAddr();
+    const agentB = makeAddr();
+    const agentC = makeAddr();
+    const encode = (val: ReturnType<typeof nativeToScVal>) => val.toXDR('base64');
+
+    const regValueA = encode(
+      nativeToScVal([nativeToScVal('kyc-a', { type: 'symbol' }), BigInt(1000), 'kenya']),
+    );
+    const regValueB = encode(
+      nativeToScVal([nativeToScVal('kyc-b', { type: 'symbol' }), BigInt(1000), 'uganda']),
+    );
+
+    // Bigint values above Number.MAX_SAFE_INTEGER to prove no Number() precision loss.
+    const mintA = 9_007_199_254_741_000n;
+    const mintB = 9_007_199_254_740_100n;
+    const transferOutAmount = 500n; // A -> B at ledger 20
+    const transferInAmount = 250n; // C -> A at ledger 30
+    const orphanedTransferAmount = 700n; // A -> B at ledger 100 (rolled back)
+
+    const upserts = setupReorgContractEventsMock([
+      {
+        event_id: '000010-0001',
+        event_type: 'AgentRegistered',
+        address: agentA,
+        ledger: 10,
+        contract_id: AGENT_REGISTRY_CONTRACT,
+        topics: [scSymbol('AgentRegistered').toXDR('base64'), scAddress(agentA).toXDR('base64')],
+        value: regValueA,
+        amount: null,
+      },
+      {
+        event_id: '000010-0002',
+        event_type: 'AgentRegistered',
+        address: agentB,
+        ledger: 10,
+        contract_id: AGENT_REGISTRY_CONTRACT,
+        topics: [scSymbol('AgentRegistered').toXDR('base64'), scAddress(agentB).toXDR('base64')],
+        value: regValueB,
+        amount: null,
+      },
+      {
+        event_id: '000015-0001',
+        event_type: 'FloatMinted',
+        address: agentA,
+        ledger: 15,
+        contract_id: AGENT_VAULT_CONTRACT,
+        topics: [scSymbol('FloatMinted').toXDR('base64'), scAddress(agentA).toXDR('base64')],
+        value: encode(nativeToScVal([mintA, mintA])),
+        amount: mintA.toString(),
+      },
+      {
+        event_id: '000015-0002',
+        event_type: 'FloatMinted',
+        address: agentB,
+        ledger: 15,
+        contract_id: AGENT_VAULT_CONTRACT,
+        topics: [scSymbol('FloatMinted').toXDR('base64'), scAddress(agentB).toXDR('base64')],
+        value: encode(nativeToScVal([mintB, mintB])),
+        amount: mintB.toString(),
+      },
+      {
+        event_id: '000020-0001',
+        event_type: 'FloatTransferred',
+        address: agentA,
+        ledger: 20,
+        contract_id: AGENT_VAULT_CONTRACT,
+        topics: [
+          scSymbol('FloatTransferred').toXDR('base64'),
+          scAddress(agentA).toXDR('base64'),
+          scAddress(agentB).toXDR('base64'),
+        ],
+        value: encode(scI128(transferOutAmount)),
+        amount: transferOutAmount.toString(),
+      },
+      {
+        event_id: '000030-0001',
+        event_type: 'FloatTransferred',
+        address: agentC,
+        ledger: 30,
+        contract_id: AGENT_VAULT_CONTRACT,
+        topics: [
+          scSymbol('FloatTransferred').toXDR('base64'),
+          scAddress(agentC).toXDR('base64'),
+          scAddress(agentA).toXDR('base64'),
+        ],
+        value: encode(scI128(transferInAmount)),
+        amount: transferInAmount.toString(),
+      },
+      {
+        event_id: '000100-0001',
+        event_type: 'FloatTransferred',
+        address: agentA,
+        ledger: 100,
+        contract_id: AGENT_VAULT_CONTRACT,
+        topics: [
+          scSymbol('FloatTransferred').toXDR('base64'),
+          scAddress(agentA).toXDR('base64'),
+          scAddress(agentB).toXDR('base64'),
+        ],
+        value: encode(scI128(orphanedTransferAmount)),
+        amount: orphanedTransferAmount.toString(),
+      },
+    ]);
+
+    const indexer = makeIndexer();
+    await (
+      indexer as unknown as { rollbackFromLedger: (ledger: number) => Promise<void> }
+    ).rollbackFromLedger(100);
+
+    // Both sender (agentA) and receiver (agentB) from the orphaned transfer are recomputed.
+    expect(upserts.has(agentA)).toBe(true);
+    expect(upserts.has(agentB)).toBe(true);
+    expect(upserts.get(agentA)![5]).toBe((mintA - transferOutAmount + transferInAmount).toString());
+    expect(upserts.get(agentB)![5]).toBe((mintB + transferOutAmount).toString());
+  });
+
+  it('orders anchor and FloatTransferred by ledger then event_id when both share the same ledger (#862)', async () => {
+    const agentA = makeAddr();
+    const agentB = makeAddr();
+    const encode = (val: ReturnType<typeof nativeToScVal>) => val.toXDR('base64');
+
+    const regValueA = encode(
+      nativeToScVal([nativeToScVal('kyc-a', { type: 'symbol' }), BigInt(1000), 'kenya']),
+    );
+
+    const anchorFloat = 5000n;
+    const preAnchorTransfer = 300n; // same ledger (50), earlier event_id -> already reflected in anchor
+    const postAnchorTransfer = 400n; // same ledger (50), later event_id -> must be replayed
+
+    const upserts = setupReorgContractEventsMock([
+      {
+        event_id: '000010-0001',
+        event_type: 'AgentRegistered',
+        address: agentA,
+        ledger: 10,
+        contract_id: AGENT_REGISTRY_CONTRACT,
+        topics: [scSymbol('AgentRegistered').toXDR('base64'), scAddress(agentA).toXDR('base64')],
+        value: regValueA,
+        amount: null,
+      },
+      {
+        event_id: '000050-0001',
+        event_type: 'FloatTransferred',
+        address: agentA,
+        ledger: 50,
+        contract_id: AGENT_VAULT_CONTRACT,
+        topics: [
+          scSymbol('FloatTransferred').toXDR('base64'),
+          scAddress(agentA).toXDR('base64'),
+          scAddress(agentB).toXDR('base64'),
+        ],
+        value: encode(scI128(preAnchorTransfer)),
+        amount: preAnchorTransfer.toString(),
+      },
+      {
+        event_id: '000050-0002',
+        event_type: 'FloatMinted',
+        address: agentA,
+        ledger: 50,
+        contract_id: AGENT_VAULT_CONTRACT,
+        topics: [scSymbol('FloatMinted').toXDR('base64'), scAddress(agentA).toXDR('base64')],
+        value: encode(nativeToScVal([BigInt(1000), anchorFloat])),
+        amount: '1000',
+      },
+      {
+        event_id: '000050-0003',
+        event_type: 'FloatTransferred',
+        address: agentA,
+        ledger: 50,
+        contract_id: AGENT_VAULT_CONTRACT,
+        topics: [
+          scSymbol('FloatTransferred').toXDR('base64'),
+          scAddress(agentA).toXDR('base64'),
+          scAddress(agentB).toXDR('base64'),
+        ],
+        value: encode(scI128(postAnchorTransfer)),
+        amount: postAnchorTransfer.toString(),
+      },
+      {
+        event_id: '000100-0001',
+        event_type: 'FloatBurned',
+        address: agentA,
+        ledger: 100,
+        contract_id: AGENT_VAULT_CONTRACT,
+        topics: [scSymbol('FloatBurned').toXDR('base64'), scAddress(agentA).toXDR('base64')],
+        value: encode(nativeToScVal([BigInt(500), BigInt(4100)])),
+        amount: '500',
+      },
+    ]);
+
+    const indexer = makeIndexer();
+    await (
+      indexer as unknown as { rollbackFromLedger: (ledger: number) => Promise<void> }
+    ).rollbackFromLedger(100);
+
+    expect(upserts.get(agentA)![5]).toBe((anchorFloat - postAnchorTransfer).toString());
+  });
 });
