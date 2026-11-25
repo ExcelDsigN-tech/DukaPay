@@ -402,11 +402,17 @@ export function LandingSections({ onConnect }: LandingSectionsProps) {
         >
           <div className="flex min-w-0 flex-col items-start gap-4 sm:flex-row sm:items-center sm:gap-7">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/brand/dukapay-mark-ink.svg" alt="" className="h-16 w-16 dark:hidden" />
+            <img
+              src="/brand/dukapay-mark-ink.svg"
+              alt=""
+              loading="lazy"
+              className="h-16 w-16 dark:hidden"
+            />
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/brand/dukapay-mark-cobalt.svg"
               alt=""
+              loading="lazy"
               className="hidden h-16 w-16 dark:block"
             />
             <div className="flex flex-col gap-2">
@@ -436,12 +442,14 @@ export function LandingSections({ onConnect }: LandingSectionsProps) {
               <img
                 src="/brand/dukapay-logo-paper.svg"
                 alt="DukaPay"
+                loading="lazy"
                 className="h-7 w-auto self-start dark:hidden"
               />
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src="/brand/dukapay-logo-cobalt.svg"
                 alt="DukaPay"
+                loading="lazy"
                 className="hidden h-7 w-auto self-start dark:block"
               />
               <p className="m-0 text-fg-muted">{t("footer.tagline")}</p>
@@ -593,21 +601,29 @@ function useLandingMotion(rootRef: RefObject<HTMLDivElement | null>) {
       ticking = false;
       vh = window.innerHeight;
 
-      for (const { el, shift } of reveals) {
-        const p = ease(prog(el, 0.95, 0.62, -shift));
+      // Read every position before writing any style. Interleaving them forced a style
+      // recalculation per element, a long main-thread task on load (home page TBT, issue #940).
+      const revealP = reveals.map(({ el, shift }) => ease(prog(el, 0.95, 0.62, -shift)));
+      const loanP = loanCard ? smooth(prog(loanCard, 0.8, 0.4)) : 0;
+      const panelA = panel ? smooth(prog(panel, 0.85, 0.42)) : 0;
+      const panelB = panel ? smooth(prog(panel, 0.42, 0.22)) : 0;
+      const reviewP = review ? prog(review, 0.85, 0.35) : 0;
+
+      reveals.forEach(({ el }, i) => {
+        const p = revealP[i];
         el.style.opacity = p.toFixed(3);
         el.style.transform = `translate3d(0,${((1 - p) * 44).toFixed(1)}px,0)`;
-      }
+      });
 
       if (loanCard && loanBar && loanPct) {
-        const p = smooth(prog(loanCard, 0.8, 0.4));
+        const p = loanP;
         loanBar.style.width = `${(LOAN_REPAID * p).toFixed(2)}%`;
         loanPct.textContent = `${Math.round(LOAN_REPAID * p)}%`;
       }
 
       if (panel && arc && num && delta) {
-        const a = smooth(prog(panel, 0.85, 0.42));
-        const b = smooth(prog(panel, 0.42, 0.22));
+        const a = panelA;
+        const b = panelB;
         const score = SCORE_MIN + (SCORE_A - SCORE_MIN) * a + (SCORE_B - SCORE_A) * b;
         arc.setAttribute("stroke-dasharray", gaugeDash(score));
         num.textContent = String(Math.round(score));
@@ -638,7 +654,7 @@ function useLandingMotion(rootRef: RefObject<HTMLDivElement | null>) {
       }
 
       if (review && ack && sign && signLabel) {
-        const p = prog(review, 0.85, 0.35);
+        const p = reviewP;
         const ticked = p >= 0.55;
         ack.style.backgroundColor = ticked ? "" : "transparent";
         ack.style.color = ticked ? "" : "transparent";
@@ -664,7 +680,8 @@ function useLandingMotion(rootRef: RefObject<HTMLDivElement | null>) {
     };
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", onScroll);
-    frame();
+    // First frame on the next animation frame, not inside the hydration effects task.
+    onScroll();
     return () => {
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", onScroll);

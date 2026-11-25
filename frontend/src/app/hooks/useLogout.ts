@@ -6,7 +6,6 @@ import { useWalletStore } from "../stores/useWalletStore";
 import { useUserStore } from "../stores/useUserStore";
 import { useGamificationStore } from "../stores/useGamificationStore";
 import { useQueryClient } from "@tanstack/react-query";
-import { CSRF_HEADER_NAME, getCsrfToken } from "./useApi";
 import { NEXT_PUBLIC_API_URL } from "../lib/apiConfig";
 
 /**
@@ -36,6 +35,9 @@ export function useLogout() {
       //    httpOnly cookies. Never block the redirect on the network round-trip.
       void (async () => {
         try {
+          // Loaded here, not at module scope: this hook mounts in the root layout, and a static
+          // import would ship the whole API client on every route, including the landing page.
+          const { CSRF_HEADER_NAME, getCsrfToken } = await import("./useApi");
           const csrfToken = await getCsrfToken();
           const headers: Record<string, string> = { "Content-Type": "application/json" };
           if (csrfToken) {
