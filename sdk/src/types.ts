@@ -117,50 +117,80 @@ export interface SimulationResult {
 }
 
 export interface AmortizationScheduleEntry {
-  period: number;
-  paymentDate: string;
-  principalPayment: number;
-  interestPayment: number;
-  totalPayment: number;
-  remainingBalance: number;
+  date: string;
+  principalPortion: number;
+  interestPortion: number;
+  totalDue: number;
+  runningBalance: number;
+}
+
+export interface AmortizationDetails {
+  principal: number;
+  interestRateBps: number;
+  termLedgers: number;
+  totalInterest: number;
+  totalDue: number;
+  schedule: AmortizationScheduleEntry[];
 }
 
 export interface AmortizationPreview {
   success: boolean;
-  principal: number;
-  interestRateBps: number;
-  termMonths: number;
-  schedule: AmortizationScheduleEntry[];
+  amortization: AmortizationDetails;
 }
 
 export interface AmortizationSchedule {
   success: boolean;
-  loanId: number;
-  schedule: AmortizationScheduleEntry[];
+  loanId: string;
+  amortization: AmortizationDetails;
+}
+
+export interface RepaymentPreviewScheduleEntry {
+  period: number;
+  due_date: string;
+  principal: number;
+  interest: number;
+  fees: number;
+  total: number;
+  remaining_balance: number;
 }
 
 export interface RepaymentPreview {
   success: boolean;
-  loanId: number;
-  currentBalance: number;
-  accruedInterest: number;
-  totalOwed: number;
-  nextPaymentDue: string;
+  loanId: string;
+  preview: {
+    principal: number;
+    interestRateBps: number;
+    termLedgers: number;
+    feeRateBps: number;
+    totalInterest: number;
+    totalFees: number;
+    totalDue: number;
+    schedule: RepaymentPreviewScheduleEntry[];
+  };
 }
 
 export interface LoanEvent {
   id: number;
-  loanId: number;
-  eventType: string;
-  amount?: number;
-  timestamp: string;
-  metadata?: Record<string, unknown>;
+  event_id: string;
+  event_type: string;
+  loan_id: number | null;
+  address: Address | null;
+  amount: number | string | null;
+  amountStroops?: Stroops;
+  ledger: number;
+  ledger_closed_at: string;
+  tx_hash: string;
+  created_at: string;
+  seq: string | number;
 }
 
 export interface LoanEvents {
   success: boolean;
-  loanId: number;
-  events: LoanEvent[];
+  data: {
+    loanId: number;
+    items: LoanEvent[];
+  };
+  page: KeysetPage;
 }
 
 // ── Pool / float ──────────────────────────────────────────────────────────────
@@ -239,8 +269,9 @@ export interface Score {
 
 export interface ScoreHistoryPoint {
   score: number;
-  timestamp: string;
-  reason?: string;
+  /** Ledger sequence number at which this score update was recorded. */
+  timestamp: number;
+  reason: string;
 }
 
 export interface ScoreHistory {
@@ -249,27 +280,45 @@ export interface ScoreHistory {
   history: ScoreHistoryPoint[];
 }
 
+export interface RemittanceNftMetadata {
+  score: number;
+  historyHash: string;
+  metadataUri: string;
+  defaultCount: number;
+  transferCooldownRemaining: number;
+  lastUpdateLedger: number;
+}
+
 export interface ScoreNFT {
   success: boolean;
   walletAddress: Address;
-  nftId?: string;
-  metadata?: {
-    score: number;
-    band: CreditBand;
-    issuedAt: string;
-  };
+  nft: RemittanceNftMetadata | null;
+}
+
+export interface ScoreBreakdownMetrics {
+  totalLoans: number;
+  repaidOnTime: number;
+  repaidLate: number;
+  defaulted: number;
+  totalRepaid: number;
+  averageRepaymentTime: string;
+  longestStreak: number;
+  currentStreak: number;
+}
+
+export interface ScoreBreakdownHistoryEntry {
+  date: string | null;
+  score: number;
+  event: string;
 }
 
 export interface ScoreBreakdown {
   success: boolean;
   userId: Address;
   score: number;
-  components: {
-    repaymentHistory: number;
-    loanUtilization: number;
-    accountAge: number;
-    diversification: number;
-  };
+  band: CreditBand;
+  breakdown: ScoreBreakdownMetrics;
+  history: ScoreBreakdownHistoryEntry[];
 }
 
 // ── Remittance ────────────────────────────────────────────────────────────────
@@ -296,13 +345,16 @@ export interface Remittance {
   updatedAt: string;
 }
 
-/** Keyset pagination envelope returned by the remittance list endpoint. */
-export interface RemittancePage {
+/** Keyset pagination envelope returned by paginated list endpoints. */
+export interface KeysetPage {
   next_cursor: string | null;
   snapshot_seq: string;
   total_at_snapshot: number;
   limit: number;
 }
+
+/** Keyset pagination envelope returned by the remittance list endpoint. */
+export type RemittancePage = KeysetPage;
 
 /** Response envelope for `GET /remittances`. */
 export interface RemittanceList {

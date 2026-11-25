@@ -1,23 +1,23 @@
 import { it, expect, beforeAll, afterAll } from '@jest/globals';
 import { query, closePool } from '../db/connection.js';
+import { CONTRACT_EVENTS_INSERT_COLUMNS } from '../services/eventIndexer.js';
 import { describeIfDb } from './helpers/dbProbe.js';
 
 // Regression for #847. The unit tests for EventIndexer mock the database, so
 // they cannot notice that `loan_events` is a backward-compat view without the
 // `address`, `interest_rate_bps` and `term_ledgers` columns. This runs the
 // indexer's INSERT column list against a real migrated schema.
-//
-// The column list below must stay in step with `EventIndexer.storeEvents`.
-const INSERT_COLUMNS = `
-  event_id, event_type, loan_id, address, amount, ledger, ledger_closed_at,
-  tx_hash, contract_id, topics, value, interest_rate_bps, term_ledgers
-`;
+const INSERT_COLUMNS = CONTRACT_EVENTS_INSERT_COLUMNS.join(', ');
 
 const EVENT_PREFIX = 'it-847-';
 
 function insertInto(target: string): string {
+  let paramIndex = 1;
+  const values = CONTRACT_EVENTS_INSERT_COLUMNS.map((col) =>
+    col === 'ledger_closed_at' ? 'NOW()' : `$${paramIndex++}`,
+  ).join(', ');
   return `INSERT INTO ${target} (${INSERT_COLUMNS})
-          VALUES ($1, $2, $3, $4, $5, $6, NOW(), $7, $8, $9, $10, $11, $12)
+          VALUES (${values})
           ON CONFLICT DO NOTHING
           RETURNING event_id`;
 }
