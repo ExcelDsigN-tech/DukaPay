@@ -32,6 +32,45 @@ interface Recorded {
   path: string;
 }
 
+// sdk/src/resources.ts (sketch)
+
+export interface DsarRequestInput {
+  /** Fields from the backend privacy schema; confirm against backend/src/swagger. */
+  reason?: string;
+}
+
+export interface DsarRequest {
+  dsarId: string;
+  type: 'access' | 'delete';
+  status: string;      // confirm enum (e.g. pending | completed | rejected)
+  createdAt: string;
+}
+
+export class PrivacyResource {
+  constructor(private readonly http: HttpClient) {} // match how LoansResource gets its transport
+
+  requestAccess(input: DsarRequestInput = {}): Promise<DsarRequest> {
+    return this.http.request('POST', '/privacy/dsar/access', input);
+  }
+
+  requestDeletion(input: DsarRequestInput = {}): Promise<DsarRequest> {
+    return this.http.request('POST', '/privacy/dsar/delete', input);
+  }
+
+  anonymize(): Promise<{ status: string }> {
+    return this.http.request('POST', '/privacy/anonymize', {});
+  }
+
+  getRequest(dsarId: string): Promise<DsarRequest> {
+    return this.http.request('GET', `/privacy/dsar/${encodeURIComponent(dsarId)}`);
+  }
+
+  export(publicKey: string): Promise<unknown> {
+    validateStellarAddress(publicKey);
+    return this.http.request('GET', `/privacy/export/${publicKey}`);
+  }
+}
+
 /** Records the method + path of every call made through the resources. */
 function recordingClient() {
   const calls: Recorded[] = [];
