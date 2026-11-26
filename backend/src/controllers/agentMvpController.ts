@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 import { StrKey } from '@stellar/stellar-sdk';
 import { stroopsToAmount, toStroops } from '../money/decimal.js';
 import { sorobanService } from '../services/sorobanService.js';
+import { cashPickupService } from '../services/cashPickupService.js';
 import { AppError } from '../errors/AppError.js';
 import { ErrorCode } from '../errors/errorCodes.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
@@ -327,4 +328,31 @@ export const getMyAgentStatus = asyncHandler(async (req: Request, res: Response)
     [agent],
   );
   res.json({ success: true, data: result.rows[0] ?? null });
+});
+
+export const getAgentCashPickupClaims = asyncHandler(async (req: Request, res: Response) => {
+  const agent = req.user?.publicKey;
+  if (!agent) throw AppError.unauthorized('Authentication required.');
+  const claims = await cashPickupService.getClaimsForAgent(agent);
+  res.json({ success: true, data: claims });
+});
+
+export const buildCashPickupRedeemTx = asyncHandler(async (req: Request, res: Response) => {
+  const agent = req.user?.publicKey;
+  if (!agent) throw AppError.unauthorized('Authentication required.');
+  const { claimId, code } = req.body as { claimId: string; code: string };
+  const result = await cashPickupService.buildRedeemBurnFloatTx(claimId, agent, code);
+  res.json({ success: true, ...result });
+});
+
+export const confirmCashPickupRedeem = asyncHandler(async (req: Request, res: Response) => {
+  const agent = req.user?.publicKey;
+  if (!agent) throw AppError.unauthorized('Authentication required.');
+  const { claimId, code, signedTxXdr } = req.body as {
+    claimId: string;
+    code: string;
+    signedTxXdr: string;
+  };
+  const claim = await cashPickupService.confirmRedeemBurnFloat(claimId, agent, code, signedTxXdr);
+  res.json({ success: true, data: claim });
 });

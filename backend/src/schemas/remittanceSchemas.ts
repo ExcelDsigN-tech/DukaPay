@@ -4,26 +4,48 @@ import { z } from 'zod';
 const STELLAR_ADDRESS_REGEX = /^G[A-Z2-7]{55}$/;
 
 // Schema for POST /remittances
-export const createRemittanceSchema = z.object({
-  body: z.object({
-    recipientAddress: z
-      .string()
-      .regex(STELLAR_ADDRESS_REGEX, 'Invalid Stellar address format')
-      .describe("Recipient's Stellar public key"),
-    amount: z
-      .number()
-      .positive('Amount must be greater than 0')
-      .max(1_000_000, 'Amount exceeds maximum limit')
-      .describe('Amount to send'),
-    fromCurrency: z.enum(['USDC', 'EURC', 'PHP']).describe('Source currency'),
-    toCurrency: z.enum(['USDC', 'EURC', 'PHP']).describe('Destination currency'),
-    memo: z
-      .string()
-      .max(28, 'Memo must be 28 characters or less')
-      .optional()
-      .describe('Optional transaction memo'),
-  }),
-});
+export const createRemittanceSchema = z
+  .object({
+    body: z.object({
+      recipientAddress: z
+        .string()
+        .regex(STELLAR_ADDRESS_REGEX, 'Invalid Stellar address format')
+        .describe("Recipient's Stellar public key"),
+      amount: z
+        .number()
+        .positive('Amount must be greater than 0')
+        .max(1_000_000, 'Amount exceeds maximum limit')
+        .describe('Amount to send'),
+      fromCurrency: z.enum(['USDC', 'EURC', 'PHP']).describe('Source currency'),
+      toCurrency: z.enum(['USDC', 'EURC', 'PHP']).describe('Destination currency'),
+      memo: z
+        .string()
+        .max(28, 'Memo must be 28 characters or less')
+        .optional()
+        .describe('Optional transaction memo'),
+      deliveryMethod: z
+        .enum(['wallet', 'cash_pickup'])
+        .default('wallet')
+        .optional()
+        .describe('Delivery method: wallet (direct) or cash_pickup (agent)'),
+      recipientRegion: z
+        .string()
+        .trim()
+        .min(1, 'Recipient region is required for cash pickup')
+        .max(16, 'Recipient region must be 16 characters or less')
+        .optional()
+        .describe('Recipient region for cash pickup agent routing'),
+    }),
+  })
+  .superRefine((data, ctx) => {
+    if (data.body.deliveryMethod === 'cash_pickup' && !data.body.recipientRegion) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Recipient region is required for cash pickup',
+        path: ['body', 'recipientRegion'],
+      });
+    }
+  });
 
 // ISO date string validation
 const isoDateString = z.string().refine((val) => !Number.isNaN(Date.parse(val)), {

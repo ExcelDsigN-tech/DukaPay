@@ -6,6 +6,7 @@ import { useUserStore } from "../../../stores/useUserStore";
 import { clearAgentDashboardCache, useAgentDashboard } from "../../../hooks/useApi";
 import { formatCurrency } from "../../../utils/formatLocale";
 import { AgentVaultActions } from "../../../components/agent/AgentVaultActions";
+import { CashPickupRedeemPanel } from "../../../components/agent/CashPickupRedeemPanel";
 import { AgentApplicationPanel } from "../../../components/agent/AgentApplicationPanel";
 import { useAgentVaultStream } from "../../../hooks/useAgentVaultStream";
 
@@ -206,6 +207,12 @@ export default function AgentDashboardPage() {
           </section>
           <AgentVaultActions
             onSubmitted={async () => {
+              await clearAgentDashboardCache();
+              await refetch();
+            }}
+          />
+          <CashPickupRedeemPanel
+            onRedeemed={async () => {
               await clearAgentDashboardCache();
               await refetch();
             }}

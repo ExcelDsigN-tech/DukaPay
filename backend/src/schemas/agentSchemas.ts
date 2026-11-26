@@ -83,6 +83,21 @@ export const removeBorrowerParamsSchema = z
   })
   .strict();
 
+export const cashPickupRedeemBuildBodySchema = z
+  .object({
+    claimId: z.string().uuid(),
+    code: z.string().trim().min(1).max(32),
+  })
+  .strict();
+
+export const cashPickupRedeemConfirmBodySchema = z
+  .object({
+    claimId: z.string().uuid(),
+    code: z.string().trim().min(1).max(32),
+    signedTxXdr: z.string().min(1),
+  })
+  .strict();
+
 export const emptyAgentParamsSchema = z.object({}).strict();
 export const emptyAgentQuerySchema = z.object({}).strict();
 export const emptyAgentBodySchema = z.object({}).strict().optional();

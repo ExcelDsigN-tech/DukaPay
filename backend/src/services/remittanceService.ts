@@ -13,7 +13,10 @@ import { AppError } from '../errors/AppError.js';
 import logger from '../utils/logger.js';
 import { complianceService } from './complianceService.js';
 import { toRemittance } from './remittanceMapper.js';
+import { toStroops } from '../money/decimal.js';
 import { env } from '../config/env.js';
+
+export type DeliveryMethod = 'wallet' | 'cash_pickup';
 
 export interface CreateRemittancePayload {
   recipientAddress: string;
@@ -22,6 +25,8 @@ export interface CreateRemittancePayload {
   toCurrency: string;
   memo?: string;
   senderAddress: string;
+  deliveryMethod?: DeliveryMethod;
+  recipientRegion?: string;
 }
 
 export type RemittanceStatus = 'pending' | 'processing' | 'completed' | 'failed';
@@ -34,6 +39,9 @@ export interface Remittance {
   fromCurrency: string;
   toCurrency: string;
   memo?: string;
+  deliveryMethod?: DeliveryMethod;
+  agentAddress?: string | null;
+  recipientRegion?: string | null;
   status: RemittanceStatus;
   transactionHash?: string;
   xdr?: string;
@@ -81,11 +89,44 @@ const getCurrencyAsset = (currency: string): Asset => {
 
 export const remittanceService = {
   /**
+   * Picks an active agent in `region` whose vault headroom
+   * (`max_float - float_balance`) covers `amountStroops`.
+   * Throws 400 before payment if no agent qualifies.
+   */
+  async selectEligibleCashPickupAgent(region: string, amountStroops: bigint): Promise<string> {
+    const trimmedRegion = region.trim();
+    if (!trimmedRegion) {
+      throw AppError.badRequest('Recipient region is required for cash pickup');
+    }
+
+    const result = await query(
+      `SELECT agent_address
+       FROM agent_vaults
+       WHERE is_active = true
+         AND LOWER(region) = LOWER($1)
+         AND ((collateral_balance * haircut_bps) / 10000) - float_balance >= $2::numeric
+       ORDER BY (((collateral_balance * haircut_bps) / 10000) - float_balance) DESC, agent_address ASC
+       LIMIT 1`,
+      [trimmedRegion, amountStroops.toString()],
+    );
+
+    const agentAddress = result.rows[0]?.agent_address;
+    if (!agentAddress || typeof agentAddress !== 'string') {
+      throw AppError.badRequest(
+        `No eligible cash pickup agent with sufficient headroom is available in region "${trimmedRegion}"`,
+      );
+    }
+
+    return agentAddress;
+  },
+
+  /**
    * Create a new remittance record and generate XDR
    */
   async createRemittance(payload: CreateRemittancePayload): Promise<Remittance> {
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
+    const deliveryMethod: DeliveryMethod = payload.deliveryMethod ?? 'wallet';
 
     // Validate before opening a DB transaction; avoids holding a connection
     // while doing synchronous checks.
@@ -102,6 +143,20 @@ export const remittanceService = {
     const paymentAsset = getCurrencyAsset(payload.fromCurrency);
     const normalizedFromCurrency = normalizeCurrency(payload.fromCurrency);
     const normalizedToCurrency = normalizeCurrency(payload.toCurrency);
+
+    let agentAddress: string | null = null;
+    let recipientRegion: string | null = null;
+    let paymentDestination = payload.recipientAddress;
+
+    if (deliveryMethod === 'cash_pickup') {
+      recipientRegion = payload.recipientRegion?.trim() ?? '';
+      if (!recipientRegion) {
+        throw AppError.badRequest('Recipient region is required for cash pickup');
+      }
+      const amountStroops = toStroops(String(payload.amount));
+      agentAddress = await this.selectEligibleCashPickupAgent(recipientRegion, amountStroops);
+      paymentDestination = agentAddress;
+    }
 
     const monitoring = await complianceService.monitorTransaction({
       subjectId: payload.senderAddress,
@@ -128,7 +183,7 @@ export const remittanceService = {
       })
         .addOperation(
           Operation.payment({
-            destination: payload.recipientAddress,
+            destination: paymentDestination,
             asset: paymentAsset,
             amount: payload.amount.toString(),
           }),
@@ -143,8 +198,8 @@ export const remittanceService = {
       return await withTransaction(async (client) => {
         const result = await client.query(
           `INSERT INTO remittances
-           (id, sender_id, recipient_address, amount, from_currency, to_currency, memo, status, xdr, created_at, updated_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+           (id, sender_id, recipient_address, amount, from_currency, to_currency, memo, delivery_method, agent_address, recipient_region, status, xdr, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
            RETURNING *`,
           [
             id,
@@ -154,6 +209,9 @@ export const remittanceService = {
             normalizedFromCurrency,
             normalizedToCurrency,
             payload.memo || null,
+            deliveryMethod,
+            agentAddress,
+            recipientRegion,
             'pending',
             xdr,
             now,
@@ -389,7 +447,11 @@ export const remittanceService = {
     if (source !== remittance.senderId) {
       throw mismatch('source account');
     }
-    if (op.destination !== remittance.recipientAddress) {
+    const expectedDestination =
+      remittance.deliveryMethod === 'cash_pickup'
+        ? remittance.agentAddress
+        : remittance.recipientAddress;
+    if (!expectedDestination || op.destination !== expectedDestination) {
       throw mismatch('destination');
     }
     if (Number(op.amount).toFixed(7) !== Number(remittance.amount).toFixed(7)) {

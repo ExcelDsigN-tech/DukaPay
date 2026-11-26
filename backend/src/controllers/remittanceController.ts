@@ -5,6 +5,8 @@ import { remittanceService } from '../services/remittanceService.js';
 import { toRemittance } from '../services/remittanceMapper.js';
 import { sorobanService } from '../services/sorobanService.js';
 import { notificationService } from '../services/notificationService.js';
+import { cashPickupService } from '../services/cashPickupService.js';
+import { toStroops } from '../money/decimal.js';
 import { AppError } from '../errors/AppError.js';
 import { encodeCursor, decodeCursor, parseKeysetParams } from '../utils/pagination.js';
 import logger from '../utils/logger.js';
@@ -17,7 +19,15 @@ import { submitRemittanceSchema } from '../schemas/remittanceSchemas.js';
  * with Freighter wallet. Returns XDR for preview and signing.
  */
 export const createRemittance = asyncHandler(async (req: Request, res: Response) => {
-  const { recipientAddress, amount, fromCurrency, toCurrency, memo } = req.body;
+  const {
+    recipientAddress,
+    amount,
+    fromCurrency,
+    toCurrency,
+    memo,
+    deliveryMethod,
+    recipientRegion,
+  } = req.body;
 
   // Get sender address from JWT (added by requireJwtAuth middleware)
   const senderAddress = req.user?.publicKey;
@@ -28,6 +38,7 @@ export const createRemittance = asyncHandler(async (req: Request, res: Response)
 
   logger.withContext().info('Creating remittance', {
     currency: fromCurrency,
+    deliveryMethod: deliveryMethod ?? 'wallet',
   });
 
   const remittance = await remittanceService.createRemittance({
@@ -37,6 +48,8 @@ export const createRemittance = asyncHandler(async (req: Request, res: Response)
     toCurrency,
     memo,
     senderAddress,
+    deliveryMethod,
+    recipientRegion,
   });
 
   res.status(201).json({
@@ -287,6 +300,17 @@ export const submitRemittanceTransaction = asyncHandler(async (req: Request, res
     'processing',
   );
 
+  if (completed.deliveryMethod === 'cash_pickup' && completed.agentAddress) {
+    const amountStroops = toStroops(String(completed.amount));
+    const claim = await cashPickupService.createPendingClaim({
+      remittanceId: completed.id,
+      recipientAddress: completed.recipientAddress,
+      agentAddress: completed.agentAddress,
+      amountStroops,
+    });
+    await cashPickupService.mintFloatForClaim(claim.id);
+  }
+
   logger.withContext().info('Remittance transaction confirmed', {
     remittanceId: id,
     txHash: stellarResult.txHash,
@@ -310,5 +334,21 @@ export const submitRemittanceTransaction = asyncHandler(async (req: Request, res
       txHash: stellarResult.txHash,
       message: 'Transaction confirmed on Stellar network',
     },
+  });
+});
+
+/**
+ * GET /api/remittances/claims/mine - Get recipient's cash pickup claims
+ */
+export const getMyCashPickupClaims = asyncHandler(async (req: Request, res: Response) => {
+  const recipientAddress = req.user?.publicKey;
+  if (!recipientAddress) {
+    throw AppError.unauthorized('Wallet address not found in request');
+  }
+
+  const claims = await cashPickupService.getClaimsForRecipient(recipientAddress);
+  res.json({
+    success: true,
+    data: claims,
   });
 });

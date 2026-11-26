@@ -285,7 +285,26 @@ export interface Remittance {
   toCurrency: string;
   recipientAddress: string;
   memo?: string;
+  deliveryMethod?: "wallet" | "cash_pickup";
+  recipientRegion?: string;
+  agentAddress?: string | null;
   status: "pending" | "processing" | "completed" | "failed";
+  createdAt: string;
+}
+
+export interface CashPickupClaim {
+  id: string;
+  remittanceId: string;
+  recipientAddress: string;
+  agentAddress: string;
+  amountStroops: string;
+  amount: number;
+  status: "pending_mint" | "credited" | "redeemed" | "failed";
+  redeemCode?: string | null;
+  mintTxHash?: string | null;
+  burnTxHash?: string | null;
+  creditedAt?: string | null;
+  redeemedAt?: string | null;
   createdAt: string;
 }
 
@@ -1082,7 +1101,7 @@ export function useCreateRemittance(
   options?: UseMutationOptions<
     Remittance & { txHash?: string },
     Error,
-    Omit<Remittance, "id" | "createdAt" | "status">
+    Omit<Remittance, "id" | "createdAt" | "status" | "agentAddress">
   >,
 ) {
   const queryClient = useQueryClient();
@@ -1090,7 +1109,7 @@ export function useCreateRemittance(
   return useMutation<
     Remittance & { txHash?: string },
     Error,
-    Omit<Remittance, "id" | "createdAt" | "status">
+    Omit<Remittance, "id" | "createdAt" | "status" | "agentAddress">
   >({
     mutationFn: (data) =>
       apiFetch<Remittance & { txHash?: string }>("/remittances", {
@@ -1100,6 +1119,26 @@ export function useCreateRemittance(
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.remittances.all() });
     },
+    ...options,
+  });
+}
+
+export function useMyCashPickupClaims(
+  options?: Omit<UseQueryOptions<CashPickupClaim[]>, "queryKey" | "queryFn">,
+) {
+  return useQuery<CashPickupClaim[]>({
+    queryKey: ["remittances", "claims", "mine"],
+    queryFn: () => apiFetch<CashPickupClaim[]>("/remittances/claims/mine"),
+    ...options,
+  });
+}
+
+export function useAgentCashPickupClaims(
+  options?: Omit<UseQueryOptions<CashPickupClaim[]>, "queryKey" | "queryFn">,
+) {
+  return useQuery<CashPickupClaim[]>({
+    queryKey: ["agents", "cash-pickup", "claims"],
+    queryFn: () => apiFetch<CashPickupClaim[]>("/agents/cash-pickup/claims"),
     ...options,
   });
 }
