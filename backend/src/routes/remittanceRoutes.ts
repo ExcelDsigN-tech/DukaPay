@@ -164,6 +164,30 @@ router.get(
   getRemittances,
 );
 
+/**
+ * @swagger
+ * /remittances/claims/mine:
+ *   get:
+ *     summary: List the authenticated recipient's cash pickup claims
+ *     description: Includes the one-time code for claims that are credited and not yet redeemed.
+ *     tags: [Remittances]
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: The recipient's cash pickup claims
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 data:
+ *                   type: array
+ *                   items: { $ref: '#/components/schemas/CashPickupClaim' }
+ *       401:
+ *         description: Unauthorized
+ */
 router.get(
   '/claims/mine',
   requireJwtAuth,

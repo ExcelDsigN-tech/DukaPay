@@ -556,6 +556,29 @@ router.delete(
   clearAgentDashboardCache,
 );
 
+/**
+ * @swagger
+ * /agents/cash-pickup/claims:
+ *   get:
+ *     summary: List cash pickup claims assigned to the authenticated agent
+ *     tags: [Agent]
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Claims assigned to this agent (without one-time codes)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 data:
+ *                   type: array
+ *                   items: { $ref: '#/components/schemas/CashPickupClaim' }
+ *       401:
+ *         description: Unauthorized
+ */
 router.get(
   '/cash-pickup/claims',
   requireJwtAuth,
@@ -564,6 +587,39 @@ router.get(
   getAgentCashPickupClaims,
 );
 
+/**
+ * @swagger
+ * /agents/cash-pickup/redeem:
+ *   post:
+ *     summary: Build the burn_float transaction to redeem a cash pickup claim
+ *     description: >
+ *       Checks the recipient's one-time code and returns an unsigned
+ *       burn_float(agent, claim amount) transaction for the agent to sign.
+ *     tags: [Agent]
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [claimId, code]
+ *             properties:
+ *               claimId: { type: string, format: uuid }
+ *               code: { type: string }
+ *     responses:
+ *       200:
+ *         description: Unsigned burn_float transaction for the claim amount
+ *       400:
+ *         description: Invalid code, or the claim is not credited
+ *       403:
+ *         description: Not the assigned agent
+ *       404:
+ *         description: Claim not found
+ *       409:
+ *         description: Claim already redeemed
+ */
 router.post(
   '/cash-pickup/redeem',
   requireJwtAuth,
@@ -573,6 +629,45 @@ router.post(
   buildCashPickupRedeemTx,
 );
 
+/**
+ * @swagger
+ * /agents/cash-pickup/redeem/confirm:
+ *   post:
+ *     summary: Submit the signed burn_float and mark the claim redeemed
+ *     description: >
+ *       The signed transaction must be exactly burn_float(agent, claim amount)
+ *       on the agent vault. The claim becomes redeemed only after it confirms.
+ *     tags: [Agent]
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [claimId, code, signedTxXdr]
+ *             properties:
+ *               claimId: { type: string, format: uuid }
+ *               code: { type: string }
+ *               signedTxXdr: { type: string }
+ *     responses:
+ *       200:
+ *         description: Claim redeemed
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 data: { $ref: '#/components/schemas/CashPickupClaim' }
+ *       400:
+ *         description: Invalid code, or the signed transaction is not the expected burn_float
+ *       403:
+ *         description: Not the assigned agent
+ *       409:
+ *         description: Claim already redeemed
+ */
 router.post(
   '/cash-pickup/redeem/confirm',
   requireJwtAuth,
