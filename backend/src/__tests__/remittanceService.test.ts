@@ -44,7 +44,8 @@ function mockRemittanceInsert() {
     let xdrValue = '';
     const result = await callback({
       query: async (_sql: string, queryParams: unknown[]) => {
-        xdrValue = queryParams[8] as string;
+        // INSERT columns: ..., delivery_method, agent_address, recipient_region, status, xdr, ...
+        xdrValue = queryParams[11] as string;
         return {
           rows: [
             {

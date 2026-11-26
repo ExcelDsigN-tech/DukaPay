@@ -13,6 +13,7 @@ import {
 const mockQuery = jest.fn();
 const mockBuildAgentVaultTx = jest.fn();
 const mockSubmitSignedTx = jest.fn();
+const mockValidateBurnFloatTx = jest.fn();
 
 const agentKeypair = Keypair.random();
 const otherAgent = Keypair.random();
@@ -36,6 +37,7 @@ jest.unstable_mockModule('../services/sorobanService.js', () => ({
   sorobanService: {
     buildAgentVaultTx: mockBuildAgentVaultTx,
     submitSignedTx: mockSubmitSignedTx,
+    validateBurnFloatTx: mockValidateBurnFloatTx,
   },
 }));
 
@@ -115,11 +117,9 @@ describe('Cash pickup redeem with one-time code and burn_float (#950)', () => {
   });
 
   it('transitions claim to redeemed only after burn_float confirms', async () => {
-    mockQuery
-      .mockResolvedValueOnce({ rows: [creditedClaim] })
-      .mockResolvedValueOnce({
-        rows: [{ ...creditedClaim, status: 'redeemed', burn_tx_hash: 'tx-burn-1' }],
-      });
+    mockQuery.mockResolvedValueOnce({ rows: [creditedClaim] }).mockResolvedValueOnce({
+      rows: [{ ...creditedClaim, status: 'redeemed', burn_tx_hash: 'tx-burn-1' }],
+    });
     mockSubmitSignedTx.mockResolvedValueOnce({ txHash: 'tx-burn-1', status: 'SUCCESS' });
 
     const redeemed = await cashPickupService.confirmRedeemBurnFloat(
@@ -131,6 +131,29 @@ describe('Cash pickup redeem with one-time code and burn_float (#950)', () => {
 
     expect(redeemed.status).toBe('redeemed');
     expect(redeemed.burnTxHash).toBe('tx-burn-1');
+    expect(mockValidateBurnFloatTx).toHaveBeenCalledWith(
+      expect.any(String),
+      agentKeypair.publicKey(),
+      500000000n,
+    );
+  });
+
+  it('does not submit or redeem when the signed tx is not the exact burn_float', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [creditedClaim] });
+    mockValidateBurnFloatTx.mockImplementationOnce(() => {
+      throw new Error('signedTxXdr does not match burn_float: contract arguments');
+    });
+
+    await expect(
+      cashPickupService.confirmRedeemBurnFloat(
+        creditedClaim.id,
+        agentKeypair.publicKey(),
+        'ABCD2345',
+        signedBurnTx(agentKeypair),
+      ),
+    ).rejects.toThrow(/contract arguments/);
+    expect(mockSubmitSignedTx).not.toHaveBeenCalled();
+    expect(mockQuery).toHaveBeenCalledTimes(1);
   });
 
   it('rejects double redemption and wrong agent or wrong code', async () => {

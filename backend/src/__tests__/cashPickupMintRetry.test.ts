@@ -6,6 +6,7 @@ const mockGetAccount = jest.fn();
 const mockPrepareTransaction = jest.fn();
 const mockSendTransaction = jest.fn();
 const mockPollTransaction = jest.fn();
+const mockGetTransaction = jest.fn();
 const mockCreateNotification = jest.fn();
 const mockLoggerError = jest.fn();
 
@@ -24,11 +25,13 @@ jest.unstable_mockModule('../db/connection.js', () => ({
 
 jest.unstable_mockModule('../config/stellar.js', () => ({
   getStellarNetworkPassphrase: () => Networks.TESTNET,
+  getStellarRpcUrl: () => 'http://localhost:8000',
   createSorobanRpcServer: () => ({
     getAccount: mockGetAccount,
     prepareTransaction: mockPrepareTransaction,
     sendTransaction: mockSendTransaction,
     pollTransaction: mockPollTransaction,
+    getTransaction: mockGetTransaction,
   }),
 }));
 
@@ -82,15 +85,19 @@ describe('Cash pickup mint_float and retry (#949)', () => {
 
   it('credits claim with mint_tx_hash when mint_float succeeds', async () => {
     mockQuery
-      .mockResolvedValueOnce({ rows: [baseClaim] })
-      .mockResolvedValueOnce({ rows: [{ ...baseClaim, status: 'credited', mint_tx_hash: 'tx-mint-1' }] });
+      .mockResolvedValueOnce({ rows: [baseClaim] }) // lease
+      .mockResolvedValueOnce({ rows: [] }) // record submitted hash
+      .mockResolvedValueOnce({
+        rows: [{ ...baseClaim, status: 'credited', mint_tx_hash: 'tx-mint-1' }],
+      }); // credit
     mockSendTransaction.mockResolvedValueOnce({ hash: 'tx-mint-1', status: 'PENDING' });
     mockPollTransaction.mockResolvedValueOnce({ status: 'SUCCESS' });
 
     const res = await cashPickupService.mintFloatForClaim('claim-1');
 
     expect(res).toEqual({ ok: true, txHash: 'tx-mint-1' });
-    expect(mockQuery).toHaveBeenCalledTimes(2);
+    expect(mockQuery).toHaveBeenCalledTimes(3);
+    expect(mockQuery.mock.calls[1]?.[1]).toEqual(['claim-1', 'tx-mint-1']);
     expect(mockCreateNotification).toHaveBeenCalledTimes(1);
   });
 
@@ -109,11 +116,56 @@ describe('Cash pickup mint_float and retry (#949)', () => {
     );
   });
 
-  it('retries pending_mint claims and succeeds when network recovers', async () => {
+  it('does not mint a claim another attempt holds the lease on', async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [] }) // lease not acquired
+      .mockResolvedValueOnce({ rows: [{ status: 'pending_mint' }] });
+
+    const res = await cashPickupService.mintFloatForClaim('claim-1');
+
+    expect(res).toEqual({ ok: false, error: 'mint_float already in progress for this claim' });
+    expect(mockSendTransaction).not.toHaveBeenCalled();
+  });
+
+  it('credits from an earlier mint that landed after its poll gave up, without minting again', async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ ...baseClaim, mint_tx_hash: 'tx-mint-late' }] }) // lease
+      .mockResolvedValueOnce({
+        rows: [{ ...baseClaim, status: 'credited', mint_tx_hash: 'tx-mint-late' }],
+      }); // credit
+    mockGetTransaction.mockResolvedValueOnce({ status: 'SUCCESS' });
+
+    const res = await cashPickupService.mintFloatForClaim('claim-1');
+
+    expect(res).toEqual({ ok: true, txHash: 'tx-mint-late' });
+    expect(mockSendTransaction).not.toHaveBeenCalled();
+  });
+
+  it('mints again when the earlier mint transaction failed', async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ ...baseClaim, mint_tx_hash: 'tx-mint-old' }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({
+        rows: [{ ...baseClaim, status: 'credited', mint_tx_hash: 'tx-mint-new' }],
+      });
+    mockGetTransaction.mockResolvedValueOnce({ status: 'FAILED' });
+    mockSendTransaction.mockResolvedValueOnce({ hash: 'tx-mint-new', status: 'PENDING' });
+    mockPollTransaction.mockResolvedValueOnce({ status: 'SUCCESS' });
+
+    const res = await cashPickupService.mintFloatForClaim('claim-1');
+
+    expect(res).toEqual({ ok: true, txHash: 'tx-mint-new' });
+    expect(mockSendTransaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries pending_mint claims one at a time and succeeds when network recovers', async () => {
     mockQuery
       .mockResolvedValueOnce({ rows: [{ id: 'claim-1' }] })
       .mockResolvedValueOnce({ rows: [baseClaim] })
-      .mockResolvedValueOnce({ rows: [{ ...baseClaim, status: 'credited', mint_tx_hash: 'tx-mint-2' }] });
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({
+        rows: [{ ...baseClaim, status: 'credited', mint_tx_hash: 'tx-mint-2' }],
+      });
     mockSendTransaction.mockResolvedValueOnce({ hash: 'tx-mint-2', status: 'PENDING' });
     mockPollTransaction.mockResolvedValueOnce({ status: 'SUCCESS' });
 

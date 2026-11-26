@@ -353,11 +353,6 @@ export const confirmCashPickupRedeem = asyncHandler(async (req: Request, res: Re
     code: string;
     signedTxXdr: string;
   };
-  const claim = await cashPickupService.confirmRedeemBurnFloat(
-    claimId,
-    agent,
-    code,
-    signedTxXdr,
-  );
+  const claim = await cashPickupService.confirmRedeemBurnFloat(claimId, agent, code, signedTxXdr);
   res.json({ success: true, data: claim });
 });

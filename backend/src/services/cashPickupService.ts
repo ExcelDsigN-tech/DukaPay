@@ -59,6 +59,9 @@ interface ClaimRow {
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const CODE_LENGTH = 8;
 const DEFAULT_RETRY_INTERVAL_MS = 60_000;
+const MINT_TX_TIMEOUT_SECONDS = 30;
+/** Longer than the mint tx time bound plus 30 one-second polls. */
+const MINT_LEASE_SECONDS = 120;
 
 function generateOneTimeCode(): string {
   let code = '';
@@ -84,9 +87,7 @@ function toClaim(row: ClaimRow, includeCode: boolean): RemittanceClaim {
     amountStroops: String(row.amount_stroops),
     amount: Number(stroopsToAmount(BigInt(row.amount_stroops))),
     status: row.status,
-    ...(includeCode
-      ? { redeemCode: row.status === 'credited' ? row.redeem_code : null }
-      : {}),
+    ...(includeCode ? { redeemCode: row.status === 'credited' ? row.redeem_code : null } : {}),
     mintTxHash: row.mint_tx_hash,
     burnTxHash: row.burn_tx_hash,
     mintAttempts: Number(row.mint_attempts ?? 0),
@@ -149,13 +150,26 @@ export const cashPickupService = {
   async mintFloatForClaim(
     claimId: string,
   ): Promise<{ ok: boolean; txHash?: string; error?: string }> {
-    const claimResult = await query('SELECT * FROM remittance_claims WHERE id = $1', [claimId]);
-    const claim = claimResult.rows[0] as ClaimRow | undefined;
+    // Take a lease on the claim so the retry scheduler, the submit request and
+    // other instances never mint it at the same time. The lease outlasts the
+    // mint transaction's 30s time bound plus polling.
+    const leased = await query(
+      `UPDATE remittance_claims
+       SET last_mint_attempt_at = NOW(), updated_at = NOW()
+       WHERE id = $1
+         AND status = 'pending_mint'
+         AND (last_mint_attempt_at IS NULL
+              OR last_mint_attempt_at < NOW() - INTERVAL '${MINT_LEASE_SECONDS} seconds')
+       RETURNING *`,
+      [claimId],
+    );
+    const claim = leased.rows[0] as ClaimRow | undefined;
     if (!claim) {
-      return { ok: false, error: 'Claim not found' };
-    }
-    if (claim.status !== 'pending_mint') {
-      return { ok: claim.status === 'credited' || claim.status === 'redeemed' };
+      const current = await query('SELECT status FROM remittance_claims WHERE id = $1', [claimId]);
+      const status = current.rows[0]?.status as ClaimStatus | undefined;
+      if (!status) return { ok: false, error: 'Claim not found' };
+      if (status === 'credited' || status === 'redeemed') return { ok: true };
+      return { ok: false, error: 'mint_float already in progress for this claim' };
     }
 
     const operatorSecret = env.AGENT_VAULT_OPERATOR_SECRET?.trim();
@@ -179,6 +193,17 @@ export const cashPickupService = {
 
     try {
       const server = createSorobanRpcServer();
+
+      // An earlier attempt may have landed on-chain after its poll gave up.
+      // Settle that transaction before minting again, so a claim is never minted twice.
+      if (claim.mint_tx_hash) {
+        const previous = await server.getTransaction(claim.mint_tx_hash);
+        if (previous.status === 'SUCCESS') {
+          return await this.creditClaim(claim, claim.mint_tx_hash);
+        }
+        // FAILED, or NOT_FOUND after its time bound expired: safe to mint again.
+      }
+
       const passphrase = getStellarNetworkPassphrase() || Networks.TESTNET;
       const account = await server.getAccount(signer.publicKey());
 
@@ -196,7 +221,7 @@ export const cashPickupService = {
             ],
           }),
         )
-        .setTimeout(30)
+        .setTimeout(MINT_TX_TIMEOUT_SECONDS)
         .build();
 
       const prepared = await server.prepareTransaction(tx);
@@ -210,6 +235,13 @@ export const cashPickupService = {
         return { ok: false, error: msg };
       }
 
+      // Record the submitted hash before polling, so a retry can settle it.
+      await query(
+        `UPDATE remittance_claims SET mint_tx_hash = $2, updated_at = NOW()
+         WHERE id = $1 AND status = 'pending_mint'`,
+        [claim.id, txHash],
+      );
+
       const polled = await server.pollTransaction(txHash, {
         attempts: 30,
         sleepStrategy: () => 1000,
@@ -221,34 +253,7 @@ export const cashPickupService = {
         return { ok: false, error: msg };
       }
 
-      const code = generateOneTimeCode();
-      const updated = await query(
-        `UPDATE remittance_claims
-         SET status = 'credited',
-             mint_tx_hash = $2,
-             redeem_code = $3,
-             credited_at = NOW(),
-             mint_error = NULL,
-             mint_attempts = mint_attempts + 1,
-             last_mint_attempt_at = NOW(),
-             updated_at = NOW()
-         WHERE id = $1 AND status = 'pending_mint'
-         RETURNING *`,
-        [claim.id, txHash, code],
-      );
-
-      if (updated.rows[0]) {
-        const displayAmount = stroopsToAmount(BigInt(claim.amount_stroops));
-        await notificationService.createNotification({
-          userId: claim.recipient_address,
-          type: 'repayment_confirmed',
-          title: 'Cash Pickup Ready',
-          message: `Your cash pickup of ${displayAmount} is ready. Use one-time code ${code} at the assigned agent.`,
-          actionUrl: '/remittances',
-        });
-      }
-
-      return { ok: true, txHash };
+      return await this.creditClaim(claim, txHash);
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       await recordMintFailure(claim, msg);
@@ -256,10 +261,47 @@ export const cashPickupService = {
     }
   },
 
+  /** Marks a claim credited after its mint_float confirmed, and notifies the recipient. */
+  async creditClaim(
+    claim: ClaimRow,
+    txHash: string,
+  ): Promise<{ ok: boolean; txHash?: string; error?: string }> {
+    const code = generateOneTimeCode();
+    const updated = await query(
+      `UPDATE remittance_claims
+       SET status = 'credited',
+           mint_tx_hash = $2,
+           redeem_code = $3,
+           credited_at = NOW(),
+           mint_error = NULL,
+           mint_attempts = mint_attempts + 1,
+           last_mint_attempt_at = NOW(),
+           updated_at = NOW()
+       WHERE id = $1 AND status = 'pending_mint'
+       RETURNING *`,
+      [claim.id, txHash, code],
+    );
+
+    if (updated.rows[0]) {
+      const displayAmount = stroopsToAmount(BigInt(claim.amount_stroops));
+      await notificationService.createNotification({
+        userId: claim.recipient_address,
+        type: 'repayment_confirmed',
+        title: 'Cash Pickup Ready',
+        message: `Your cash pickup of ${displayAmount} is ready. Use one-time code ${code} at the assigned agent.`,
+        actionUrl: '/remittances',
+      });
+    }
+
+    return { ok: true, txHash };
+  },
+
   async retryPendingMints(limit = 25): Promise<{ attempted: number; succeeded: number }> {
     const pending = await query(
       `SELECT id FROM remittance_claims
        WHERE status = 'pending_mint'
+         AND (last_mint_attempt_at IS NULL
+              OR last_mint_attempt_at < NOW() - INTERVAL '${MINT_LEASE_SECONDS} seconds')
        ORDER BY created_at ASC
        LIMIT $1`,
       [limit],
@@ -269,14 +311,15 @@ export const cashPickupService = {
       return { attempted: 0, succeeded: 0 };
     }
 
-    const results = await Promise.all(
-      (pending.rows as Array<{ id: string }>).map((row) => this.mintFloatForClaim(row.id)),
-    );
+    // One at a time: every mint is signed by the same operator account, so
+    // parallel submissions would collide on its sequence number.
+    let succeeded = 0;
+    for (const row of pending.rows as Array<{ id: string }>) {
+      const result = await this.mintFloatForClaim(row.id);
+      if (result.ok) succeeded += 1;
+    }
 
-    return {
-      attempted: results.length,
-      succeeded: results.filter((r) => r.ok).length,
-    };
+    return { attempted: pending.rows.length, succeeded };
   },
 
   async getClaimsForRecipient(recipientAddress: string): Promise<RemittanceClaim[]> {
@@ -350,26 +393,8 @@ export const cashPickupService = {
   ): Promise<RemittanceClaim> {
     const claim = await this.verifyClaimForRedeem(claimId, agentAddress, code);
 
-    const passphrase = getStellarNetworkPassphrase() || Networks.TESTNET;
-    let parsedTx;
-    try {
-      parsedTx = TransactionBuilder.fromXDR(signedTxXdr, passphrase);
-    } catch {
-      throw AppError.badRequest('signedTxXdr is not a valid transaction envelope');
-    }
-
-    if (
-      !('operations' in parsedTx) ||
-      parsedTx.operations.length !== 1 ||
-      parsedTx.operations[0]?.type !== 'invokeHostFunction'
-    ) {
-      throw AppError.badRequest('signedTxXdr must invoke burn_float on agent_vault');
-    }
-
-    const opSource = parsedTx.operations[0].source ?? parsedTx.source;
-    if (opSource !== agentAddress) {
-      throw AppError.forbidden('signedTxXdr source must match the authenticated agent');
-    }
+    // Exactly burn_float(agent, claim amount) on the agent vault, from the agent.
+    sorobanService.validateBurnFloatTx(signedTxXdr, agentAddress, BigInt(claim.amount_stroops));
 
     // Claim only transitions to redeemed after burn_float confirms on-chain.
     const submitted = await sorobanService.submitSignedTx(signedTxXdr);
@@ -393,9 +418,9 @@ export const cashPickupService = {
   },
 };
 
-export function startCashPickupMintRetryScheduler(
-  intervalMs = DEFAULT_RETRY_INTERVAL_MS,
-): { stop: () => void } {
+export function startCashPickupMintRetryScheduler(intervalMs = DEFAULT_RETRY_INTERVAL_MS): {
+  stop: () => void;
+} {
   const timer = setInterval(() => {
     cashPickupService.retryPendingMints().catch((error) => {
       logger.withContext().error('cash_pickup.mint_retry_scheduler_failed', {

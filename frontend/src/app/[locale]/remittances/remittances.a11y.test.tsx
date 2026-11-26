@@ -20,6 +20,7 @@ jest.mock("next/link", () => {
 
 jest.mock("../../hooks/useApi", () => ({
   useRemittancesPage: () => ({ data: null, isLoading: false, isError: false }),
+  useMyCashPickupClaims: () => ({ data: [], isLoading: false, isError: false }),
 }));
 
 jest.mock("../../stores/useWalletStore", () => ({

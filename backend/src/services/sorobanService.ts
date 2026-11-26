@@ -931,6 +931,35 @@ class SorobanService {
     toAgent: string,
     amount: bigint,
   ): void {
+    this.validateAgentVaultCall(signedTxXdr, fromAgent, 'transfer_to_agent', 'float transfer', [
+      nativeToScVal(Address.fromString(fromAgent), { type: 'address' }),
+      nativeToScVal(Address.fromString(toAgent), { type: 'address' }),
+      nativeToScVal(amount, { type: 'i128' }),
+    ]);
+  }
+
+  /**
+   * Ensures a signed envelope is exactly `burn_float(agent, amount)` on the
+   * agent vault, signed and sourced by `agent`.
+   */
+  validateBurnFloatTx(signedTxXdr: string, agent: string, amount: bigint): void {
+    this.validateAgentVaultCall(signedTxXdr, agent, 'burn_float', 'burn_float', [
+      nativeToScVal(Address.fromString(agent), { type: 'address' }),
+      nativeToScVal(amount, { type: 'i128' }),
+    ]);
+  }
+
+  /**
+   * Checks that `signedTxXdr` holds exactly one invocation of `functionName`
+   * on the agent vault contract, from `source`, with exactly `expectedArgs`.
+   */
+  private validateAgentVaultCall(
+    signedTxXdr: string,
+    source: string,
+    functionName: string,
+    label: string,
+    expectedArgs: xdr.ScVal[],
+  ): void {
     let parsed;
     try {
       parsed = TransactionBuilder.fromXDR(signedTxXdr, this.getNetworkPassphrase());
@@ -945,12 +974,12 @@ class SorobanService {
     const transaction = parsed instanceof FeeBumpTransaction ? parsed.innerTransaction : parsed;
     const mismatch = (detail: string) =>
       AppError.badRequest(
-        `signedTxXdr does not match float transfer: ${detail}`,
+        `signedTxXdr does not match ${label}: ${detail}`,
         undefined,
         'signedTxXdr',
       );
 
-    if (transaction.source !== fromAgent) {
+    if (transaction.source !== source) {
       throw mismatch('source account');
     }
     if (
@@ -961,7 +990,7 @@ class SorobanService {
     }
 
     const operation = transaction.operations[0] as Operation.InvokeHostFunction;
-    if (operation.source && operation.source !== fromAgent) {
+    if (operation.source && operation.source !== source) {
       throw mismatch('operation source account');
     }
     if (operation.func.switch().name !== 'hostFunctionTypeInvokeContract') {
@@ -974,19 +1003,14 @@ class SorobanService {
       throw mismatch('contract address');
     }
 
-    const functionName = invocation.functionName();
-    const decodedFunctionName = Buffer.isBuffer(functionName)
-      ? functionName.toString('utf8')
-      : functionName;
-    if (decodedFunctionName !== 'transfer_to_agent') {
+    const actualFunction = invocation.functionName();
+    const decodedFunctionName = Buffer.isBuffer(actualFunction)
+      ? actualFunction.toString('utf8')
+      : actualFunction;
+    if (decodedFunctionName !== functionName) {
       throw mismatch('contract function');
     }
 
-    const expectedArgs = [
-      nativeToScVal(Address.fromString(fromAgent), { type: 'address' }),
-      nativeToScVal(Address.fromString(toAgent), { type: 'address' }),
-      nativeToScVal(amount, { type: 'i128' }),
-    ];
     const actualArgs = invocation.args();
     const argsMatch =
       actualArgs.length === expectedArgs.length &&
