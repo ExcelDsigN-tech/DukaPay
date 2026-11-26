@@ -1,7 +1,7 @@
 /**
  * stores/useUIStore.ts
  *
- * Zustand store for transient UI state — modals, toasts, and
+ * Zustand store for transient UI state: modals, toasts, and
  * global loading indicators.
  *
  * Responsibilities:
@@ -9,7 +9,7 @@
  *  - Toast notification queue
  *  - Global (page-level) loading overlay
  *
- * Design decision: no persistence — UI state should always start fresh.
+ * Design decision: no persistence; UI state should always start fresh.
  */
 
 import { create } from "zustand";
@@ -20,7 +20,7 @@ import { devtools } from "zustand/middleware";
 export type ToastVariant = "success" | "error" | "warning" | "info";
 
 export interface Toast {
-  /** Unique identifier — auto-generated if not provided */
+  /** Unique identifier; auto-generated if not provided */
   id: string;
   message: string;
   variant: ToastVariant;

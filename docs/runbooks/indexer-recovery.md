@@ -14,12 +14,12 @@ curl /api/indexer/status
 
 Check the `last_indexed_ledger` field against the current Stellar ledger sequence (available from the RPC `getLatestLedger` method). A gap larger than `INDEXER_POLL_INTERVAL_MS × 2` indicates lag.
 
-### Via Prometheus Metrics (future)
+### Via Prometheus Metrics
 
-Once Prometheus is deployed, alert on:
+The `IndexerLagHigh` alert (`ops/monitoring/prometheus/alerts.yml`) fires when:
 
-- `indexer_lag_ledgers > 100`
-- `indexer_last_indexed_timestamp > 5 minutes ago`
+- `indexer_lag_ledgers > 100` for 5m (threshold mirrors `INDEXER_LAG_ALERT_THRESHOLD`)
+- Route: critical → `#dukapay-critical` + PagerDuty (see `alertmanager.yml`)
 
 ### Via Database Query
 
@@ -109,10 +109,10 @@ curl /api/admin/indexer/quarantine \
 
 Response includes:
 
-- `event_id` — original Soroban event ID
-- `ledger` — ledger sequence
-- `error` — the error message that caused quarantine
-- `raw_payload` — raw XDR base64 for debugging
+- `event_id`: original Soroban event ID
+- `ledger`: ledger sequence
+- `error`: the error message that caused quarantine
+- `raw_payload`: raw XDR base64 for debugging
 
 ### Reprocess a Quarantined Event
 
@@ -168,7 +168,7 @@ Use this after a hotfix deployment to clear the quarantine backlog.
 
 ## 6. Escalation Contacts
 
-For incidents that cannot be resolved with the steps above, escalate to the on-call platform maintainer.
+For incidents that cannot be resolved with the steps above, escalate to a maintainer.
 
 When escalating, include:
 

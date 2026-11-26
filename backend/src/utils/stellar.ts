@@ -1,11 +1,11 @@
+import { env } from '../config/env.js';
 /**
  * utils/stellar.ts
  *
  * Stellar blockchain utilities: address validation, explorer links, etc.
  */
 
-const STELLAR_EXPLORER_URL =
-  process.env.STELLAR_EXPLORER_URL ?? 'https://stellar.expert/explorer/testnet';
+const STELLAR_EXPLORER_URL = env.STELLAR_EXPLORER_URL;
 
 /**
  * Get Stellar Explorer URL for a transaction hash

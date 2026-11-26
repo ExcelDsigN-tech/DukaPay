@@ -19,7 +19,7 @@ describe('reconcileLoanStroops', () => {
 
   it('sums approved principal and repayments in exact stroops with zero drift once settled', async () => {
     const principal = toStroops('1000');
-    // Two partial repayments that together exactly cover the principal —
+    // Two partial repayments that together exactly cover the principal;
     // this is the "dust reconciliation" invariant: owed == paid to the
     // stroop once a loan is fully repaid.
     const first = toStroops('333.3333333');

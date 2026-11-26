@@ -64,7 +64,7 @@ export default function (data) {
       execute: () => {
         const loanData = generateLoanRequest(testUser);
         const response = http.post(
-          `${baseUrl}/api/v1/loans`,
+          `${baseUrl}/api/loans`,
           JSON.stringify(loanData),
           { headers, tags: { operation: 'create_loan' } }
         );
@@ -92,7 +92,7 @@ export default function (data) {
         const loanId = Math.floor(Math.random() * 1000) + 1;
         const repaymentData = generateRepayment();
         const response = http.post(
-          `${baseUrl}/api/v1/loans/${loanId}/repay`,
+          `${baseUrl}/api/loans/${loanId}/repay`,
           JSON.stringify(repaymentData),
           { headers, tags: { operation: 'process_repayment' } }
         );
@@ -118,7 +118,7 @@ export default function (data) {
         };
         
         const response = http.post(
-          `${baseUrl}/api/v1/remittances`,
+          `${baseUrl}/api/remittances`,
           JSON.stringify(remittanceData),
           { headers, tags: { operation: 'create_remittance' } }
         );
@@ -133,7 +133,7 @@ export default function (data) {
         const loanId = Math.floor(Math.random() * 1000) + 1;
         const disputeData = generateDispute();
         const response = http.post(
-          `${baseUrl}/api/v1/loans/${loanId}/dispute`,
+          `${baseUrl}/api/loans/${loanId}/dispute`,
           JSON.stringify(disputeData),
           { headers, tags: { operation: 'file_dispute' } }
         );

@@ -3,6 +3,13 @@
 version = 4
 
 [[package]]
+name = "agent_vault"
+version = "0.1.0"
+dependencies = [
+ "soroban-sdk",
+]
+
+[[package]]
 name = "ahash"
 version = "0.8.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -238,6 +245,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "circuit_breaker"
+version = "0.1.0"
+dependencies = [
+ "soroban-sdk",
+]
+
+[[package]]
 name = "const-oid"
 version = "0.9.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -465,6 +479,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "75b325c5dbd37f80359721ad39aca5a29fb04c89279657cffdda8736d0c0b9d2"
 
 [[package]]
+name = "dukapay-fuzz"
+version = "0.0.0"
+dependencies = [
+ "agent_vault",
+ "arbitrary",
+ "circuit_breaker",
+ "lending_pool",
+ "libfuzzer-sys",
+ "loan_manager",
+ "multisig_governance",
+ "remittance_nft",
+ "soroban-sdk",
+]
+
+[[package]]
 name = "dyn-clone"
 version = "1.0.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -546,9 +575,9 @@ checksum = "2bfcf67fea2815c2fc3b90873fae90957be12ff417335dfadc7f52927feb03b2"
 
 [[package]]
 name = "ethnum"
-version = "1.5.2"
+version = "1.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ca81e6b4777c89fd810c25a4be2b1bd93ea034fbe58e6a75216a34c6b82c539b"
+checksum = "40404c3f5f511ec4da6fe866ddf6a717c309fdbb69fbbad7b0f3edab8f2e835f"
 
 [[package]]
 name = "ff"
@@ -1037,22 +1066,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "dukapay-fuzz"
-version = "0.0.0"
-dependencies = [
- "arbitrary",
- "lending_pool",
- "libfuzzer-sys",
- "loan_manager",
- "multisig_governance",
- "remittance_nft",
- "soroban-sdk",
-]
-
-[[package]]
 name = "remittance_nft"
 version = "0.0.1"
 dependencies = [
+ "money",
  "soroban-sdk",
 ]
 

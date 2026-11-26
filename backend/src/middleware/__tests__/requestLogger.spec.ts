@@ -32,7 +32,7 @@ describe('Request Logger Production Access Test Harness (#1207)', () => {
 
     const mockReq = {
       method: 'GET',
-      originalUrl: '/api/v1/loans',
+      originalUrl: '/api/loans',
       ip: '10.0.0.1',
       get: (header: string) => (header === 'user-agent' ? 'Jest-Test-Agent' : undefined),
     } as unknown as Request;
@@ -56,7 +56,7 @@ describe('Request Logger Production Access Test Harness (#1207)', () => {
         level: 'http',
         message: 'HTTP request',
         statusCode: 200,
-        url: '/api/v1/loans',
+        url: '/api/loans',
         method: 'GET',
       }),
     );

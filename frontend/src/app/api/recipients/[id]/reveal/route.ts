@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { API_URL } from "../../../../lib/apiConfig";
 
 interface RevealRequestBody {
   field: "email" | "phone" | "name";
@@ -16,12 +17,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   let role: string | null = null;
   try {
-    const sessionRes = await fetch(
-      `${process.env.API_URL ?? "http://localhost:3001"}/auth/session`,
-      {
-        headers: { Authorization: `Bearer ${sessionToken}` },
-      },
-    );
+    const sessionRes = await fetch(`${API_URL}/auth/session`, {
+      headers: { Authorization: `Bearer ${sessionToken}` },
+    });
     if (!sessionRes.ok) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -45,23 +43,20 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const requestId = crypto.randomUUID();
 
   try {
-    const backendRes = await fetch(
-      `${process.env.API_URL ?? "http://localhost:3001"}/recipients/${id}/decrypt`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${sessionToken}`,
-          "X-Request-Id": requestId,
-        },
-        body: JSON.stringify({
-          field: body.field,
-          actor: role,
-          reason: body.reason,
-          request_id: requestId,
-        }),
+    const backendRes = await fetch(`${API_URL}/recipients/${id}/decrypt`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${sessionToken}`,
+        "X-Request-Id": requestId,
       },
-    );
+      body: JSON.stringify({
+        field: body.field,
+        actor: role,
+        reason: body.reason,
+        request_id: requestId,
+      }),
+    });
 
     if (!backendRes.ok) {
       const error = await backendRes.text();

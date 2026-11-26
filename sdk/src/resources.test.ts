@@ -1,270 +1,1125 @@
 import { describe, expect, it, vi } from 'vitest';
+import { DukaPayClient } from './client.js';
 import { HttpClient } from './http.js';
-import { LoansResource, NotificationsResource, PoolResource, PrivacyResource } from './resources.js';
+import type { RemittanceList } from './types.js';
+import {
+  AgentsResource,
+  AuthResource,
+  LoansResource,
+  NotificationsResource,
+  PoolResource,
+  PrivacyResource,
+  ScoresResource,
+  RemittanceResource,
+} from './resources.js';
+import { ValidationError } from './errors.js';
 
-// Minimal valid Stellar G-address (56 chars starting with G)
-const VALID_ADDR = 'G' + 'A'.repeat(55);
-// A contract C-address (not a G-address) — invalid as a borrowerPublicKey
-const CONTRACT_ADDR = 'C' + 'A'.repeat(55);
+const VALID_ADDRESS = 'GDZST3XVCDTUJ76ZAV2HA72KYRF5KKDTDQH2CBLFGEXU5PZC3T7KRMHQ';
 
-function makeHttp(mockFetch: ReturnType<typeof vi.fn>): HttpClient {
+describe('RemittanceResource', () => {
+  it('passes list filters through as query parameters', async () => {
+    const response: RemittanceList = {
+      success: true,
+      data: [],
+      page: { next_cursor: null, snapshot_seq: '1', total_at_snapshot: 0, limit: 50 },
+    };
+    const get = vi.fn().mockResolvedValue(response);
+    const resource = new RemittanceResource({ get } as unknown as HttpClient);
+
+    await expect(resource.list({ status: 'pending', limit: 10 })).resolves.toBe(response);
+    expect(get).toHaveBeenCalledWith('/remittances', {
+      query: { status: 'pending', limit: 10 },
+    });
+  });
+
+  it('lists remittances with no filters when called without params', async () => {
+    const get = vi.fn().mockResolvedValue({ success: true, data: [], page: {} });
+    const resource = new RemittanceResource({ get } as unknown as HttpClient);
+
+    await resource.list();
+
+    expect(get).toHaveBeenCalledWith('/remittances', { query: {} });
+  });
+
+  it('fetches a single remittance by id', async () => {
+    const get = vi.fn().mockResolvedValue({ success: true, data: { id: 'abc' } });
+    const resource = new RemittanceResource({ get } as unknown as HttpClient);
+
+    await resource.get('abc');
+
+    expect(get).toHaveBeenCalledWith('/remittances/abc');
+  });
+
+  it('throws ValidationError when recipient is invalid in buildSend', () => {
+    const resource = new RemittanceResource({ post: vi.fn() } as unknown as HttpClient);
+
+    expect(() =>
+      resource.buildSend({
+        recipient: 'invalid-address',
+        amount: 100,
+        fromCurrency: 'USDC',
+        toCurrency: 'EURC',
+      }),
+    ).toThrow(ValidationError);
+  });
+
+  it('throws ValidationError when amount is invalid in buildSend', () => {
+    const resource = new RemittanceResource({ post: vi.fn() } as unknown as HttpClient);
+
+    expect(() =>
+      resource.buildSend({
+        recipient: VALID_ADDRESS,
+        amount: 0,
+        fromCurrency: 'USDC',
+        toCurrency: 'EURC',
+      }),
+    ).toThrow(ValidationError);
+  });
+
+  it('creates a remittance with the body the API expects', async () => {
+    const post = vi.fn().mockResolvedValue({ success: true, data: { id: 'abc' } });
+    const resource = new RemittanceResource({ post } as unknown as HttpClient);
+
+    await resource.buildSend({
+      recipient: VALID_ADDRESS,
+      amount: 100,
+      fromCurrency: 'USDC',
+      toCurrency: 'EURC',
+      memo: 'rent',
+    });
+
+    expect(post).toHaveBeenCalledWith('/remittances', {
+      recipientAddress: VALID_ADDRESS,
+      amount: 100,
+      fromCurrency: 'USDC',
+      toCurrency: 'EURC',
+      memo: 'rent',
+    });
+  });
+
+  it('omits the memo when it is not provided', async () => {
+    const post = vi.fn().mockResolvedValue({ success: true, data: { id: 'abc' } });
+    const resource = new RemittanceResource({ post } as unknown as HttpClient);
+
+    await resource.buildSend({
+      recipient: VALID_ADDRESS,
+      amount: 100,
+      fromCurrency: 'USDC',
+      toCurrency: 'USDC',
+    });
+
+    expect(post).toHaveBeenCalledWith('/remittances', {
+      recipientAddress: VALID_ADDRESS,
+      amount: 100,
+      fromCurrency: 'USDC',
+      toCurrency: 'USDC',
+    });
+  });
+
+  it('submits a signed remittance XDR', async () => {
+    const post = vi.fn().mockResolvedValue({ success: true, data: { id: 'abc' } });
+    const resource = new RemittanceResource({ post } as unknown as HttpClient);
+
+    await resource.submit('abc', 'signed-xdr');
+
+    expect(post).toHaveBeenCalledWith('/remittances/abc/submit', { signedXdr: 'signed-xdr' });
+  });
+});
+
+describe('AuthResource', () => {
+  it('throws ValidationError when publicKey is invalid in challenge', () => {
+    const resource = new AuthResource({ post: vi.fn() } as unknown as HttpClient);
+
+    expect(() => resource.challenge('invalid-address')).toThrow(ValidationError);
+  });
+
+  it('accepts valid publicKey in challenge', async () => {
+    const post = vi.fn().mockResolvedValue({ message: 'test', nonce: 'test', expiresAt: '' });
+    const resource = new AuthResource({ post } as unknown as HttpClient);
+    const validAddress = 'GDZST3XVCDTUJ76ZAV2HA72KYRF5KKDTDQH2CBLFGEXU5PZC3T7KRMHQ';
+
+    await resource.challenge(validAddress);
+
+    expect(post).toHaveBeenCalledWith('/auth/challenge', { publicKey: validAddress }, { anonymous: true });
+  });
+
+  it('throws ValidationError when publicKey is invalid in login', () => {
+    const resource = new AuthResource({ post: vi.fn() } as unknown as HttpClient);
+
+    expect(() =>
+      resource.login({
+        publicKey: 'invalid-address',
+        message: 'test-message',
+        signature: 'test-signature',
+      }),
+    ).toThrow(ValidationError);
+  });
+
+  it('throws ValidationError when message is invalid in login', () => {
+    const resource = new AuthResource({ post: vi.fn() } as unknown as HttpClient);
+    const validAddress = 'GDZST3XVCDTUJ76ZAV2HA72KYRF5KKDTDQH2CBLFGEXU5PZC3T7KRMHQ';
+
+    expect(() =>
+      resource.login({
+        publicKey: validAddress,
+        message: '',
+        signature: 'test-signature',
+      }),
+    ).toThrow(ValidationError);
+  });
+
+  it('throws ValidationError when signature is invalid in login', () => {
+    const resource = new AuthResource({ post: vi.fn() } as unknown as HttpClient);
+    const validAddress = 'GDZST3XVCDTUJ76ZAV2HA72KYRF5KKDTDQH2CBLFGEXU5PZC3T7KRMHQ';
+
+    expect(() =>
+      resource.login({
+        publicKey: validAddress,
+        message: 'test-message',
+        signature: '',
+      }),
+    ).toThrow(ValidationError);
+  });
+
+  it('accepts valid login parameters', async () => {
+    const post = vi.fn().mockResolvedValue({ token: 'test', expiresAt: '', address: '', scopes: [] });
+    const resource = new AuthResource({ post } as unknown as HttpClient);
+    const validAddress = 'GDZST3XVCDTUJ76ZAV2HA72KYRF5KKDTDQH2CBLFGEXU5PZC3T7KRMHQ';
+
+    await resource.login({
+      publicKey: validAddress,
+      message: 'test-message',
+      signature: 'test-signature',
+    });
+
+    expect(post).toHaveBeenCalledWith(
+      '/auth/login',
+      {
+        publicKey: validAddress,
+        message: 'test-message',
+        signature: 'test-signature',
+      },
+      { anonymous: true },
+    );
+  });
+
+  it('refreshes a session anonymously so a 401 cannot refresh again', async () => {
+    const post = vi.fn().mockResolvedValue({ token: 'next', expiresAt: '', address: '', scopes: [] });
+    const resource = new AuthResource({ post } as unknown as HttpClient);
+
+    await resource.refresh('refresh-token');
+
+    expect(post).toHaveBeenCalledWith('/auth/refresh', { refreshToken: 'refresh-token' }, { anonymous: true });
+  });
+
+  it('throws ValidationError when refreshToken is empty', () => {
+    const resource = new AuthResource({ post: vi.fn() } as unknown as HttpClient);
+
+    expect(() => resource.refresh('')).toThrow(ValidationError);
+  });
+
+  it('logs out every session via POST /auth/logout-all', async () => {
+    const post = vi.fn().mockResolvedValue(undefined);
+    const resource = new AuthResource({ post } as unknown as HttpClient);
+
+    await resource.logoutAll();
+
+    expect(post).toHaveBeenCalledWith('/auth/logout-all');
+  });
+
+  it('submits KYC to POST /auth/kyc', async () => {
+    const post = vi.fn().mockResolvedValue({ success: true, kycId: 'kyc_1' });
+    const resource = new AuthResource({ post } as unknown as HttpClient);
+
+    await resource.submitKyc({
+      firstName: 'Ada',
+      lastName: 'Lovelace',
+      countryCode: 'KE',
+      dateOfBirth: '1990-01-01',
+    });
+
+    expect(post).toHaveBeenCalledWith('/auth/kyc', {
+      firstName: 'Ada',
+      lastName: 'Lovelace',
+      countryCode: 'KE',
+      dateOfBirth: '1990-01-01',
+    });
+  });
+
+  it('throws ValidationError when KYC fields are incomplete', () => {
+    const resource = new AuthResource({ post: vi.fn() } as unknown as HttpClient);
+
+    expect(() => resource.submitKyc({ firstName: '', lastName: 'Lovelace', countryCode: 'KE' })).toThrow(
+      ValidationError,
+    );
+    expect(() => resource.submitKyc({ firstName: 'Ada', lastName: 'Lovelace', countryCode: 'KEN' })).toThrow(
+      ValidationError,
+    );
+  });
+});
+
+describe('LoansResource', () => {
+  it('lists the loans of a borrower', async () => {
+    const get = vi.fn().mockResolvedValue({ success: true, borrower: VALID_ADDRESS, loans: [] });
+    const resource = new LoansResource({ get } as unknown as HttpClient);
+
+    await resource.list({ borrower: VALID_ADDRESS, status: 'active', limit: 20 });
+
+    expect(get).toHaveBeenCalledWith(`/loans/borrower/${VALID_ADDRESS}`, {
+      query: { status: 'active', from: undefined, to: undefined, limit: 20, cursor: undefined },
+    });
+  });
+
+  it('throws ValidationError when the borrower address is invalid in list', () => {
+    const resource = new LoansResource({ get: vi.fn() } as unknown as HttpClient);
+
+    expect(() => resource.list({ borrower: 'invalid-address' })).toThrow(ValidationError);
+  });
+
+  it('throws ValidationError when loanId is not positive in get', () => {
+    const resource = new LoansResource({ get: vi.fn() } as unknown as HttpClient);
+
+    expect(() => resource.get(-1)).toThrow(ValidationError);
+    expect(() => resource.get('0')).toThrow(ValidationError);
+    expect(() => resource.get('not-a-number')).toThrow(ValidationError);
+  });
+
+  it('accepts valid loanId in get', async () => {
+    const get = vi.fn().mockResolvedValue({ id: 1 });
+    const resource = new LoansResource({ get } as unknown as HttpClient);
+
+    await resource.get(42);
+    expect(get).toHaveBeenCalledWith('/loans/42');
+
+    await resource.get('123');
+    expect(get).toHaveBeenCalledWith('/loans/123');
+  });
+
+  it('throws ValidationError when loanId is invalid in buildRepay', () => {
+    const resource = new LoansResource({ post: vi.fn() } as unknown as HttpClient);
+
+    expect(() => resource.buildRepay(-1, 100, VALID_ADDRESS)).toThrow(ValidationError);
+  });
+
+  it('throws ValidationError when amount is invalid in buildRepay', () => {
+    const resource = new LoansResource({ post: vi.fn() } as unknown as HttpClient);
+
+    expect(() => resource.buildRepay(1, 0, VALID_ADDRESS)).toThrow(ValidationError);
+    expect(() => resource.buildRepay(1, -5, VALID_ADDRESS)).toThrow(ValidationError);
+    // More than 7 decimal places is finer than one stroop.
+    expect(() => resource.buildRepay(1, 1.12345678, VALID_ADDRESS)).toThrow(ValidationError);
+  });
+
+  it('accepts a decimal amount in whole tokens in buildRepay', async () => {
+    const post = vi.fn().mockResolvedValue({ success: true, unsignedTxXdr: 'test-xdr' });
+    const resource = new LoansResource({ post } as unknown as HttpClient);
+
+    await resource.buildRepay(1, 1.5, VALID_ADDRESS);
+
+    expect(post).toHaveBeenCalledWith('/loans/1/repay', {
+      amount: 1.5,
+      borrowerPublicKey: VALID_ADDRESS,
+    });
+  });
+
+  it('throws ValidationError when borrowerPublicKey is invalid in buildRepay', () => {
+    const resource = new LoansResource({ post: vi.fn() } as unknown as HttpClient);
+
+    expect(() => resource.buildRepay(1, 100, 'invalid-address')).toThrow(ValidationError);
+  });
+
+  it('builds a repayment against POST /loans/:loanId/repay', async () => {
+    const post = vi.fn().mockResolvedValue({
+      success: true,
+      loanId: 42,
+      unsignedTxXdr: 'test-xdr',
+      networkPassphrase: 'Test SDF Network ; September 2015',
+    });
+    const resource = new LoansResource({ post } as unknown as HttpClient);
+
+    await resource.buildRepay(42, 100, VALID_ADDRESS);
+
+    expect(post).toHaveBeenCalledWith('/loans/42/repay', {
+      amount: 100,
+      borrowerPublicKey: VALID_ADDRESS,
+    });
+  });
+
+  it.each([30, 60, 90] as const)('previews amortization for a %s day term', async (termDays) => {
+    const post = vi.fn().mockResolvedValue({ schedule: [] });
+    const resource = new LoansResource({ post } as unknown as HttpClient);
+
+    await resource.amortizationPreview({ amount: 250.5, termDays });
+
+    expect(post).toHaveBeenCalledWith('/loans/amortization-preview', { amount: 250.5, termDays });
+  });
+
+  it('throws ValidationError when termDays is not 30, 60, or 90', () => {
+    const resource = new LoansResource({ post: vi.fn() } as unknown as HttpClient);
+
+    expect(() => resource.amortizationPreview({ amount: 100, termDays: 45 as 30 })).toThrow(ValidationError);
+  });
+
+  it('loads an amortization schedule by loan id', async () => {
+    const get = vi.fn().mockResolvedValue({ loanId: 42, schedule: [] });
+    const resource = new LoansResource({ get } as unknown as HttpClient);
+
+    await resource.amortizationSchedule(42);
+
+    expect(get).toHaveBeenCalledWith('/loans/42/amortization-schedule');
+  });
+
+  it('loads a repayment preview by loan id', async () => {
+    const get = vi.fn().mockResolvedValue({ loanId: 42, amountDue: 10 });
+    const resource = new LoansResource({ get } as unknown as HttpClient);
+
+    await resource.repaymentPreview('42');
+
+    expect(get).toHaveBeenCalledWith('/loans/42/repayment-preview');
+  });
+
+  it('loads loan events by loan id', async () => {
+    const get = vi.fn().mockResolvedValue({ events: [] });
+    const resource = new LoansResource({ get } as unknown as HttpClient);
+
+    await resource.events(7);
+
+    expect(get).toHaveBeenCalledWith('/loans/7/events');
+  });
+});
+
+describe('PoolResource', () => {
+  it('resolves the analytics envelope and preserves the snapshot payload', async () => {
+    const response: PoolAnalyticsResponse = {
+      success: true,
+      analytics: {
+        totalDeposits: 1000,
+        totalWithdrawals: 250,
+        totalYieldDistributed: 42.5,
+        totalLoansIssued: 7,
+        totalVolume: 5000,
+        activeAgents: 3,
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      },
+      source: 'database',
+    };
+    const get = vi.fn().mockResolvedValue(response);
+    const resource = new PoolResource({ get } as unknown as HttpClient);
+
+    const result = await resource.analytics();
+
+    expect(result).toBe(response);
+    expect(result.analytics.totalLoansIssued).toBe(7);
+    expect(result.source).toBe('database');
+    expect(get).toHaveBeenCalledWith('/pool/analytics', { anonymous: true });
+  });
+
+  it('throws ValidationError when address is invalid in depositor', () => {
+    const resource = new PoolResource({ get: vi.fn() } as unknown as HttpClient);
+
+    expect(() => resource.depositor('invalid-address')).toThrow(ValidationError);
+  });
+
+  it('accepts valid address in depositor', async () => {
+    const get = vi.fn().mockResolvedValue({});
+    const resource = new PoolResource({ get } as unknown as HttpClient);
+    const validAddress = 'GDZST3XVCDTUJ76ZAV2HA72KYRF5KKDTDQH2CBLFGEXU5PZC3T7KRMHQ';
+
+    await resource.depositor(validAddress);
+
+    expect(get).toHaveBeenCalledWith(`/pool/depositor/${validAddress}`);
+  });
+
+  it('throws ValidationError when address is invalid in yieldHistory', () => {
+    const resource = new PoolResource({ get: vi.fn() } as unknown as HttpClient);
+
+    expect(() => resource.yieldHistory('invalid-address')).toThrow(ValidationError);
+  });
+
+  it('throws ValidationError when parameters are invalid in buildDeposit', () => {
+    const resource = new PoolResource({ post: vi.fn() } as unknown as HttpClient);
+    const validAddress = 'GDZST3XVCDTUJ76ZAV2HA72KYRF5KKDTDQH2CBLFGEXU5PZC3T7KRMHQ';
+
+    expect(() =>
+      resource.buildDeposit({
+        token: 'invalid-token',
+        amount: '100',
+        from: validAddress,
+      }),
+    ).toThrow(ValidationError);
+
+    expect(() =>
+      resource.buildDeposit({
+        token: validAddress,
+        amount: 'not-a-number',
+        from: validAddress,
+      }),
+    ).toThrow(ValidationError);
+
+    expect(() =>
+      resource.buildDeposit({
+        token: validAddress,
+        amount: '100',
+        from: 'invalid-address',
+      }),
+    ).toThrow(ValidationError);
+  });
+
+  it('accepts valid buildDeposit parameters', async () => {
+    const post = vi.fn().mockResolvedValue({ xdr: 'test-xdr' });
+    const resource = new PoolResource({ post } as unknown as HttpClient);
+    const validAddress = 'GDZST3XVCDTUJ76ZAV2HA72KYRF5KKDTDQH2CBLFGEXU5PZC3T7KRMHQ';
+
+    await resource.buildDeposit({
+      token: validAddress,
+      amount: '100.50',
+      from: validAddress,
+    });
+
+    expect(post).toHaveBeenCalledWith('/pool/build-deposit', {
+      token: validAddress,
+      amount: '100.50',
+      from: validAddress,
+    });
+  });
+
+  it('accepts valid buildWithdraw parameters', async () => {
+    const post = vi.fn().mockResolvedValue({ xdr: 'test-xdr' });
+    const resource = new PoolResource({ post } as unknown as HttpClient);
+    const validAddress = 'GDZST3XVCDTUJ76ZAV2HA72KYRF5KKDTDQH2CBLFGEXU5PZC3T7KRMHQ';
+
+    await resource.buildWithdraw({
+      token: validAddress,
+      shares: '50.25',
+      from: validAddress,
+    });
+
+    expect(post).toHaveBeenCalledWith('/pool/build-withdraw', {
+      token: validAddress,
+      shares: '50.25',
+      from: validAddress,
+    });
+  });
+});
+
+describe('ScoresResource', () => {
+  it('throws ValidationError when address is invalid in get', () => {
+    const resource = new ScoresResource({ get: vi.fn() } as unknown as HttpClient);
+
+    expect(() => resource.get('invalid-address')).toThrow(ValidationError);
+  });
+
+  it('reads a score from the singular /score route', async () => {
+    const get = vi.fn().mockResolvedValue({ success: true, userId: VALID_ADDRESS, score: 700 });
+    const resource = new ScoresResource({ get } as unknown as HttpClient);
+
+    await resource.get(VALID_ADDRESS);
+
+    expect(get).toHaveBeenCalledWith(`/score/${VALID_ADDRESS}`);
+  });
+
+  it('reads score history from GET /score/:address/history', async () => {
+    const get = vi.fn().mockResolvedValue({ points: [] });
+    const resource = new ScoresResource({ get } as unknown as HttpClient);
+
+    await resource.history(VALID_ADDRESS);
+
+    expect(get).toHaveBeenCalledWith(`/score/${VALID_ADDRESS}/history`);
+  });
+
+  it('reads the score NFT from GET /score/:address/nft', async () => {
+    const get = vi.fn().mockResolvedValue({ tokenId: '1' });
+    const resource = new ScoresResource({ get } as unknown as HttpClient);
+
+    await resource.nft(VALID_ADDRESS);
+
+    expect(get).toHaveBeenCalledWith(`/score/${VALID_ADDRESS}/nft`);
+  });
+
+  it('reads a score breakdown from GET /score/:userId/breakdown', async () => {
+    const get = vi.fn().mockResolvedValue({ factors: [] });
+    const resource = new ScoresResource({ get } as unknown as HttpClient);
+
+    await resource.breakdown(VALID_ADDRESS);
+
+    expect(get).toHaveBeenCalledWith(`/score/${VALID_ADDRESS}/breakdown`);
+  });
+
+  it('throws ValidationError when history, nft, or breakdown receive an invalid address', () => {
+    const resource = new ScoresResource({ get: vi.fn() } as unknown as HttpClient);
+
+    expect(() => resource.history('not-an-address')).toThrow(ValidationError);
+    expect(() => resource.nft('not-an-address')).toThrow(ValidationError);
+    expect(() => resource.breakdown('not-an-address')).toThrow(ValidationError);
+  });
+});
+
+const SECOND_ADDRESS = 'GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H';
+
+describe('AgentsResource', () => {
+  it('fetches my-assignments from GET /agents/my-assignments', async () => {
+    const get = vi.fn().mockResolvedValue({
+      success: true,
+      data: { agentPublicKey: VALID_ADDRESS, assignments: [] },
+    });
+    const resource = new AgentsResource({ get } as unknown as HttpClient);
+
+    await resource.myAssignments();
+
+    expect(get).toHaveBeenCalledWith('/agents/my-assignments');
+  });
+
+  it('assigns a borrower to an agent via POST /agents/:agentPublicKey/assignees', async () => {
+    const post = vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        agentPublicKey: VALID_ADDRESS,
+        borrowerPublicKey: SECOND_ADDRESS,
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+    });
+    const resource = new AgentsResource({ post } as unknown as HttpClient);
+
+    await resource.assignBorrower({
+      agentPublicKey: VALID_ADDRESS,
+      borrowerPublicKey: SECOND_ADDRESS,
+    });
+
+    expect(post).toHaveBeenCalledWith(`/agents/${VALID_ADDRESS}/assignees`, {
+      borrowerPublicKey: SECOND_ADDRESS,
+    });
+  });
+
+  it('throws ValidationError when assignBorrower receives invalid addresses or identical addresses', () => {
+    const resource = new AgentsResource({ post: vi.fn() } as unknown as HttpClient);
+
+    expect(() =>
+      resource.assignBorrower({
+        agentPublicKey: 'bad-address',
+        borrowerPublicKey: SECOND_ADDRESS,
+      }),
+    ).toThrow(ValidationError);
+
+    expect(() =>
+      resource.assignBorrower({
+        agentPublicKey: VALID_ADDRESS,
+        borrowerPublicKey: 'bad-address',
+      }),
+    ).toThrow(ValidationError);
+
+    expect(() =>
+      resource.assignBorrower({
+        agentPublicKey: VALID_ADDRESS,
+        borrowerPublicKey: VALID_ADDRESS,
+      }),
+    ).toThrow(ValidationError);
+  });
+
+  it('removes a borrower assignment via DELETE /agents/:agentPublicKey/assignees/:borrowerPublicKey', async () => {
+    const del = vi.fn().mockResolvedValue({ success: true, data: { removed: true } });
+    const resource = new AgentsResource({ delete: del } as unknown as HttpClient);
+
+    await resource.removeBorrower({
+      agentPublicKey: VALID_ADDRESS,
+      borrowerPublicKey: SECOND_ADDRESS,
+    });
+
+    expect(del).toHaveBeenCalledWith(
+      `/agents/${VALID_ADDRESS}/assignees/${SECOND_ADDRESS}`,
+    );
+  });
+
+  it('throws ValidationError when removeBorrower receives invalid addresses', () => {
+    const resource = new AgentsResource({ delete: vi.fn() } as unknown as HttpClient);
+
+    expect(() =>
+      resource.removeBorrower({
+        agentPublicKey: 'bad-address',
+        borrowerPublicKey: SECOND_ADDRESS,
+      }),
+    ).toThrow(ValidationError);
+
+    expect(() =>
+      resource.removeBorrower({
+        agentPublicKey: VALID_ADDRESS,
+        borrowerPublicKey: 'bad-address',
+      }),
+    ).toThrow(ValidationError);
+  });
+
+  it('fetches agent dashboard metrics and clears dashboard cache', async () => {
+    const get = vi.fn().mockResolvedValue({ agentPublicKey: VALID_ADDRESS });
+    const del = vi.fn().mockResolvedValue({ success: true, message: 'cleared' });
+    const resource = new AgentsResource({ get, delete: del } as unknown as HttpClient);
+
+    await resource.dashboard();
+    expect(get).toHaveBeenCalledWith('/agents/dashboard');
+
+    await resource.clearDashboardCache();
+    expect(del).toHaveBeenCalledWith('/agents/dashboard/cache');
+  });
+
+  it('initiates a float transfer with whole-token amounts and optional reason', async () => {
+    const post = vi.fn().mockResolvedValue({ success: true, data: {} });
+    const resource = new AgentsResource({ post } as unknown as HttpClient);
+
+    await resource.initiateFloatTransfer({
+      fromAgent: VALID_ADDRESS,
+      toAgent: SECOND_ADDRESS,
+      amount: 5000,
+      reason: 'liquidity rebalance',
+    });
+
+    expect(post).toHaveBeenCalledWith('/agents/float-transfer', {
+      fromAgent: VALID_ADDRESS,
+      toAgent: SECOND_ADDRESS,
+      amount: 5000,
+      reason: 'liquidity rebalance',
+    });
+
+    await resource.initiateFloatTransfer({
+      fromAgent: VALID_ADDRESS,
+      toAgent: SECOND_ADDRESS,
+      amount: 250.5,
+    });
+
+    expect(post).toHaveBeenCalledWith('/agents/float-transfer', {
+      fromAgent: VALID_ADDRESS,
+      toAgent: SECOND_ADDRESS,
+      amount: 250.5,
+    });
+  });
+
+  it('throws ValidationError when initiateFloatTransfer parameters are invalid', () => {
+    const resource = new AgentsResource({ post: vi.fn() } as unknown as HttpClient);
+
+    expect(() =>
+      resource.initiateFloatTransfer({
+        fromAgent: 'invalid',
+        toAgent: SECOND_ADDRESS,
+        amount: 100,
+      }),
+    ).toThrow(ValidationError);
+
+    expect(() =>
+      resource.initiateFloatTransfer({
+        fromAgent: VALID_ADDRESS,
+        toAgent: 'invalid',
+        amount: 100,
+      }),
+    ).toThrow(ValidationError);
+
+    expect(() =>
+      resource.initiateFloatTransfer({
+        fromAgent: VALID_ADDRESS,
+        toAgent: VALID_ADDRESS,
+        amount: 100,
+      }),
+    ).toThrow(ValidationError);
+
+    expect(() =>
+      resource.initiateFloatTransfer({
+        fromAgent: VALID_ADDRESS,
+        toAgent: SECOND_ADDRESS,
+        amount: 0,
+      }),
+    ).toThrow(ValidationError);
+
+    expect(() =>
+      resource.initiateFloatTransfer({
+        fromAgent: VALID_ADDRESS,
+        toAgent: SECOND_ADDRESS,
+        amount: 1.123456789,
+      }),
+    ).toThrow(ValidationError);
+
+    expect(() =>
+      resource.initiateFloatTransfer({
+        fromAgent: VALID_ADDRESS,
+        toAgent: SECOND_ADDRESS,
+        amount: '100' as unknown as number,
+      }),
+    ).toThrow(ValidationError);
+  });
+
+  it('approves, submits, and rejects float transfers and validates inputs', async () => {
+    const post = vi.fn().mockResolvedValue({ success: true, data: {} });
+    const resource = new AgentsResource({ post } as unknown as HttpClient);
+
+    await resource.approveFloatTransfer('ft_123');
+    expect(post).toHaveBeenCalledWith('/agents/float-transfer/ft_123/approve');
+
+    await resource.submitFloatTransfer('ft_123', 'c2lnbmVkLXhkcg==');
+    expect(post).toHaveBeenCalledWith('/agents/float-transfer/ft_123/submit', {
+      signedTxXdr: 'c2lnbmVkLXhkcg==',
+    });
+
+    await resource.rejectFloatTransfer('ft_123');
+    expect(post).toHaveBeenCalledWith('/agents/float-transfer/ft_123/reject');
+
+    expect(() => resource.approveFloatTransfer('')).toThrow(ValidationError);
+    expect(() => resource.submitFloatTransfer('ft_123', '')).toThrow(ValidationError);
+    expect(() => resource.submitFloatTransfer('bad/id', 'c2lnbmVkLXhkcg==')).toThrow(
+      ValidationError,
+    );
+    expect(() => resource.rejectFloatTransfer('   ')).toThrow(ValidationError);
+    expect(() => resource.approveFloatTransfer('ft/../../loans')).toThrow(ValidationError);
+  });
+
+  it('gets and sets pair limits with validation', async () => {
+    const get = vi.fn().mockResolvedValue({
+      success: true,
+      data: { dailyLimit: 100000, weeklyLimit: 500000 },
+    });
+    const put = vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        fromAgent: VALID_ADDRESS,
+        toAgent: SECOND_ADDRESS,
+        dailyLimit: 200000,
+        weeklyLimit: 800000,
+      },
+    });
+    const resource = new AgentsResource({ get, put } as unknown as HttpClient);
+
+    await resource.getPairLimits({ fromAgent: VALID_ADDRESS, toAgent: SECOND_ADDRESS });
+    expect(get).toHaveBeenCalledWith('/agents/float-transfer/limits', {
+      query: { fromAgent: VALID_ADDRESS, toAgent: SECOND_ADDRESS },
+    });
+
+    await resource.setPairLimits({
+      fromAgent: VALID_ADDRESS,
+      toAgent: SECOND_ADDRESS,
+      dailyLimit: 200000,
+      weeklyLimit: 800000,
+    });
+    expect(put).toHaveBeenCalledWith('/agents/float-transfer/limits', {
+      fromAgent: VALID_ADDRESS,
+      toAgent: SECOND_ADDRESS,
+      dailyLimit: 200000,
+      weeklyLimit: 800000,
+    });
+
+    expect(() =>
+      resource.getPairLimits({ fromAgent: 'invalid', toAgent: SECOND_ADDRESS }),
+    ).toThrow(ValidationError);
+
+    expect(() =>
+      resource.setPairLimits({
+        fromAgent: VALID_ADDRESS,
+        toAgent: VALID_ADDRESS,
+        dailyLimit: 200000,
+        weeklyLimit: 800000,
+      }),
+    ).toThrow(ValidationError);
+
+    expect(() =>
+      resource.setPairLimits({
+        fromAgent: VALID_ADDRESS,
+        toAgent: SECOND_ADDRESS,
+        dailyLimit: 0,
+        weeklyLimit: 800000,
+      }),
+    ).toThrow(ValidationError);
+  });
+});
+
+describe('NotificationsResource', () => {
+  it('lists notifications with filters', async () => {
+    const response = {
+      success: true,
+      data: { notifications: [], unreadCount: 0 },
+    };
+    const get = vi.fn().mockResolvedValue(response);
+    const resource = new NotificationsResource({ get } as unknown as HttpClient);
+
+    await expect(
+      resource.list({ type: 'repayment_due', status: 'unread', from: '2026-01-01', limit: 20 }),
+    ).resolves.toBe(response);
+    expect(get).toHaveBeenCalledWith('/notifications', {
+      query: {
+        type: 'repayment_due',
+        status: 'unread',
+        from: '2026-01-01',
+        to: undefined,
+        limit: 20,
+      },
+    });
+  });
+
+  it('lists notifications with no filters', async () => {
+    const get = vi.fn().mockResolvedValue({ success: true, data: { notifications: [] } });
+    const resource = new NotificationsResource({ get } as unknown as HttpClient);
+
+    await resource.list();
+
+    expect(get).toHaveBeenCalledWith('/notifications', {
+      query: { type: undefined, status: undefined, from: undefined, to: undefined, limit: undefined },
+    });
+  });
+
+  it('gets and updates preferences', async () => {
+    const preferences = {
+      emailEnabled: true,
+      smsEnabled: false,
+      phone: null,
+      perTypeOverrides: { repayment_due: true },
+    };
+    const get = vi.fn().mockResolvedValue(preferences);
+    const put = vi.fn().mockResolvedValue(preferences);
+    const resource = new NotificationsResource({ get, put } as unknown as HttpClient);
+
+    await expect(resource.getPreferences()).resolves.toBe(preferences);
+    expect(get).toHaveBeenCalledWith('/notifications/preferences');
+
+    await expect(resource.updatePreferences(preferences)).resolves.toBe(preferences);
+    expect(put).toHaveBeenCalledWith('/notifications/preferences', preferences);
+  });
+
+  it('rejects invalid preference values before sending', () => {
+    const put = vi.fn();
+    const resource = new NotificationsResource({ put } as unknown as HttpClient);
+
+    expect(() =>
+      resource.updatePreferences({
+        emailEnabled: true,
+        smsEnabled: true,
+        phone: null,
+      }),
+    ).toThrow(ValidationError);
+    expect(() =>
+      resource.updatePreferences({
+        emailEnabled: true,
+        smsEnabled: false,
+        perTypeOverrides: { repayment_due: 'yes' } as unknown as Record<string, boolean>,
+      }),
+    ).toThrow(ValidationError);
+    expect(put).not.toHaveBeenCalled();
+  });
+
+  it('marks notification ids as read', async () => {
+    const post = vi.fn().mockResolvedValue({ success: true });
+    const resource = new NotificationsResource({ post } as unknown as HttpClient);
+
+    await expect(resource.markRead([1, 2])).resolves.toEqual({ success: true });
+    expect(post).toHaveBeenCalledWith('/notifications/mark-read', { ids: [1, 2] });
+  });
+
+  it('rejects an empty ids array before sending', () => {
+    const post = vi.fn();
+    const resource = new NotificationsResource({ post } as unknown as HttpClient);
+
+    expect(() => resource.markRead([])).toThrow(ValidationError);
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it('rejects invalid ids before sending', () => {
+    const post = vi.fn();
+    const resource = new NotificationsResource({ post } as unknown as HttpClient);
+
+    expect(() => resource.markRead([1, -2])).toThrow(ValidationError);
+    expect(() => resource.markRead(Array.from({ length: 101 }, (_, i) => i + 1))).toThrow(
+      ValidationError,
+    );
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it('marks all notifications as read', async () => {
+    const post = vi.fn().mockResolvedValue({ success: true });
+    const resource = new NotificationsResource({ post } as unknown as HttpClient);
+
+    await expect(resource.markAllRead()).resolves.toEqual({ success: true });
+    expect(post).toHaveBeenCalledWith('/notifications/mark-all-read');
+  });
+
+  it('is exposed as client.notifications', () => {
+    const client = new DukaPayClient({ baseUrl: 'https://api.example.com' });
+
+    expect(client.notifications).toBeInstanceOf(NotificationsResource);
+  });
+});
+
+// ── PrivacyResource (#935) ────────────────────────────────────────────────────
+
+function streamHttp(mockFetch: ReturnType<typeof vi.fn>): HttpClient {
   return new HttpClient({ baseUrl: 'https://api.example.com', fetch: mockFetch });
 }
 
-function okResponse(body: unknown): Response {
+function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
-    status: 200,
+    status,
     headers: { 'Content-Type': 'application/json' },
   });
 }
 
-// ── LoansResource builders ────────────────────────────────────────────────────
-
-describe('LoansResource.requestLoan', () => {
-  it('posts to /loans/request with amount and borrowerPublicKey', async () => {
-    const mockFetch = vi.fn().mockResolvedValue(okResponse({ id: 1 }));
-    const loans = new LoansResource(makeHttp(mockFetch));
-
-    await loans.requestLoan({ amount: '1000000', borrowerPublicKey: VALID_ADDR });
-
-    expect(mockFetch).toHaveBeenCalledOnce();
-    const [url, init] = mockFetch.mock.calls[0] as [URL, RequestInit];
-    expect(url.pathname).toBe('/loans/request');
-    expect(JSON.parse(init.body as string)).toMatchObject({
-      amount: '1000000',
-      borrowerPublicKey: VALID_ADDR,
-    });
-  });
-});
-
-describe('LoansResource.buildDepositCollateral', () => {
-  it('posts to /loans/:id/build-deposit-collateral', async () => {
-    const mockFetch = vi.fn().mockResolvedValue(okResponse({ xdr: 'abc' }));
-    const loans = new LoansResource(makeHttp(mockFetch));
-
-    await loans.buildDepositCollateral(42, { amount: '500000', borrowerPublicKey: VALID_ADDR });
-
-    const [url] = mockFetch.mock.calls[0] as [URL];
-    expect(url.pathname).toBe('/loans/42/build-deposit-collateral');
-  });
-});
-
-describe('LoansResource.buildReleaseCollateral', () => {
-  it('posts to /loans/:id/build-release-collateral', async () => {
-    const mockFetch = vi.fn().mockResolvedValue(okResponse({ xdr: 'abc' }));
-    const loans = new LoansResource(makeHttp(mockFetch));
-
-    await loans.buildReleaseCollateral(7, { borrowerPublicKey: VALID_ADDR });
-
-    const [url] = mockFetch.mock.calls[0] as [URL];
-    expect(url.pathname).toBe('/loans/7/build-release-collateral');
-  });
-});
-
-describe('LoansResource.buildRefinance', () => {
-  it('posts to /loans/:id/build-refinance', async () => {
-    const mockFetch = vi.fn().mockResolvedValue(okResponse({ xdr: 'abc' }));
-    const loans = new LoansResource(makeHttp(mockFetch));
-
-    await loans.buildRefinance(3, {
-      newAmount: '2000000',
-      newTerm: 60,
-      borrowerPublicKey: VALID_ADDR,
-    });
-
-    const [url, init] = mockFetch.mock.calls[0] as [URL, RequestInit];
-    expect(url.pathname).toBe('/loans/3/build-refinance');
-    expect(JSON.parse(init.body as string)).toMatchObject({ newAmount: '2000000', newTerm: 60 });
-  });
-});
-
-describe('LoansResource.buildExtend', () => {
-  it('posts to /loans/:id/build-extend', async () => {
-    const mockFetch = vi.fn().mockResolvedValue(okResponse({ xdr: 'abc' }));
-    const loans = new LoansResource(makeHttp(mockFetch));
-
-    await loans.buildExtend(5, { extraLedgers: 1000, borrowerPublicKey: VALID_ADDR });
-
-    const [url, init] = mockFetch.mock.calls[0] as [URL, RequestInit];
-    expect(url.pathname).toBe('/loans/5/build-extend');
-    expect(JSON.parse(init.body as string)).toMatchObject({ extraLedgers: 1000 });
-  });
-});
-
-describe('LoansResource.contestDefault', () => {
-  it('posts to /loans/:id/contest-default with reason', async () => {
-    const mockFetch = vi.fn().mockResolvedValue(okResponse({ id: 9 }));
-    const loans = new LoansResource(makeHttp(mockFetch));
-
-    await loans.contestDefault(9, 'Repayment was sent on-chain but not reflected');
-
-    const [url, init] = mockFetch.mock.calls[0] as [URL, RequestInit];
-    expect(url.pathname).toBe('/loans/9/contest-default');
-    expect(JSON.parse(init.body as string)).toMatchObject({
-      reason: 'Repayment was sent on-chain but not reflected',
-    });
-  });
-
-  it('throws immediately for an empty reason (no request sent)', async () => {
-    const mockFetch = vi.fn();
-    const loans = new LoansResource(makeHttp(mockFetch));
-
-    await expect(loans.contestDefault(1, '')).rejects.toThrow('reason must be a non-empty string');
-    expect(mockFetch).not.toHaveBeenCalled();
-  });
-
-  it('throws immediately for a whitespace-only reason', async () => {
-    const mockFetch = vi.fn();
-    const loans = new LoansResource(makeHttp(mockFetch));
-
-    await expect(loans.contestDefault(1, '   ')).rejects.toThrow('reason must be a non-empty string');
-    expect(mockFetch).not.toHaveBeenCalled();
-  });
-});
-
-// ── PoolResource.buildEmergencyWithdraw ───────────────────────────────────────
-
-describe('PoolResource.buildEmergencyWithdraw', () => {
-  it('posts to /pool/build-emergency-withdraw', async () => {
-    const mockFetch = vi.fn().mockResolvedValue(okResponse({ xdr: 'xyz' }));
-    const pool = new PoolResource(makeHttp(mockFetch));
-
-    await pool.buildEmergencyWithdraw({
-      depositorPublicKey: VALID_ADDR,
-      token: VALID_ADDR,
-      shares: '100000',
-    });
-
-    const [url, init] = mockFetch.mock.calls[0] as [URL, RequestInit];
-    expect(url.pathname).toBe('/pool/build-emergency-withdraw');
-    expect(JSON.parse(init.body as string)).toMatchObject({
-      depositorPublicKey: VALID_ADDR,
-      shares: '100000',
-    });
-  });
-});
-
-// ── PrivacyResource validation ────────────────────────────────────────────────
-
 describe('PrivacyResource', () => {
-  it('requestAccess rejects a non-G... publicKey before sending a request', async () => {
-    const mockFetch = vi.fn();
-    const privacy = new PrivacyResource(makeHttp(mockFetch));
+  const REASON = 'I would like a copy of my data';
 
-    await expect(
-      privacy.requestAccess({ publicKey: CONTRACT_ADDR, reason: 'I need my data' }),
-    ).rejects.toThrow('valid Stellar public key');
+  it('requestAccess rejects a non-G publicKey before sending a request', async () => {
+    const mockFetch = vi.fn();
+    const privacy = new PrivacyResource(streamHttp(mockFetch));
+
+    expect(() =>
+      privacy.requestAccess({ publicKey: 'C' + 'A'.repeat(55), reason: REASON }),
+    ).toThrow(ValidationError);
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
-  it('export rejects a non-G... publicKey before sending a request', async () => {
+  it('export rejects an invalid publicKey before sending a request', () => {
     const mockFetch = vi.fn();
-    const privacy = new PrivacyResource(makeHttp(mockFetch));
+    const privacy = new PrivacyResource(streamHttp(mockFetch));
 
-    await expect(privacy.export('not-a-key')).rejects.toThrow('valid Stellar public key');
+    expect(() => privacy.export('not-a-key')).toThrow(ValidationError);
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
-  it('requestAccess posts to /privacy/dsar/access with a valid key', async () => {
-    const mockFetch = vi.fn().mockResolvedValue(okResponse({ id: 'dsar-1', status: 'pending' }));
-    const privacy = new PrivacyResource(makeHttp(mockFetch));
+  it('posts access, deletion and anonymization requests to their endpoints', async () => {
+    const post = vi.fn().mockResolvedValue({ success: true });
+    const privacy = new PrivacyResource({ post } as unknown as HttpClient);
 
-    await privacy.requestAccess({ publicKey: VALID_ADDR, reason: 'I need my data' });
+    await privacy.requestAccess({ publicKey: VALID_ADDRESS, reason: REASON });
+    await privacy.requestDeletion({ publicKey: VALID_ADDRESS, reason: REASON, confirmDeletion: true });
+    await privacy.anonymize({ publicKey: VALID_ADDRESS, reason: REASON });
 
-    const [url] = mockFetch.mock.calls[0] as [URL];
-    expect(url.pathname).toBe('/privacy/dsar/access');
+    expect(post).toHaveBeenNthCalledWith(1, '/privacy/dsar/access', {
+      publicKey: VALID_ADDRESS,
+      reason: REASON,
+    });
+    expect(post).toHaveBeenNthCalledWith(2, '/privacy/dsar/delete', {
+      publicKey: VALID_ADDRESS,
+      reason: REASON,
+      confirmDeletion: true,
+    });
+    expect(post).toHaveBeenNthCalledWith(3, '/privacy/anonymize', {
+      publicKey: VALID_ADDRESS,
+      reason: REASON,
+    });
   });
 
-  it('export GETs /privacy/export/:publicKey', async () => {
-    const mockFetch = vi.fn().mockResolvedValue(okResponse({ publicKey: VALID_ADDR, data: {} }));
-    const privacy = new PrivacyResource(makeHttp(mockFetch));
+  it('gets a DSAR by id and exports by publicKey', async () => {
+    const get = vi.fn().mockResolvedValue({ success: true });
+    const privacy = new PrivacyResource({ get } as unknown as HttpClient);
 
-    await privacy.export(VALID_ADDR);
+    await privacy.getRequest('dsar-1');
+    await privacy.export(VALID_ADDRESS);
 
-    const [url] = mockFetch.mock.calls[0] as [URL];
-    expect(url.pathname).toBe(`/privacy/export/${VALID_ADDR}`);
+    expect(get).toHaveBeenNthCalledWith(1, '/privacy/dsar/dsar-1');
+    expect(get).toHaveBeenNthCalledWith(2, `/privacy/export/${VALID_ADDRESS}`);
+  });
+
+  it('getRequest rejects an empty dsarId', () => {
+    const get = vi.fn();
+    const privacy = new PrivacyResource({ get } as unknown as HttpClient);
+
+    expect(() => privacy.getRequest(' ')).toThrow(ValidationError);
+    expect(get).not.toHaveBeenCalled();
   });
 });
 
-// ── NotificationsResource.stream ─────────────────────────────────────────────
+// ── NotificationsResource.stream (#934) ───────────────────────────────────────
 
 describe('NotificationsResource.stream', () => {
-  function makeStream(chunks: string[]): ReadableStream<Uint8Array> {
+  const notification = {
+    id: 1,
+    userId: VALID_ADDRESS,
+    type: 'loan_approved',
+    title: 'Loan approved',
+    message: 'Your loan was approved',
+    read: false,
+    status: 'unread',
+    createdAt: '2026-11-25T00:00:00Z',
+  };
+
+  function sseResponse(chunks: string[], keepOpen = false): Response {
     const encoder = new TextEncoder();
-    return new ReadableStream({
+    const body = new ReadableStream<Uint8Array>({
       start(controller) {
         for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
-        controller.close();
+        if (!keepOpen) controller.close();
       },
     });
+    return new Response(body, { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
   }
 
-  it('parses a single SSE event from the stream', async () => {
-    const notification = { id: 'n1', type: 'loan_approved', read: false, payload: {}, createdAt: '' };
-    const sseChunk = `id: evt1\nevent: notification\ndata: ${JSON.stringify(notification)}\n\n`;
-
-    const mockFetch = vi.fn().mockResolvedValue(
-      new Response(makeStream([sseChunk]), {
-        status: 200,
-        headers: { 'Content-Type': 'text/event-stream' },
-      }),
-    );
-    const notifs = new NotificationsResource(makeHttp(mockFetch));
-
+  it('sends the bearer token and parses id, event and data', async () => {
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValue(
+        sseResponse([`id: evt1\nevent: notification\ndata: ${JSON.stringify(notification)}\n\n`]),
+      );
+    const http = new HttpClient({ baseUrl: 'https://api.example.com', fetch: mockFetch, token: 'tok' });
     const received: unknown[] = [];
-    await notifs.stream((evt) => received.push(evt));
 
-    expect(received).toHaveLength(1);
-    expect((received[0] as { id: string }).id).toBe('evt1');
-    expect((received[0] as { event: string }).event).toBe('notification');
+    await new NotificationsResource(http).stream((evt) => received.push(evt));
+
+    const [url, init] = mockFetch.mock.calls[0] as [URL, RequestInit];
+    expect(url.pathname).toBe('/notifications/stream');
+    expect((init.headers as Record<string, string>).authorization).toBe('Bearer tok');
+    expect(received).toEqual([{ id: 'evt1', event: 'notification', data: notification }]);
   });
 
-  it('skips heartbeat/comment frames', async () => {
-    const notification = { id: 'n2', type: 'score_updated', read: false, payload: {}, createdAt: '' };
-    const sseChunk = `: heartbeat\n\ndata: ${JSON.stringify(notification)}\n\n`;
+  it('joins multi-line data fields and handles frames split across chunks', async () => {
+    const json = JSON.stringify({ type: 'init', notifications: [notification] }, null, 2);
+    const frame = json
+      .split('\n')
+      .map((line) => `data: ${line}`)
+      .join('\n');
+    const half = Math.floor(frame.length / 2);
+    const mockFetch = vi.fn().mockResolvedValue(sseResponse([frame.slice(0, half), frame.slice(half) + '\n\n']));
+    const received: Array<{ data: unknown }> = [];
 
-    const mockFetch = vi.fn().mockResolvedValue(
-      new Response(makeStream([sseChunk]), {
-        status: 200,
-        headers: { 'Content-Type': 'text/event-stream' },
-      }),
-    );
-    const notifs = new NotificationsResource(makeHttp(mockFetch));
+    await new NotificationsResource(streamHttp(mockFetch)).stream((evt) => received.push(evt));
 
+    expect(received).toHaveLength(1);
+    expect(received[0].data).toEqual({ type: 'init', notifications: [notification] });
+  });
+
+  it('skips heartbeat and comment frames', async () => {
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValue(sseResponse([`: heartbeat\n\n`, `data: ${JSON.stringify(notification)}\n\n`]));
     const received: unknown[] = [];
-    await notifs.stream((evt) => received.push(evt));
+
+    await new NotificationsResource(streamHttp(mockFetch)).stream((evt) => received.push(evt));
 
     expect(received).toHaveLength(1);
   });
 
   it('stops cleanly on AbortSignal without throwing', async () => {
     const ctrl = new AbortController();
-    const encoder = new TextEncoder();
-    const stream = new ReadableStream<Uint8Array>({
-      start(controller) {
-        controller.enqueue(encoder.encode(': heartbeat\n\n'));
-        // simulate abort before data arrives
-        ctrl.abort();
-      },
+    const mockFetch = vi.fn().mockResolvedValue(sseResponse([': heartbeat\n\n'], true));
+    const received: unknown[] = [];
+
+    const done = new NotificationsResource(streamHttp(mockFetch)).stream((evt) => received.push(evt), {
+      signal: ctrl.signal,
     });
+    ctrl.abort();
 
-    const mockFetch = vi.fn().mockResolvedValue(
-      new Response(stream, {
-        status: 200,
-        headers: { 'Content-Type': 'text/event-stream' },
-      }),
-    );
-    const notifs = new NotificationsResource(makeHttp(mockFetch));
-
-    await expect(notifs.stream(() => {}, { signal: ctrl.signal })).resolves.toBeUndefined();
+    await expect(done).resolves.toBeUndefined();
+    expect(received).toHaveLength(0);
   });
 
-  it('throws for a non-200 response', async () => {
-    const mockFetch = vi.fn().mockResolvedValue(
-      new Response(null, { status: 401, statusText: 'Unauthorized' }),
-    );
-    const notifs = new NotificationsResource(makeHttp(mockFetch));
+  it('throws a DukaPayError for a non-200 response', async () => {
+    const mockFetch = vi.fn().mockResolvedValue(jsonResponse({ error: 'nope' }, 403));
 
-    await expect(notifs.stream(() => {})).rejects.toThrow('401');
+    await expect(new NotificationsResource(streamHttp(mockFetch)).stream(() => {})).rejects.toMatchObject({
+      status: 403,
+    });
+  });
+
+  it('refreshes the session once on a 401 and retries', async () => {
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ error: 'expired' }, 401))
+      .mockResolvedValueOnce(sseResponse([`data: ${JSON.stringify(notification)}\n\n`]));
+    const onUnauthorized = vi.fn().mockResolvedValue({ token: 'new' });
+    const http = new HttpClient({ baseUrl: 'https://api.example.com', fetch: mockFetch, onUnauthorized });
+    const received: unknown[] = [];
+
+    await new NotificationsResource(http).stream((evt) => received.push(evt));
+
+    expect(onUnauthorized).toHaveBeenCalledTimes(1);
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(received).toHaveLength(1);
   });
 });

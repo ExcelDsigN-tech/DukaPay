@@ -6,7 +6,6 @@ merged PR.
 ## 1. Accounts & access
 
 - [ ] GitHub access to `ExcelDsigN-tech/dukapay`
-- [ ] Joined the [Telegram community](https://t.me/+eRqhka27TVo0NzM8)
 - [ ] Read `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, and `SECURITY.md`
 - [ ] Read `ARCHITECTURE.md` and `docs/wiki/architecture.md`
 
@@ -38,8 +37,8 @@ cd backend  && npm run lint && npm run test
 
 ## 4. Branch & commit conventions
 
-- Branch: `feat/<short>`, `fix/<short>`, `docs/<short>`, `security/<short>`,
-  `contracts/<short>`, etc. (see `CONTRIBUTING.md`).
+- Branch: `feat/<short>`, `fix/<short>`, `docs/<short>` or `chore/<short>`
+  (see `CONTRIBUTING.md`).
 - Commits: Conventional Commits (`feat(contracts): ...`).
 - PR must `Closes #<issue>` and include testing evidence.
 
@@ -64,7 +63,7 @@ cd backend  && npm run lint && npm run test
 
 For auth, payments, secrets, or contract changes: complete the STRIDE
 analysis in `.github/THREAT_MODEL.md`, run `pre-commit run --all-files`, and
-request a security-champion review.
+request a maintainer review.
 
 ## 8. Verify before pushing
 

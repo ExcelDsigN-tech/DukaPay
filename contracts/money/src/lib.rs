@@ -3,7 +3,7 @@
 //! This crate is the single place where stroop-denominated `i128` amounts are
 //! divided, rounded, or split pro-rata. Every contract that touches a stroop
 //! quantity must route the conversion through [`round_div`] or
-//! [`split_pro_rata`] rather than using a bare `/` — that is what keeps this
+//! [`split_pro_rata`] rather than using a bare `/`: that is what keeps this
 //! crate's semantics, the backend's `decimal.ts`, and the frontend's
 //! generated formatter in lock-step (see `money-policy.json` at the repo
 //! root and `scripts/gen-money.ts`).
@@ -11,7 +11,7 @@
 
 pub mod policy;
 
-use soroban_sdk::{contracterror, Env, Vec};
+use soroban_sdk::{contracterror, Env, Vec, I256};
 
 /// Number of stroops in one whole unit (`10^7`), re-exported from
 /// [`policy::STROOP_SCALE`] for ergonomic access at the crate root.
@@ -106,6 +106,67 @@ pub fn round_div(num: i128, den: i128, mode: RoundingMode) -> Result<i128, MathE
     }
 }
 
+/// Compute `a * b / den`, applying `mode` to any remainder, exactly as
+/// [`round_div`]`(a * b, den, mode)` would if `a * b` fitted in `i128`.
+///
+/// The product is held in a 256-bit host integer, so a large intermediate
+/// (e.g. shares * pool assets) cannot overflow; only a result outside `i128`
+/// returns [`MathError::Overflow`].
+pub fn mul_div(
+    env: &Env,
+    a: i128,
+    b: i128,
+    den: i128,
+    mode: RoundingMode,
+) -> Result<i128, MathError> {
+    if den == 0 {
+        return Err(MathError::DivByZero);
+    }
+    // Normalize so `den` is positive; fold its sign into `a`.
+    let (a, den) = if den < 0 {
+        (
+            a.checked_neg().ok_or(MathError::Overflow)?,
+            den.checked_neg().ok_or(MathError::Overflow)?,
+        )
+    } else {
+        (a, den)
+    };
+
+    let num = I256::from_i128(env, a).mul(&I256::from_i128(env, b));
+    let den256 = I256::from_i128(env, den);
+    // Euclidean remainder is in [0, den), so `floor` is exact and `rem` fits i128.
+    let rem256 = num.rem_euclid(&den256);
+    let floor = num.sub(&rem256).div(&den256);
+    let rem = rem256.to_i128().ok_or(MathError::Overflow)?;
+
+    let round_up = if rem == 0 {
+        false
+    } else {
+        let num_is_negative = a != 0 && b != 0 && ((a < 0) != (b < 0));
+        // Compare the remainder with the half-way point without doubling it.
+        match rem.cmp(&(den - rem)) {
+            core::cmp::Ordering::Greater => !matches!(mode, RoundingMode::Floor),
+            core::cmp::Ordering::Less => matches!(mode, RoundingMode::Ceil),
+            core::cmp::Ordering::Equal => match mode {
+                RoundingMode::Floor => false,
+                RoundingMode::Ceil => true,
+                // Ties away from zero: up for positive, down (floor) for negative.
+                RoundingMode::HalfUp => !num_is_negative,
+                RoundingMode::HalfEven => {
+                    floor.rem_euclid(&I256::from_i128(env, 2)).to_i128() != Some(0)
+                }
+            },
+        }
+    };
+
+    let q = if round_up {
+        floor.add(&I256::from_i128(env, 1))
+    } else {
+        floor
+    };
+    q.to_i128().ok_or(MathError::Overflow)
+}
+
 /// Split `total` among `weights` using the largest-remainder method so the
 /// returned parts sum *exactly* to `total` (no dust is created or lost),
 /// while staying as proportional to each weight as integer stroops allow.
@@ -168,8 +229,8 @@ pub fn split_pro_rata(env: &Env, total: i128, weights: &Vec<i128>) -> Result<Vec
         return Err(MathError::DriftDetected);
     }
 
-    // Selection sort descending by remainder (n is expected to be small —
-    // pool participants / loan tranches — so O(n^2) is fine and avoids
+    // Selection sort descending by remainder (n is expected to be small:
+    // pool participants / loan tranches, so O(n^2) is fine and avoids
     // pulling in an allocator-backed sort).
     let remainder_count = remainders.len();
     let mut sorted: Vec<(u32, i128)> = Vec::new(env);
@@ -228,6 +289,64 @@ mod test {
 
     fn v(env: &Env, xs: &[i128]) -> Vec<i128> {
         Vec::from_slice(env, xs)
+    }
+
+    #[test]
+    fn mul_div_matches_round_div_when_product_fits() {
+        let env = Env::default();
+        // Exhaustive grid: thousands of host calls in one env, far past a real tx budget.
+        env.cost_estimate().budget().reset_unlimited();
+        let modes = [
+            RoundingMode::Floor,
+            RoundingMode::Ceil,
+            RoundingMode::HalfUp,
+            RoundingMode::HalfEven,
+        ];
+        let vals = [
+            -9i128, -7, -5, -2, -1, 0, 1, 2, 3, 5, 7, 9, 1_000, 1_000_003,
+        ];
+        let dens = [-4i128, -3, -2, -1, 1, 2, 3, 4, 7, 1_000];
+        for &a in &vals {
+            for &b in &vals {
+                for &d in &dens {
+                    for &m in &modes {
+                        assert_eq!(
+                            mul_div(&env, a, b, d, m),
+                            round_div(a * b, d, m),
+                            "a={a} b={b} d={d} mode={m:?}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn mul_div_survives_intermediate_overflow() {
+        let env = Env::default();
+        // 2e19 * 2e19 = 4e38 > i128::MAX, but the result fits.
+        let big: i128 = 20_000_000_000_000_000_000;
+        assert!(big.checked_mul(big).is_none());
+        assert_eq!(mul_div(&env, big, big, big, RoundingMode::Floor), Ok(big));
+        assert_eq!(
+            mul_div(&env, big, big + 1_000, big + 1_000, RoundingMode::Floor),
+            Ok(big)
+        );
+        assert_eq!(mul_div(&env, -big, big, big, RoundingMode::Floor), Ok(-big));
+        // (MAX * 3) / 2 floors to MAX + MAX/2 rounding: still out of range.
+        assert_eq!(
+            mul_div(&env, i128::MAX, 3, 2, RoundingMode::Floor),
+            Err(MathError::Overflow)
+        );
+        // (MAX * 2) / 3 fits and floors.
+        assert_eq!(
+            mul_div(&env, i128::MAX, 2, 3, RoundingMode::Floor),
+            Ok(i128::MAX / 3 * 2 + (i128::MAX % 3) * 2 / 3)
+        );
+        assert_eq!(
+            mul_div(&env, 1, 1, 0, RoundingMode::Floor),
+            Err(MathError::DivByZero)
+        );
     }
 
     #[test]

@@ -65,7 +65,7 @@ export default function (data) {
     // Step 1: Get pending settlements
     group('Fetch Pending Settlements', () => {
       const response = http.get(
-        `${baseUrl}/api/v1/settlements?status=pending&limit=1000`,
+        `${baseUrl}/api/settlements?status=pending&limit=1000`,
         { 
           headers,
           tags: { operation: 'fetch_pending' },
@@ -107,7 +107,7 @@ export default function (data) {
 
       const startTime = Date.now();
       const response = http.post(
-        `${baseUrl}/api/v1/settlements/batch`,
+        `${baseUrl}/api/settlements/batch`,
         JSON.stringify(batchData),
         {
           headers: {
@@ -166,7 +166,7 @@ export default function (data) {
     group('Check Batch Status', () => {
       const batchId = `batch_${Date.now()}_${__VU}`;
       const response = http.get(
-        `${baseUrl}/api/v1/settlements/batch/${batchId}/status`,
+        `${baseUrl}/api/settlements/batch/${batchId}/status`,
         {
           headers,
           tags: { operation: 'batch_status' },
@@ -183,7 +183,7 @@ export default function (data) {
     // Step 4: Get settlement statistics
     group('Get Settlement Stats', () => {
       const response = http.get(
-        `${baseUrl}/api/v1/settlements/stats`,
+        `${baseUrl}/api/settlements/stats`,
         {
           headers,
           tags: { operation: 'settlement_stats' },

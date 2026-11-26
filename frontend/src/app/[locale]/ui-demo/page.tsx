@@ -1,6 +1,6 @@
 "use client";
 
-// This route is intentionally gated from production — it is a development-only
+// This route is intentionally gated from production: it is a development-only
 // component gallery. If accidentally shipped, requests are bounced to 404.
 import { notFound } from "next/navigation";
 import React, { useState } from "react";
@@ -58,7 +58,7 @@ export default function UIDemoPage() {
             <ThemeToggle />
           </div>
           <p className="text-lg text-gray-500 dark:text-zinc-400">
-            Development-only gallery — not shipped to production. Covers all 22 components in{" "}
+            Development-only gallery, not shipped to production. Covers all 22 components in{" "}
             <code className="text-sm">src/app/components/ui/</code>.
           </p>
         </section>

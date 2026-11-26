@@ -10,9 +10,9 @@ describe("amount utils", () => {
   describe("getAssetDecimals", () => {
     it("returns known asset decimals", () => {
       expect(getAssetDecimals("XLM")).toBe(7);
-      expect(getAssetDecimals("USDC")).toBe(2);
-      expect(getAssetDecimals("EURC")).toBe(2);
-      expect(getAssetDecimals("PHP")).toBe(2);
+      expect(getAssetDecimals("USDC")).toBe(7);
+      expect(getAssetDecimals("EURC")).toBe(7);
+      expect(getAssetDecimals("PHP")).toBe(7);
     });
 
     it("falls back for unknown assets", () => {
@@ -24,8 +24,8 @@ describe("amount utils", () => {
     it("converts whole and fractional amounts", () => {
       expect(toStroops("1", 7)?.toString()).toBe("10000000");
       expect(toStroops("1.5", 7)?.toString()).toBe("15000000");
-      expect(toStroops("0.01", 2)?.toString()).toBe("1");
-      expect(toStroops("12.34", 2)?.toString()).toBe("1234");
+      expect(toStroops("0.0000001", 7)?.toString()).toBe("1");
+      expect(toStroops("12.34", 7)?.toString()).toBe("123400000");
     });
 
     it("returns null when precision exceeds decimals", () => {
@@ -36,13 +36,15 @@ describe("amount utils", () => {
 
   describe("hasInvalidPrecision / getPrecisionError", () => {
     it("treats values at the limit as valid", () => {
-      expect(hasInvalidPrecision("1.12", 2)).toBe(false);
-      expect(getPrecisionError("1.12", "USDC")).toBeNull();
+      expect(hasInvalidPrecision("1.1234567", 7)).toBe(false);
+      expect(getPrecisionError("1.1234567", "USDC")).toBeNull();
     });
 
     it("flags values over the limit and returns error text", () => {
-      expect(hasInvalidPrecision("1.123", 2)).toBe(true);
-      expect(getPrecisionError("1.123", "USDC")).toBe("USDC supports at most 2 decimal places.");
+      expect(hasInvalidPrecision("1.12345678", 7)).toBe(true);
+      expect(getPrecisionError("1.12345678", "USDC")).toBe(
+        "USDC supports at most 7 decimal places.",
+      );
     });
   });
 

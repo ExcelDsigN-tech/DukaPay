@@ -60,7 +60,7 @@ export default function (data) {
     {
       weight: 0.35,
       name: 'loan_approve',
-      endpoint: '/api/v1/loans/__LOAN_ID__/approve',
+      endpoint: '/api/loans/__LOAN_ID__/approve',
       method: 'POST',
       generateData: () => ({
         approverComment: 'Load test approval',
@@ -69,14 +69,14 @@ export default function (data) {
     {
       weight: 0.25,
       name: 'loan_fund',
-      endpoint: '/api/v1/loans/__LOAN_ID__/fund',
+      endpoint: '/api/loans/__LOAN_ID__/fund',
       method: 'POST',
       generateData: () => ({}),
     },
     {
       weight: 0.2,
       name: 'pool_deposit',
-      endpoint: '/api/v1/pool/deposit',
+      endpoint: '/api/pool/deposit',
       method: 'POST',
       generateData: () => ({
         amount: Math.floor(Math.random() * 10000) + 1000,
@@ -86,7 +86,7 @@ export default function (data) {
     {
       weight: 0.1,
       name: 'pool_withdraw',
-      endpoint: '/api/v1/pool/withdraw',
+      endpoint: '/api/pool/withdraw',
       method: 'POST',
       generateData: () => ({
         amount: Math.floor(Math.random() * 5000) + 500,
@@ -96,7 +96,7 @@ export default function (data) {
     {
       weight: 0.1,
       name: 'remittance_mint',
-      endpoint: '/api/v1/remittances/__REMITTANCE_ID__/mint-nft',
+      endpoint: '/api/remittances/__REMITTANCE_ID__/mint-nft',
       method: 'POST',
       generateData: () => ({}),
     },

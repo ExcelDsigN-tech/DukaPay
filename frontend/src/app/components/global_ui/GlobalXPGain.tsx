@@ -20,6 +20,7 @@ export function GlobalXPGain() {
 
   useEffect(() => {
     if (recentXPGain) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- queues external events
       setQueue((prev) => {
         // Prevent duplicate enqueue
         if (
@@ -37,6 +38,7 @@ export function GlobalXPGain() {
   useEffect(() => {
     if (!activeGain && queue.length > 0) {
       const next = queue[0];
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- processes animation queue
       setActiveGain(next);
       setQueue((prev) => prev.slice(1));
       if (soundEnabled) {

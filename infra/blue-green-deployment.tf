@@ -110,7 +110,81 @@ resource "aws_ecs_service" "blue" {
     Color       = "blue"
   }
 }
+resource "aws_ecs_task_definition" "backend_blue" {
+  family                   = "dukapay-backend"
+  network_mode             = "awsvpc"
+  requires_compatibilities = ["FARGATE"]
+  cpu                      = "512"
+  memory                   = "1024"
 
+  container_definitions = jsonencode([
+    {
+      name      = "dukapay-backend"
+      image     = "ghcr.io/${var.backend_image_owner}/dukapay-backend:${var.backend_image_version}"
+      essential = true
+
+      portMappings = [
+        {
+          containerPort = 3000
+          hostPort      = 3000
+          protocol      = "tcp"
+        }
+      ]
+
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = "/ecs/dukapay-backend"
+          "awslogs-region"        = var.aws_region
+          "awslogs-stream-prefix" = "blue"
+        }
+      }
+    }
+  ])
+
+  tags = {
+    Name  = "dukapay-backend-blue"
+    Color = "blue"
+  }
+}
+
+resource "aws_ecs_task_definition" "backend_green" {
+  family                   = "dukapay-backend"
+  network_mode             = "awsvpc"
+  requires_compatibilities = ["FARGATE"]
+  cpu                      = "512"
+  memory                   = "1024"
+
+  container_definitions = jsonencode([
+    {
+      name      = "dukapay-backend"
+      image     = "ghcr.io/${var.backend_image_owner}/dukapay-backend:${var.backend_image_version}"
+      essential = true
+
+      portMappings = [
+        {
+          containerPort = 3000
+          hostPort      = 3000
+          protocol      = "tcp"
+        }
+      ]
+
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = "/ecs/dukapay-backend"
+          "awslogs-region"        = var.aws_region
+          "awslogs-stream-prefix" = "green"
+        }
+      }
+    }
+  ])
+
+  tags = {
+    Name  = "dukapay-backend-green"
+    Color = "green"
+  }
+}
 resource "aws_ecs_service" "green" {
   name            = "dukapay-backend-green"
   cluster         = aws_ecs_cluster.main.id
@@ -173,4 +247,21 @@ output "blue_target_group_arn" {
 
 output "green_target_group_arn" {
   value = aws_lb_target_group.green.arn
+}
+
+variable "backend_image_owner" {
+  description = "GitHub Container Registry owner for the DukaPay backend image"
+  type        = string
+  default     = "exceldsign-tech"
+}
+
+variable "backend_image_version" {
+  description = "Version tag for the DukaPay backend container image"
+  type        = string
+  default     = "production-latest"
+}
+
+variable "aws_region" {
+  description = "AWS region used by ECS task logging"
+  type        = string
 }

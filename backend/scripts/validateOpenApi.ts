@@ -22,6 +22,8 @@ import remittanceRoutes from '../src/routes/remittanceRoutes.js';
 import transactionRoutes from '../src/routes/transactionRoutes.js';
 import privacyRoutes from '../src/routes/privacyRoutes.js';
 import auditRoutes from '../src/routes/auditRoutes.js';
+import agentRoutes from '../src/routes/agentRoutes.js';
+import agentFloatRoutes from '../src/routes/agentFloatRoutes.js';
 
 export const OPENAPI_ARTIFACT = 'openapi.json';
 
@@ -32,7 +34,7 @@ const HTTP_METHODS = ['get', 'post', 'put', 'delete', 'patch', 'head', 'options'
 
 /**
  * Mount table mirroring src/app.ts. The key is the spec-relative base path
- * (the express mount prefix with `/api`/`/api/v1` stripped); each entry maps
+ * (the express mount prefix with `/api` stripped); each entry maps
  * to the router instance registered there.
  */
 const MOUNTS: Array<[specBasePath: string, router: Router]> = [
@@ -50,6 +52,8 @@ const MOUNTS: Array<[specBasePath: string, router: Router]> = [
   ['/privacy', privacyRoutes],
   ['/audit', auditRoutes],
   ['/user', userRoutes],
+  ['/agents', agentRoutes],
+  ['/agents', agentFloatRoutes],
 ];
 
 interface LayerLike {
@@ -145,7 +149,7 @@ function findUndocumented(
 }
 
 async function main(): Promise<void> {
-  const ok = <T,>(label: string, fn: () => T): T => {
+  const ok = <T>(label: string, fn: () => T): T => {
     const value = fn();
     console.log(`  ✓ ${label}`);
     return value;
@@ -165,9 +169,7 @@ async function main(): Promise<void> {
 
   const pathCount = Object.keys(spec.paths ?? {}).length;
   const operationCount = Object.values(spec.paths ?? {}).reduce(
-    (acc, item) =>
-      acc +
-      Object.values(item ?? {}).filter((o) => o && typeof o === 'object').length,
+    (acc, item) => acc + Object.values(item ?? {}).filter((o) => o && typeof o === 'object').length,
     0,
   );
 

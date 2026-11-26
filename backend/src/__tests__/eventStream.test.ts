@@ -1,5 +1,6 @@
 import request from 'supertest';
 import { jest } from '@jest/globals';
+import { Keypair } from '@stellar/stellar-sdk';
 import { generateJwtToken } from '../services/authService.js';
 
 type MockQueryResult = { rows: unknown[]; rowCount?: number };
@@ -56,8 +57,8 @@ describe('GET /api/events/stream', () => {
 
   it('should reject borrower stream access for a different wallet', async () => {
     const response = await request(app)
-      .get('/api/events/stream?borrower=GOTHERWALLET')
-      .set(bearer('GOWNERWALLET'));
+      .get(`/api/events/stream?borrower=${Keypair.random().publicKey()}`)
+      .set(bearer(Keypair.random().publicKey()));
 
     expect(response.status).toBe(403);
   });
@@ -254,5 +255,45 @@ describe('EventStreamService', () => {
     expect(mockRes.write).toHaveBeenCalledWith(expect.stringContaining('id: evt-99'));
     expect(mockRes.write).toHaveBeenCalledWith(expect.stringContaining('event: loan-event'));
     expect(mockRes.write).toHaveBeenCalledWith(expect.stringContaining('LoanRequested'));
+  });
+
+  it('should broadcast pause and unpause events to non-admin subscribers', () => {
+    const nonAdminRes = {
+      write: jest.fn(),
+    } as unknown as import('express').Response;
+
+    const unsubscribe = eventStreamService.subscribeAddress(
+      'BORROWER_USER',
+      'BORROWER_USER',
+      nonAdminRes,
+    );
+
+    eventStreamService.broadcast({
+      eventId: 'evt-pause-1',
+      eventType: 'PoolPaused',
+      ledger: 5000,
+      ledgerClosedAt: '2026-03-10T00:00:00Z',
+      txHash: 'pause123',
+    });
+
+    expect(nonAdminRes.write).toHaveBeenCalledTimes(1);
+    const pauseWrite = (nonAdminRes.write as jest.Mock).mock.calls[0]?.[0] as string | undefined;
+    expect(pauseWrite).toBeDefined();
+    expect(pauseWrite).toContain('PoolPaused');
+
+    eventStreamService.broadcast({
+      eventId: 'evt-unpause-1',
+      eventType: 'PoolUnpaused',
+      ledger: 5001,
+      ledgerClosedAt: '2026-03-10T01:00:00Z',
+      txHash: 'unpause123',
+    });
+
+    expect(nonAdminRes.write).toHaveBeenCalledTimes(2);
+    const unpauseWrite = (nonAdminRes.write as jest.Mock).mock.calls[1]?.[0] as string | undefined;
+    expect(unpauseWrite).toBeDefined();
+    expect(unpauseWrite).toContain('PoolUnpaused');
+
+    unsubscribe();
   });
 });

@@ -7,20 +7,25 @@ export function getConfig() {
   
   const configs = {
     local: {
-      baseUrl: 'http://localhost:4000',
+      baseUrl: 'http://localhost:3001',
       rpcUrl: 'http://localhost:8000',
     },
     staging: {
-      baseUrl: __ENV.STAGING_API_URL || 'https://api.staging.dukapay.io',
-      rpcUrl: __ENV.STAGING_RPC_URL || 'https://rpc.staging.dukapay.io',
+      baseUrl: __ENV.STAGING_API_URL || 'http://localhost:3001',
+      rpcUrl: __ENV.STAGING_RPC_URL || 'https://soroban-testnet.stellar.org',
     },
     production: {
-      baseUrl: __ENV.PROD_API_URL || 'https://api.dukapay.io',
-      rpcUrl: __ENV.PROD_RPC_URL || 'https://rpc.dukapay.io',
+      baseUrl: __ENV.PROD_API_URL || 'http://localhost:3001',
+      rpcUrl: __ENV.PROD_RPC_URL || 'https://soroban-testnet.stellar.org',
     },
   };
 
-  return configs[env] || configs.staging;
+  const config = configs[env] || configs.staging;
+
+  // An explicit TARGET_URL (e.g. the workflow_dispatch input) overrides the
+  // environment's base URL while keeping its RPC URL.
+  const targetUrl = __ENV.TARGET_URL;
+  return targetUrl ? { ...config, baseUrl: targetUrl } : config;
 }
 
 export function getTestDuration() {

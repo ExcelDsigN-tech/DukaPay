@@ -1,26 +1,11 @@
-import { describe, it, expect, beforeAll } from '@jest/globals';
-import { query } from '../db/connection.js';
+import { it, expect, afterAll } from '@jest/globals';
+import { query, closePool } from '../db/connection.js';
+import { describeIfDb } from './helpers/dbProbe.js';
 
-let databaseAvailable = false;
-
-beforeAll(async () => {
-  try {
-    await query('SELECT 1');
-    databaseAvailable = true;
-  } catch {
-    databaseAvailable = false;
-  }
-});
-
-const describeIf = (name: string, fn: () => void) => {
-  if (databaseAvailable) {
-    describe(name, fn);
-  } else {
-    describe.skip(`${name} (skipped: no database)`, fn);
-  }
-};
-
-describeIf('loan_disputes schema', () => {
+describeIfDb('loan_disputes schema', () => {
+  afterAll(async () => {
+    await closePool();
+  });
   it('should successfully insert a loan dispute against the schema', async () => {
     const result = await query(
       `INSERT INTO loan_disputes (loan_id, borrower, reason) VALUES ($1, $2, $3) RETURNING id`,

@@ -1,4 +1,4 @@
-// GENERATED FILE — do not edit by hand.
+// GENERATED FILE: do not edit by hand.
 //
 // Derived from `money-policy.json` at the repository root by
 // `scripts/gen-money.ts`. Run `npx ts-node scripts/gen-money.ts` from the
@@ -8,7 +8,7 @@
 // Deliberately dependency-free (no imports from hand-authored modules like
 // decimal.ts/format.ts) so this file can never form an import cycle with the
 // logic that consumes it. `MODE` is a plain string union rather than the
-// `RoundingMode` enum for the same reason — consumers map it to their own
+// `RoundingMode` enum for the same reason; consumers map it to their own
 // enum.
 //
 // Uses `BigInt(...)` rather than a `123n` literal so this file type-checks
@@ -25,7 +25,7 @@ export const SCALE: bigint = BigInt(10000000);
 export const MODE = 'half_even' as const;
 
 /**
- * Fractional digits used for *display only* — settlement always uses
+ * Fractional digits used for *display only*; settlement always uses
  * `SCALE_DECIMALS` (full stroop precision).
  */
 export const DISPLAY_DP = 2;

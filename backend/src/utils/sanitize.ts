@@ -4,7 +4,7 @@
  * DukaPay's backend is JSON-only (no HTML rendering), but user-provided text
  * (loan descriptions, dispute messages, display names) is stored and later
  * rendered by the frontend. If any downstream consumer renders this content as
- * HTML — even accidentally via a CMS or admin dashboard — stored XSS is
+ * HTML (even accidentally via a CMS or admin dashboard), stored XSS is
  * possible. These helpers strip dangerous tags/attributes at the API boundary
  * so the payload is safe regardless of how it's later consumed.
  *
@@ -21,7 +21,7 @@ const ATTR_RE = /\s+[a-zA-Z-]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]*))?/g;
 
 /**
  * Strip any HTML tags not in the allowlist, and remove all attributes from
- * allowed tags. This is a defense-in-depth measure — React escapes by
+ * allowed tags. This is a defense-in-depth measure: React escapes by
  * default, but this guards against accidental `dangerouslySetInnerHTML` or
  * non-React consumers.
  */

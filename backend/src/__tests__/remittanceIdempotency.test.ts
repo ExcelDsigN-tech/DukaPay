@@ -40,8 +40,21 @@ const fakeCacheStore = new Map<string, unknown>();
 jest.unstable_mockModule('../services/cacheService.js', () => ({
   cacheService: {
     get: jest.fn(async (key: string) => fakeCacheStore.get(key) ?? null),
+    reserve: jest.fn(async (key: string, value: unknown) => {
+      if (fakeCacheStore.has(key)) return false;
+      fakeCacheStore.set(key, value);
+      return true;
+    }),
     set: jest.fn(async (key: string, value: unknown) => {
       fakeCacheStore.set(key, value);
+    }),
+    setRequired: jest.fn(async (key: string, value: unknown) => {
+      fakeCacheStore.set(key, value);
+    }),
+    deleteIfMatch: jest.fn(async (key: string, value: string) => {
+      if (fakeCacheStore.get(key) !== value) return false;
+      fakeCacheStore.delete(key);
+      return true;
     }),
     delete: jest.fn(async (key: string) => {
       fakeCacheStore.delete(key);
@@ -51,6 +64,7 @@ jest.unstable_mockModule('../services/cacheService.js', () => ({
 
 jest.unstable_mockModule('../db/connection.js', () => ({
   default: { query: jest.fn() },
+  pool: { query: jest.fn(), connect: jest.fn(), end: jest.fn() },
   query: jest.fn(),
   getClient: jest.fn(),
   closePool: jest.fn(),
@@ -103,7 +117,7 @@ describe('POST /api/remittances idempotency', () => {
     expect(second.headers['x-idempotent-replayed']).toBe('true');
     expect(second.body).toEqual(first.body);
 
-    // The underlying service — and therefore the DB insert — only ran once.
+    // The underlying service (and therefore the DB insert) only ran once.
     expect(mockCreateRemittance).toHaveBeenCalledTimes(1);
   });
 

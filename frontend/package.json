@@ -3,13 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "prettier --check .",
+    "lint": "eslint --max-warnings 0 src e2e lib && npm run lint:i18n",
+    "format:check": "prettier --check .",
+    "lint:i18n": "eslint -c eslint.i18n.config.mjs --no-warn-ignored src",
     "typecheck": "tsc --noEmit",
     "audit:a11y": "next build && npx axe-playwright",
     "perf:budget": "node scripts/check-bundle-size.mjs",
@@ -21,7 +23,7 @@
     "prepare": "husky || true"
   },
   "dependencies": {
-    "@sentry/nextjs": "^10.46.0",
+    "@sentry/nextjs": "^10.76.2",
     "@serwist/next": "^9.0.12",
     "@serwist/precaching": "^9.0.12",
     "@serwist/sw": "^9.0.12",
@@ -33,7 +35,7 @@
     "framer-motion": "^12.38.0",
     "lottie-react": "^2.4.1",
     "lucide-react": "^0.575.0",
-    "next": "^16.2.1",
+    "next": "^16.4.6",
     "next-intl": "^4.8.3",
     "qrcode.react": "^4.2.0",
     "react": "19.2.3",
@@ -45,7 +47,7 @@
   },
   "devDependencies": {
     "@eslint/compat": "^2.0.3",
-    "@next/bundle-analyzer": "^16.2.1",
+    "@next/bundle-analyzer": "^16.4.6",
     "@playwright/test": "^1.58.2",
     "@tailwindcss/postcss": "^4.2.2",
     "@testing-library/jest-dom": "^6.9.1",
@@ -78,6 +80,9 @@
     ]
   },
   "overrides": {
-    "axios": "1.13.5"
+    "axios": "1.20.0",
+    "toml": "5.0.1",
+    "browserslist": "4.28.9",
+    "zod": "4.6.7"
   }
 }

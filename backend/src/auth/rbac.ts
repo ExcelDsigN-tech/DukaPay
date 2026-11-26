@@ -1,8 +1,38 @@
-export const USER_ROLES = ['admin', 'borrower', 'lender'] as const;
+import { env } from '../config/env.js';
+export const USER_ROLES = [
+  'admin',
+  'super_admin',
+  'ops',
+  'support',
+  'agent',
+  'borrower',
+  'auditor',
+  'lender',
+] as const;
 export type UserRole = (typeof USER_ROLES)[number];
 
 export const ROLE_SCOPES: Record<UserRole, string[]> = {
   admin: ['admin:all'],
+  super_admin: ['admin:all'],
+  /**
+   * Admin sub-roles (#427). Their admin-panel actions are gated by
+   * `requireRoles` in adminRoutes.ts; scopes stay read-only so they never
+   * inherit write access to user-facing routes.
+   */
+  ops: ['read:loans', 'read:pool', 'read:score', 'read:remittances', 'read:notifications'],
+  support: ['read:loans', 'read:score', 'read:remittances', 'read:notifications'],
+  agent: [
+    'read:loans',
+    'write:loans',
+    'read:pool',
+    'write:pool',
+    'read:score',
+    'read:notifications',
+    'write:notifications',
+    'read:remittances',
+    'write:remittances',
+    'agents:view-assigned',
+  ],
   borrower: [
     'read:loans',
     'write:loans',
@@ -12,27 +42,78 @@ export const ROLE_SCOPES: Record<UserRole, string[]> = {
     'read:remittances',
     'write:remittances',
   ],
-  lender: ['read:loans', 'read:pool', 'write:loans'],
+  /**
+   * Read-only elevation over audit, compliance and KYC surfaces. Auditors can
+   * inspect everything but never mutate state (the middleware layer guarantees
+   * this by refusing write-scopes for the auditor role). The read:* scopes here
+   * mirror the route gates so auditors can reach loan, score, notification,
+   * remittance and pool reads without any write scope.
+   */
+  auditor: [
+    'read:audit',
+    'read:compliance',
+    'read:loans',
+    'read:score',
+    'read:notifications',
+    'read:remittances',
+    'read:pool',
+  ],
+  // `lender` represents liquidity providers supplying capital to the lending pool,
+  // distinct from `agent` (who manages assigned borrowers and origination).
+  lender: [
+    'read:loans',
+    'read:pool',
+    'write:loans',
+    'write:pool',
+    'read:notifications',
+    'write:notifications',
+  ],
 };
 
-const parseWalletSet = (wallets: string | undefined): Set<string> => {
-  if (!wallets) return new Set();
-
-  return new Set(
-    wallets
-      .split(',')
-      .map((wallet) => wallet.trim())
-      .filter((wallet) => wallet.length > 0),
-  );
+/** Privilege ordering used for read-level "at least" comparisons. */
+export const ROLE_HIERARCHY: Record<UserRole, number> = {
+  admin: 4,
+  super_admin: 4,
+  ops: 2,
+  support: 2,
+  agent: 3,
+  auditor: 2,
+  lender: 3,
+  borrower: 1,
 };
 
 export const resolveRoleForWallet = (publicKey: string): UserRole => {
-  const adminWallets = parseWalletSet(process.env.ADMIN_WALLETS);
+  const superAdminWallets = new Set(env.SUPER_ADMIN_WALLETS);
+  if (superAdminWallets.has(publicKey)) {
+    return 'super_admin';
+  }
+
+  const opsWallets = new Set(env.OPS_WALLETS);
+  if (opsWallets.has(publicKey)) {
+    return 'ops';
+  }
+
+  const supportWallets = new Set(env.SUPPORT_WALLETS);
+  if (supportWallets.has(publicKey)) {
+    return 'support';
+  }
+
+  const adminWallets = new Set(env.ADMIN_WALLETS);
   if (adminWallets.has(publicKey)) {
     return 'admin';
   }
 
-  const lenderWallets = parseWalletSet(process.env.LENDER_WALLETS);
+  const agentWallets = new Set(env.AGENT_WALLETS);
+  if (agentWallets.has(publicKey)) {
+    return 'agent';
+  }
+
+  const auditorWallets = new Set(env.AUDITOR_WALLETS);
+  if (auditorWallets.has(publicKey)) {
+    return 'auditor';
+  }
+
+  const lenderWallets = new Set(env.LENDER_WALLETS);
   if (lenderWallets.has(publicKey)) {
     return 'lender';
   }
@@ -41,11 +122,11 @@ export const resolveRoleForWallet = (publicKey: string): UserRole => {
 };
 
 export const resolveScopesForRole = (role: UserRole): string[] => {
-  const ownScopes = ROLE_SCOPES[role] ?? [];
-  if (role === 'admin') {
-    return [...ownScopes];
-  }
+  return [...(ROLE_SCOPES[role] ?? [])];
+};
 
-  // Include admin scope only for admin; keep role scopes explicit for others.
-  return [...ownScopes];
+/** True when `role` sits at or above `minimum` in the privilege ordering. */
+export const isRoleAtLeast = (role: UserRole | undefined, minimum: UserRole): boolean => {
+  if (!role) return false;
+  return (ROLE_HIERARCHY[role] ?? 0) >= (ROLE_HIERARCHY[minimum] ?? 0);
 };

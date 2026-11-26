@@ -84,7 +84,7 @@ export function validateLoanConfig(): LoanConfig {
 }
 
 /**
- * Startup guard — mirrors validateEnvVars().
+ * Startup guard; mirrors validateEnvVars().
  * Calls getLoanConfig() and, on any validation failure, logs the error and
  * terminates the process immediately so the server never starts with bad loan
  * parameters.

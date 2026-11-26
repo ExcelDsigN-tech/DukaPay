@@ -20,6 +20,99 @@ export const swaggerSchemas = {
     },
     required: ['success', 'message'],
   },
+  AgentDashboard: {
+    type: 'object',
+    properties: {
+      agentPublicKey: { type: 'string' },
+      floatUtilization: {
+        type: 'object',
+        properties: {
+          totalFloat: {
+            type: 'number',
+            description: 'Whole tokens, up to 7 decimal places.',
+          },
+          allocated: {
+            type: 'number',
+            description: 'Whole tokens, up to 7 decimal places.',
+          },
+          utilizationPct: { type: 'number' },
+        },
+      },
+      earnings: {
+        type: 'object',
+        properties: {
+          daily: {
+            type: 'number',
+            description: 'Whole tokens, up to 7 decimal places.',
+          },
+          weekly: {
+            type: 'number',
+            description: 'Whole tokens, up to 7 decimal places.',
+          },
+          monthly: {
+            type: 'number',
+            description: 'Whole tokens, up to 7 decimal places.',
+          },
+          total: {
+            type: 'number',
+            description: 'Whole tokens, up to 7 decimal places.',
+          },
+        },
+      },
+      borrowerPortfolio: {
+        type: 'object',
+        properties: {
+          totalLoans: { type: 'integer' },
+          activeLoans: { type: 'integer' },
+          defaultedLoans: { type: 'integer' },
+          totalOutstanding: {
+            type: 'number',
+            description: 'Whole tokens, up to 7 decimal places.',
+          },
+          byStatus: { type: 'object', additionalProperties: { type: 'integer' } },
+        },
+      },
+      pendingSettlements: {
+        type: 'object',
+        properties: {
+          count: { type: 'integer' },
+          totalValue: {
+            type: 'number',
+            description: 'Whole tokens, up to 7 decimal places.',
+          },
+        },
+      },
+      collateralRatio: {
+        type: 'object',
+        properties: {
+          totalCollateral: {
+            type: 'number',
+            description: 'Whole tokens, up to 7 decimal places.',
+          },
+          totalDebt: {
+            type: 'number',
+            description: 'Whole tokens, up to 7 decimal places.',
+          },
+          ratio: { type: 'number' },
+        },
+      },
+      recentTransactions: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            type: { type: 'string' },
+            amount: {
+              type: 'number',
+              description: 'Whole tokens for money events; raw value otherwise.',
+            },
+            loanId: { type: 'string', nullable: true },
+            timestamp: { type: 'string', format: 'date-time' },
+          },
+        },
+      },
+    },
+  },
   SimpleSuccessResponse: {
     type: 'object',
     properties: {
@@ -83,7 +176,7 @@ export const swaggerSchemas = {
       publicKey: { type: 'string', nullable: true },
       role: {
         type: 'string',
-        enum: ['admin', 'borrower', 'lender'],
+        enum: ['admin', 'agent', 'borrower', 'auditor', 'lender'],
         nullable: true,
       },
       scopes: {
@@ -145,7 +238,16 @@ export const swaggerSchemas = {
     type: 'object',
     properties: {
       type: { type: 'string' },
-      amount: { type: 'string', nullable: true },
+      amount: {
+        oneOf: [{ type: 'number' }, { type: 'string' }],
+        nullable: true,
+        description:
+          'Money events: whole tokens (e.g. 250.5 USDC). Config events (rates, ledgers, scores): the raw on-chain value.',
+      },
+      amountStroops: {
+        type: 'string',
+        description: 'Exact amount in stroops (10^-7 token). Money events only.',
+      },
       timestamp: { type: 'string', format: 'date-time', nullable: true },
       tx: { type: 'string', nullable: true },
     },
@@ -591,7 +693,16 @@ export const swaggerSchemas = {
       },
       loanId: { type: 'integer' },
       borrower: { type: 'string' },
-      amount: { type: 'string' },
+      amount: {
+        oneOf: [{ type: 'number' }, { type: 'string' }],
+        nullable: true,
+        description:
+          'Money events: whole tokens (e.g. 250.5 USDC). Config events (rates, ledgers, scores): the raw on-chain value.',
+      },
+      amountStroops: {
+        type: 'string',
+        description: 'Exact amount in stroops (10^-7 token). Money events only.',
+      },
       ledger: { type: 'integer' },
       ledgerClosedAt: { type: 'string', format: 'date-time' },
       txHash: { type: 'string' },

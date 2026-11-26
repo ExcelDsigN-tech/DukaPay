@@ -1,6 +1,5 @@
 import request from 'supertest';
 import { jest } from '@jest/globals';
-import { generateJwtToken } from '../services/authService.js';
 
 type MockQueryResult = { rows: unknown[]; rowCount?: number };
 
@@ -29,6 +28,7 @@ jest.unstable_mockModule('../services/cacheService.js', () => ({
 
 await import('../db/connection.js');
 const { default: app } = await import('../app.js');
+const { generateJwtToken } = await import('../services/authService.js');
 
 const userId = 'GTESTUSER1111111111111111111111111111111111111111111111111';
 

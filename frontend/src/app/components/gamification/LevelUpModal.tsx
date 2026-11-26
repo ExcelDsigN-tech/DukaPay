@@ -19,14 +19,6 @@ export function LevelUpModal() {
 
   const sound = useSoundEffect();
 
-  useEffect(() => {
-    if (showModal && soundEnabled) {
-      sound.play("levelUp");
-    }
-  }, [showModal, soundEnabled, sound]);
-
-  if (!pendingLevelUp) return null;
-
   const handleClose = () => {
     if (soundEnabled) {
       sound.play("click");
@@ -40,6 +32,14 @@ export function LevelUpModal() {
     containerRef: modalRef,
     initialFocusRef: closeButtonRef,
   });
+
+  useEffect(() => {
+    if (showModal && soundEnabled) {
+      sound.play("levelUp");
+    }
+  }, [showModal, soundEnabled, sound]);
+
+  if (!pendingLevelUp) return null;
 
   return (
     <AnimatePresence>

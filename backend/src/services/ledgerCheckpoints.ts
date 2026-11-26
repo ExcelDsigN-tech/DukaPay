@@ -5,14 +5,14 @@ import logger from '../utils/logger.js';
  * Whether any ledger range for `contract` is currently flagged `'suspect'`
  * by the indexer's contiguous-cursor checkpoint table (see
  * `EventIndexer.recordCheckpoint` in `eventIndexer.ts`). A consumer that
- * draws conclusions from indexed events — e.g. `defaultChecker.ts` deciding
- * a loan was never repaid — should treat events in a suspect window as
- * unreliable until the gap is reconciled (issue #1376).
+ * draws conclusions from indexed events (e.g. `defaultChecker.ts` deciding
+ * a loan was never repaid) should treat events in a suspect window as
+ * unreliable until the gap is reconciled.
  *
  * Deliberately kept in its own module, separate from `eventIndexer.ts`:
  * `defaultChecker.ts` needs this single query but not the rest of the
  * indexer's dependency graph (Soroban RPC client, webhook/notification/
- * event-stream services, etc.) — importing `eventIndexer.js` directly would
+ * event-stream services, etc.); importing `eventIndexer.js` directly would
  * pull all of that in transitively for a consumer that only wants to key
  * off `LOAN_MANAGER_CONTRACT_ID` and ask "is there a gap right now?".
  *

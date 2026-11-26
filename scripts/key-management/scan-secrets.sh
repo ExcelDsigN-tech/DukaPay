@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# scan-secrets.sh — "no hardcoded secrets" guard for DukaPay.
+# scan-secrets.sh: "no hardcoded secrets" guard for DukaPay.
 #
 # Fails (exit 1) if it finds likely secret material in source. Intended to run
 # in pre-commit and CI. Only key *references* (ARNs, vault IDs) are allowed;

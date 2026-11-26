@@ -27,8 +27,8 @@ export const getRemittanceHistory = asyncHandler(async (req: Request, res: Respo
   const { userId } = req.params;
 
   // 1. Fetch current score from database
-  const scoreResult = await query('SELECT current_score FROM scores WHERE user_id = $1', [userId]);
-  const score = scoreResult.rows[0]?.current_score ?? 500;
+  const scoreResult = await query('SELECT score FROM scores WHERE borrower = $1', [userId]);
+  const score = scoreResult.rows[0]?.score ?? scoreResult.rows[0]?.current_score ?? 500;
 
   // 2. Fetch all repayment and default events for history calculation
   const eventsResult = await query(
@@ -42,7 +42,7 @@ export const getRemittanceHistory = asyncHandler(async (req: Request, res: Respo
   const events = eventsResult.rows;
 
   // 3. Group by month for display. Accrue in stroops (bigint) so repeated
-  // `+=` across many repayments never accumulates float drift — previously
+  // `+=` across many repayments never accumulates float drift. Previously
   // this summed `parseFloat(amount) / 10000000` per event, which both loses
   // sub-stroop precision per event and compounds float rounding error across
   // the reduce. The exact stroop total is only converted to a display string
@@ -114,8 +114,8 @@ export const simulatePayment = asyncHandler(async (req: Request, res: Response) 
   const userId = req.user!.publicKey;
 
   // Fetch current score
-  const scoreResult = await query('SELECT current_score FROM scores WHERE user_id = $1', [userId]);
-  const currentScore = scoreResult.rows[0]?.current_score ?? 500;
+  const scoreResult = await query('SELECT score FROM scores WHERE borrower = $1', [userId]);
+  const currentScore = scoreResult.rows[0]?.score ?? scoreResult.rows[0]?.current_score ?? 500;
 
   const { repaymentDelta } = sorobanService.getScoreConfig();
   const newScore = Math.min(850, currentScore + repaymentDelta);

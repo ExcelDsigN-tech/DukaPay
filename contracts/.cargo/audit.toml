@@ -1,0 +1,14 @@
+# cargo-audit baseline for the contracts workspace (#839, #902).
+# Every entry needs a reason and a review date. Remove it as soon as the fix lands upstream.
+
+[advisories]
+ignore = [
+  # RUSTSEC-2026-0387: crypto-bigint 0.5.5 timing variability.
+  # Pulled in only by soroban-env-host (host side: tests and native builds) via
+  # elliptic-curve 0.13. Not in the wasm32 build we deploy
+  # (`cargo tree -e normal --target wasm32-unknown-unknown -i crypto-bigint` is empty).
+  # No fix upstream: soroban-env-host 30.0.0 still depends on elliptic-curve ^0.13.
+  # Remove when soroban-env-host moves to elliptic-curve 0.14 (crypto-bigint >= 0.7.6).
+  # Review by 2027-02-01.
+  "RUSTSEC-2026-0387",
+]

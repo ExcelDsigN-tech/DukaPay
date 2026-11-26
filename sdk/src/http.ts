@@ -1,7 +1,7 @@
 import { DukaPayError } from './errors.js';
 
 export interface HttpClientOptions {
-  /** API base URL, e.g. https://api.dukapay.io */
+  /** API base URL, e.g. https://your-backend.example */
   baseUrl: string;
   /** Static bearer token, or a function returning one (sync or async). */
   token?: string | (() => string | null | undefined | Promise<string | null | undefined>);
@@ -15,6 +15,8 @@ export interface HttpClientOptions {
   timeoutMs?: number;
   /** Injectable fetch, for tests / non-browser runtimes. */
   fetch?: typeof fetch;
+  /** Called on 401 to attempt token refresh. Should return new session or throw. */
+  onUnauthorized?: () => Promise<{ token: string; refreshToken?: string } | null>;
 }
 
 export interface RequestOptions {
@@ -36,6 +38,8 @@ export class HttpClient {
   private readonly timeoutMs: number;
   private readonly fetchImpl: typeof fetch;
   private token: HttpClientOptions['token'];
+  private readonly onUnauthorized?: () => Promise<{ token: string; refreshToken?: string } | null>;
+  private refreshPromise: Promise<void> | null = null;
 
   constructor(options: HttpClientOptions) {
     const fetchImpl = options.fetch ?? globalThis.fetch;
@@ -49,6 +53,7 @@ export class HttpClient {
     this.retryBackoffMs = options.retryBackoffMs ?? 300;
     this.timeoutMs = options.timeoutMs ?? 30_000;
     this.token = options.token;
+    this.onUnauthorized = options.onUnauthorized;
   }
 
   setToken(token: HttpClientOptions['token']): void {
@@ -62,6 +67,15 @@ export class HttpClient {
   }
 
   async request<T>(method: string, path: string, options: RequestOptions = {}): Promise<T> {
+    return this._request(method, path, options, false);
+  }
+
+  private async _request<T>(
+    method: string,
+    path: string,
+    options: RequestOptions,
+    isRetryAfter401: boolean,
+  ): Promise<T> {
     const url = new URL(this.baseUrl + (path.startsWith('/') ? path : `/${path}`));
     for (const [k, v] of Object.entries(options.query ?? {})) {
       if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
@@ -98,6 +112,14 @@ export class HttpClient {
         const parsed = await parseBody(res);
         if (res.ok) return parsed as T;
 
+        if (res.status === 401 && !isRetryAfter401 && this.onUnauthorized && !options.anonymous) {
+          clearTimeout(timer);
+          options.signal?.removeEventListener('abort', onExternalAbort);
+          
+          await this.refreshSession();
+          return this._request(method, path, options, true);
+        }
+
         const err = toError(res, parsed);
         if (!err.isRetryable || attempt === attempts - 1) throw err;
         lastErr = err;
@@ -116,6 +138,46 @@ export class HttpClient {
       await sleep(this.retryBackoffMs * 2 ** attempt);
     }
     throw lastErr ?? new DukaPayError('request failed');
+  }
+
+  /** Runs `onUnauthorized` once; concurrent 401s share the same refresh. */
+  private refreshSession(): Promise<void> {
+    if (!this.refreshPromise && this.onUnauthorized) {
+      this.refreshPromise = this.onUnauthorized()
+        .then(() => {
+          this.refreshPromise = null;
+        })
+        .catch((err) => {
+          this.refreshPromise = null;
+          throw err;
+        });
+    }
+    return this.refreshPromise ?? Promise.resolve();
+  }
+
+  /**
+   * Opens a long-lived `text/event-stream` response for `path`. Uses the same
+   * fetch, base headers, bearer token and 401 refresh as `request`, but no
+   * timeout or retries: the caller reads the body and ends it with `signal`.
+   */
+  async openStream(path: string, signal?: AbortSignal, isRetryAfter401 = false): Promise<Response> {
+    const url = new URL(this.baseUrl + (path.startsWith('/') ? path : `/${path}`));
+    const headers: Record<string, string> = {
+      ...this.baseHeaders,
+      accept: 'text/event-stream',
+    };
+    const token = await this.resolveToken();
+    if (token) headers.authorization = `Bearer ${token}`;
+
+    const res = await this.fetchImpl(url, { method: 'GET', headers, signal });
+    if (res.ok) return res;
+
+    if (res.status === 401 && !isRetryAfter401 && this.onUnauthorized) {
+      await res.body?.cancel();
+      await this.refreshSession();
+      return this.openStream(path, signal, true);
+    }
+    throw toError(res, await parseBody(res));
   }
 
   get<T>(path: string, options?: RequestOptions) {

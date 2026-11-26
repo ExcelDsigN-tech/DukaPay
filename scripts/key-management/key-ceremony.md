@@ -6,10 +6,10 @@ multi-party control so no single operator ever sees or can reconstruct a key.
 
 ## Participants
 
-- **Ceremony coordinator** (1) — runs the scripted steps, does not hold keys.
-- **Key custodians** (≥3 independent) — each authorizes one share / quorum
+- **Ceremony coordinator** (1): runs the scripted steps, does not hold keys.
+- **Key custodians** (≥3 independent): each authorizes one share / quorum
   member. For the governance admin key, these are the 5 governance signers.
-- **Observer / auditor** (1) — records the session, attests the outcome.
+- **Observer / auditor** (1): records the session, attests the outcome.
 
 ## Pre-conditions
 
@@ -45,7 +45,7 @@ multi-party control so no single operator ever sees or can reconstruct a key.
    containing: key references, public keys, participant names, timestamp, and
    the observer's signature. Commit to the repo.
 
-5. **Verification.** Run `scripts/key-management/scan-secrets.sh` — it must
+5. **Verification.** Run `scripts/key-management/scan-secrets.sh`; it must
    pass (only references present). Smoke-test signing with each key against a
    testnet contract.
 

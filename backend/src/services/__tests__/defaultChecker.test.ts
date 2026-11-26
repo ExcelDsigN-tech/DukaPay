@@ -82,7 +82,7 @@ describe('DefaultChecker', () => {
     );
   });
 
-  describe('suspect ledger range gate (#1376)', () => {
+  describe('suspect ledger range gate', () => {
     it('skips the run without submitting when the indexer has an unresolved ledger gap', async () => {
       mockSetNotExists.mockResolvedValue(true);
       mockQuery.mockImplementation(async (sql: string) => {

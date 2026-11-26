@@ -3,12 +3,13 @@ import { setAbsoluteUserScoresBulk } from './scoresService.js';
 import { sorobanService } from './sorobanService.js';
 import { jobMetricsService } from './jobMetricsService.js';
 import logger from '../utils/logger.js';
+import { env } from '../config/env.js';
 
 /**
  * Cross-contract reconciliation with Saga pattern (issues #1377, #420).
  *
  * A loan's custody change and its credit-score mutation share one atomic boundary.
- * When they don't — partial settlement — we track via saga with compensation.
+ * When they don't (partial settlement), we track via saga with compensation.
  *
  * State machine: PENDING -> PARTIAL -> COMPLETED / FAILED
  *  Also maps legacy: pending -> PENDING, half_applied -> PARTIAL, reconciled -> COMPLETED, failed -> FAILED
@@ -19,7 +20,12 @@ import logger from '../utils/logger.js';
 
 export type SettlementState = 'PENDING' | 'PARTIAL' | 'COMPLETED' | 'FAILED';
 // Legacy compatibility union
-export type ReconciliationState = SettlementState | 'pending' | 'half_applied' | 'reconciled' | 'failed';
+export type ReconciliationState =
+  | SettlementState
+  | 'pending'
+  | 'half_applied'
+  | 'reconciled'
+  | 'failed';
 
 interface UnresolvedRow {
   id: number;
@@ -45,19 +51,6 @@ export interface CrossContractReconciliationResult {
   compensatedCount: number;
   alertedPartialCount: number;
   autoCorrectEnabled: boolean;
-}
-
-function parsePositiveInt(value: string | undefined, fallback: number): number {
-  const parsed = Number.parseInt(value ?? '', 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
-
-function parseBoolean(value: string | undefined, fallback: boolean): boolean {
-  if (value == null) return fallback;
-  const normalized = value.trim().toLowerCase();
-  if (['1', 'true', 'yes', 'on'].includes(normalized)) return true;
-  if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
-  return fallback;
 }
 
 // On-chain event types that represent a credit-score mutation landing.
@@ -86,13 +79,14 @@ export class SettlementSaga {
         await step.action();
         this.executed.push(step);
       } catch (err) {
-        // Partial failure — compensate executed steps in reverse order
+        // Partial failure: compensate executed steps in reverse order
         await this.compensate();
         return { state: 'FAILED', failedStep: step.name };
       }
     }
     // If all steps succeeded
-    const state: SettlementState = this.executed.length === this.steps.length ? 'COMPLETED' : 'PARTIAL';
+    const state: SettlementState =
+      this.executed.length === this.steps.length ? 'COMPLETED' : 'PARTIAL';
     return { state };
   }
 
@@ -108,8 +102,11 @@ export class SettlementSaga {
   }
 }
 
-// Compensation handlers registry — each contract interaction has a compensating action
-export const compensationHandlers: Record<string, (params: Record<string, unknown>) => Promise<void>> = {
+// Compensation handlers registry: each contract interaction has a compensating action
+export const compensationHandlers: Record<
+  string,
+  (params: Record<string, unknown>) => Promise<void>
+> = {
   // Lending pool deposit compensation: withdraw equivalent
   lending_pool_deposit: async (params) => {
     logger.withContext().warn('compensating lending_pool deposit', params);
@@ -132,7 +129,10 @@ export const compensationHandlers: Record<string, (params: Record<string, unknow
   },
 };
 
-export async function runCompensation(operation: string, params: Record<string, unknown>): Promise<boolean> {
+export async function runCompensation(
+  operation: string,
+  params: Record<string, unknown>,
+): Promise<boolean> {
   const handler = compensationHandlers[operation];
   if (!handler) {
     logger.withContext().warn('no compensation handler for operation', { operation });
@@ -182,19 +182,19 @@ function toLegacyState(state: SettlementState): string {
 
 class CrossContractReconciler {
   private getMaxRowsPerRun(): number {
-    return parsePositiveInt(process.env.CROSS_RECONCILE_MAX_ROWS_PER_RUN, 500);
+    return env.CROSS_RECONCILE_MAX_ROWS_PER_RUN;
   }
 
   private getStaleAttempts(): number {
-    return parsePositiveInt(process.env.CROSS_RECONCILE_STALE_ATTEMPTS, 3);
+    return env.CROSS_RECONCILE_STALE_ATTEMPTS;
   }
 
   private isAutoCorrectEnabled(): boolean {
-    return parseBoolean(process.env.CROSS_RECONCILE_AUTOCORRECT_ENABLED, false);
+    return env.CROSS_RECONCILE_AUTOCORRECT_ENABLED;
   }
 
   private getPartialAlertThresholdMs(): number {
-    return parsePositiveInt(process.env.CROSS_RECONCILE_PARTIAL_ALERT_MS, 60 * 60 * 1000);
+    return env.CROSS_RECONCILE_PARTIAL_ALERT_MS;
   }
 
   private async backfillPendingRows(): Promise<number> {
@@ -299,11 +299,15 @@ class CrossContractReconciler {
     );
   }
 
-  private async markState(id: number, state: SettlementState | 'pending' | 'half_applied'): Promise<void> {
+  private async markState(
+    id: number,
+    state: SettlementState | 'pending' | 'half_applied',
+  ): Promise<void> {
     // Normalize to legacy for DB compatibility (new states will be migrated)
-    const dbState = typeof state === 'string' && ['PENDING', 'PARTIAL', 'COMPLETED', 'FAILED'].includes(state)
-      ? toLegacyState(state as SettlementState)
-      : state;
+    const dbState =
+      typeof state === 'string' && ['PENDING', 'PARTIAL', 'COMPLETED', 'FAILED'].includes(state)
+        ? toLegacyState(state as SettlementState)
+        : state;
     await query(
       `/* update */
       UPDATE cross_contract_reconciliation
@@ -367,7 +371,11 @@ class CrossContractReconciler {
   async compensatePartial(row: UnresolvedRow): Promise<boolean> {
     const operation = row.operation;
     const handlerKey =
-      operation === 'repay' ? 'score_update' : operation === 'default' ? 'score_update' : 'lending_pool_deposit';
+      operation === 'repay'
+        ? 'score_update'
+        : operation === 'default'
+          ? 'score_update'
+          : 'lending_pool_deposit';
 
     const compensated = await runCompensation(handlerKey, {
       borrower: row.borrower,
@@ -425,7 +433,10 @@ class CrossContractReconciler {
           continue;
         }
 
-        const scoreLedger = await this.findMatchingScoreLedger(row.borrower, row.disbursementLedger);
+        const scoreLedger = await this.findMatchingScoreLedger(
+          row.borrower,
+          row.disbursementLedger,
+        );
 
         if (scoreLedger !== null) {
           await this.markReconciled(row.id, scoreLedger, true);
@@ -434,7 +445,7 @@ class CrossContractReconciler {
         }
 
         if (row.attempts + 1 >= staleAttempts) {
-          // Transition to PARTIAL (half_applied) — saga partial failure
+          // Transition to PARTIAL (half_applied): saga partial failure
           await this.markState(row.id, 'PARTIAL');
           result.halfAppliedCount += 1;
 
@@ -460,7 +471,7 @@ class CrossContractReconciler {
             }
           }
         } else {
-          // Still PENDING — not yet stale
+          // Still PENDING, not yet stale
           await this.markState(row.id, 'PENDING');
           result.stillPendingCount += 1;
         }
@@ -494,16 +505,16 @@ let inFlight = false;
 
 export function startCrossContractReconciler(): void {
   if (interval) return;
-  if (process.env.NODE_ENV === 'test') return;
+  if (env.NODE_ENV === 'test') return;
 
-  if (!process.env.REMITTANCE_NFT_CONTRACT_ID) {
+  if (!env.REMITTANCE_NFT_CONTRACT_ID) {
     logger
       .withContext()
       .warn('Cross-contract reconciler disabled (set REMITTANCE_NFT_CONTRACT_ID)');
     return;
   }
 
-  const intervalMs = parsePositiveInt(process.env.CROSS_RECONCILE_INTERVAL_MS, 5 * 60 * 1000);
+  const intervalMs = env.CROSS_RECONCILE_INTERVAL_MS;
 
   const runOnce = async () => {
     if (inFlight) {

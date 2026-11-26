@@ -27,7 +27,7 @@ let hasAttachedSystemThemeListener = false;
 export const useThemeStore = create<ThemeStore>()(
   devtools(
     (set, get) => ({
-      theme: "light",
+      theme: "dark",
       hydrated: false,
 
       initializeTheme: () => {
@@ -42,16 +42,10 @@ export const useThemeStore = create<ThemeStore>()(
         hasAttachedSystemThemeListener = true;
         const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
         const handleSystemThemeChange = () => {
-          const stored = getStoredTheme();
-          if (stored !== null && stored !== "system") return;
-
-          const nextTheme = mediaQuery.matches ? "dark" : "light";
-          applyTheme(stored === "system" ? "system" : nextTheme);
-          set(
-            { theme: stored === "system" ? "system" : nextTheme },
-            false,
-            "theme/syncSystemTheme",
-          );
+          // Only users who chose "system" in Settings follow the OS.
+          if (getStoredTheme() !== "system") return;
+          applyTheme("system");
+          set({ theme: "system" }, false, "theme/syncSystemTheme");
         };
 
         mediaQuery.addEventListener("change", handleSystemThemeChange);
@@ -66,9 +60,10 @@ export const useThemeStore = create<ThemeStore>()(
       },
 
       toggleTheme: () => {
+        // The header switch is two-way: light and dark. "System" stays a Settings option.
         const current = get().theme;
-        const nextTheme = current === "light" ? "dark" : current === "dark" ? "system" : "light";
-        get().setTheme(nextTheme);
+        const resolved = current === "system" ? getSystemTheme() : current;
+        get().setTheme(resolved === "dark" ? "light" : "dark");
       },
     }),
     { name: "ThemeStore" },

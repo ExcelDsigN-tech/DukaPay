@@ -125,8 +125,8 @@ export function StepCollateralNFT({ data, onChange, onNext, onBack }: StepCollat
               </li>
               <li className="flex items-start gap-2">
                 <span className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-indigo-500" />
-                Your NFT encodes your full repayment history — it cannot be transferred while a loan
-                is active.
+                Your NFT encodes your full repayment history, so it cannot be transferred while a
+                loan is active.
               </li>
             </ul>
           </div>

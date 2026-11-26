@@ -8,6 +8,15 @@ import {
   updateNotificationPreferences,
 } from '../controllers/notificationController.js';
 import { requireJwtAuth, requireScopes } from '../middleware/jwtAuth.js';
+import { validateBody, validateParams, validateQuery } from '../middleware/validation.js';
+import {
+  emptyNotificationsBodySchema,
+  emptyNotificationsParamsSchema,
+  emptyNotificationsQuerySchema,
+  getNotificationsQuerySchema,
+  markNotificationsReadBodySchema,
+  updateNotificationPreferencesSchema,
+} from '../schemas/notificationSchemas.js';
 
 const router = Router();
 
@@ -61,7 +70,15 @@ const router = Router();
  *             schema:
  *               $ref: '#/components/schemas/NotificationsResponse'
  */
-router.get('/', requireJwtAuth, requireScopes('read:notifications'), getNotifications);
+router.get(
+  '/',
+  requireJwtAuth,
+  requireScopes('read:notifications'),
+  validateParams(emptyNotificationsParamsSchema),
+  validateQuery(getNotificationsQuerySchema),
+  validateBody(emptyNotificationsBodySchema),
+  getNotifications,
+);
 
 /**
  * @swagger
@@ -79,7 +96,14 @@ router.get('/', requireJwtAuth, requireScopes('read:notifications'), getNotifica
  *             schema:
  *               $ref: '#/components/schemas/NotificationPreferences'
  */
-router.get('/preferences', requireJwtAuth, getNotificationPreferences);
+router.get(
+  '/preferences',
+  requireJwtAuth,
+  validateParams(emptyNotificationsParamsSchema),
+  validateQuery(emptyNotificationsQuerySchema),
+  validateBody(emptyNotificationsBodySchema),
+  getNotificationPreferences,
+);
 
 /**
  * @swagger
@@ -103,7 +127,14 @@ router.get('/preferences', requireJwtAuth, getNotificationPreferences);
  *             schema:
  *               $ref: '#/components/schemas/NotificationPreferences'
  */
-router.put('/preferences', requireJwtAuth, updateNotificationPreferences);
+router.put(
+  '/preferences',
+  requireJwtAuth,
+  validateParams(emptyNotificationsParamsSchema),
+  validateQuery(emptyNotificationsQuerySchema),
+  validateBody(updateNotificationPreferencesSchema),
+  updateNotificationPreferences,
+);
 
 /**
  * @swagger
@@ -125,7 +156,15 @@ router.put('/preferences', requireJwtAuth, updateNotificationPreferences);
  *             schema:
  *               $ref: '#/components/schemas/ServerSentEventStream'
  */
-router.get('/stream', requireJwtAuth, requireScopes('read:notifications'), streamNotifications);
+router.get(
+  '/stream',
+  requireJwtAuth,
+  requireScopes('read:notifications'),
+  validateParams(emptyNotificationsParamsSchema),
+  validateQuery(emptyNotificationsQuerySchema),
+  validateBody(emptyNotificationsBodySchema),
+  streamNotifications,
+);
 
 /**
  * @swagger
@@ -154,7 +193,15 @@ router.get('/stream', requireJwtAuth, requireScopes('read:notifications'), strea
  *             schema:
  *               $ref: '#/components/schemas/SimpleSuccessResponse'
  */
-router.post('/mark-read', requireJwtAuth, requireScopes('write:notifications'), markRead);
+router.post(
+  '/mark-read',
+  requireJwtAuth,
+  requireScopes('write:notifications'),
+  validateParams(emptyNotificationsParamsSchema),
+  validateQuery(emptyNotificationsQuerySchema),
+  validateBody(markNotificationsReadBodySchema),
+  markRead,
+);
 
 /**
  * @swagger
@@ -172,6 +219,14 @@ router.post('/mark-read', requireJwtAuth, requireScopes('write:notifications'), 
  *             schema:
  *               $ref: '#/components/schemas/SimpleSuccessResponse'
  */
-router.post('/mark-all-read', requireJwtAuth, requireScopes('write:notifications'), markAllRead);
+router.post(
+  '/mark-all-read',
+  requireJwtAuth,
+  requireScopes('write:notifications'),
+  validateParams(emptyNotificationsParamsSchema),
+  validateQuery(emptyNotificationsQuerySchema),
+  validateBody(emptyNotificationsBodySchema),
+  markAllRead,
+);
 
 export default router;

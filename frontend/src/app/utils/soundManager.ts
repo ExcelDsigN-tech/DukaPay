@@ -7,12 +7,12 @@
  * dynamic import() the first time useSoundEffect()'s returned play/setVolume/
  * setEnabled/preload is actually called (#1523). Consumers previously
  * imported useSoundEffect statically at module scope (GamificationSettings,
- * LevelUpModal, and GlobalXPGain — the last mounted globally in
+ * LevelUpModal, and GlobalXPGain, the last mounted globally in
  * app/layout.tsx), which pulled soundManagerCore's ~8 placeholder audio
  * clips and Audio-element setup into every page load regardless of whether
  * sound is enabled or the user ever triggers a sound effect. This file's
  * public API (useSoundEffect, getSoundManager, SoundEffect) is unchanged so
- * no call site needs to change — only the module actually doing the work is
+ * no call site needs to change; only the module actually doing the work is
  * now deferred.
  */
 
@@ -66,7 +66,7 @@ function withManager(fn: (manager: SoundManagerInstance) => void): void {
 /**
  * Returns the lazily-loaded singleton SoundManager once it has finished
  * loading, or null if the dynamic import hasn't resolved yet. Prefer
- * useSoundEffect() for normal call sites — this is only exposed for cases
+ * useSoundEffect() for normal call sites; this is only exposed for cases
  * that need synchronous access after confirming the manager is ready.
  */
 export function getSoundManager(): SoundManagerInstance | null {
@@ -78,7 +78,7 @@ export function getSoundManager(): SoundManagerInstance | null {
  * Hook to use sound manager with gamification store integration.
  *
  * The underlying SoundManager module is only fetched (via dynamic import)
- * the first time one of the returned methods is actually called — merely
+ * the first time one of the returned methods is actually called; merely
  * calling useSoundEffect() (e.g. to read `sound` into a variable, as every
  * current consumer does) has no loading cost.
  */

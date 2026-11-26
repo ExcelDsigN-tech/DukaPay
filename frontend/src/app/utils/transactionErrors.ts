@@ -63,6 +63,11 @@ export const ERROR_CODE_MESSAGES: Record<string, string> = {
   LOAN_NOT_ACTIVE: "Loan is not active",
   INVALID_LOAN_ID: "Invalid loan ID provided",
   INVALID_TX_XDR: "Invalid transaction XDR format",
+  SOLVENCY_VIOLATED: "The requested amount would breach the agent vault solvency limit",
+  INSUFFICIENT_FLOAT: "The agent does not have enough float for this operation",
+  TOKEN_REPLAY_DETECTED: "Token replay detected. Please re-authenticate.",
+  INVALID_REFRESH_TOKEN: "Invalid or expired refresh token",
+  CSRF_TOKEN_INVALID: "Invalid or missing CSRF token",
 };
 
 const DEFAULT_HORIZON_URL = "https://horizon-testnet.stellar.org";

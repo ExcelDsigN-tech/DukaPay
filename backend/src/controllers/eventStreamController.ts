@@ -37,8 +37,8 @@ const parseLastEventId = (req: Request): string | null => {
  * GET /api/events/stream?borrower=G...
  *
  * SSE endpoint for real-time loan events.
- * - With `?borrower=G...` — streams events for that specific borrower (requires JWT matching)
- * - Without `?borrower` — streams all events (requires API key for admin access)
+ * - With `?borrower=G...`: streams events for that specific borrower (requires JWT matching)
+ * - Without `?borrower`: streams all events (requires API key for admin access)
  */
 export const streamEvents = asyncHandler(async (req: Request, res: Response) => {
   const requestedBorrower = typeof req.query.borrower === 'string' ? req.query.borrower : undefined;

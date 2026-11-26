@@ -19,6 +19,8 @@ export interface LoanWizardData {
   /** Derived from credit score query (passed in) */
   creditScore: number;
   maxAmount: number;
+  /** Annual rate from the backend loan config (GET /loans/config) */
+  interestRatePercent: number;
 }
 
 // ─── Step definitions ─────────────────────────────────────────────────────────
@@ -36,6 +38,7 @@ interface LoanApplicationWizardProps {
   borrowerAddress: string;
   creditScore: number;
   maxAmount: number;
+  interestRatePercent: number;
   onSuccess: (loanId: string) => void;
 }
 
@@ -43,6 +46,7 @@ export function LoanApplicationWizard({
   borrowerAddress,
   creditScore,
   maxAmount,
+  interestRatePercent,
   onSuccess,
 }: LoanApplicationWizardProps) {
   const [currentStep, setCurrentStep] = useState(1);
@@ -54,6 +58,7 @@ export function LoanApplicationWizard({
     collateralConfirmed: false,
     creditScore,
     maxAmount,
+    interestRatePercent,
   });
 
   const updateData = (updates: Partial<LoanWizardData>) => {

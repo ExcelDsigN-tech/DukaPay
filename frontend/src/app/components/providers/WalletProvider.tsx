@@ -1,8 +1,17 @@
 "use client";
 
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import type { TokenBalance, WalletNetwork, WalletStatus } from "../../stores/useWalletStore";
 import { useWalletStore } from "../../stores/useWalletStore";
+import { NEXT_PUBLIC_API_URL } from "../../lib/apiConfig";
 
 type FreighterApi = typeof import("@stellar/freighter-api");
 
@@ -14,6 +23,10 @@ interface ExtendedFreighterApi {
     xdr: string,
     opts?: { network?: string; networkPassphrase?: string },
   ) => Promise<string | { signedTxXdr?: string; error?: string }>;
+  signMessage: (
+    message: string,
+    opts?: { networkPassphrase?: string; address?: string },
+  ) => Promise<FreighterSignMessageResult>;
   getNetworkDetails?: () => Promise<FreighterNetworkResult>;
   getNetwork?: () => Promise<FreighterNetworkResult>;
   watchAddress?: (callback: (address: string) => void) => () => void;
@@ -43,6 +56,12 @@ interface FreighterNetworkResult {
   error?: unknown;
 }
 
+interface FreighterSignMessageResult {
+  // Freighter v4+ returns base64; older extensions return a Buffer.
+  signedMessage: string | { toString(encoding: "base64"): string } | null;
+  error?: unknown;
+}
+
 interface HorizonBalance {
   balance: string;
   asset_type: "native" | "credit_alphanum4" | "credit_alphanum12" | "liquidity_pool_shares";
@@ -56,6 +75,13 @@ const NETWORK_CHAIN_IDS: Record<string, number> = {
   TESTNET: 2,
   FUTURENET: 3,
   STANDALONE: 4,
+};
+
+const NETWORK_PASSPHRASES: Record<string, string> = {
+  PUBLIC: "Public Global Stellar Network ; October 2015",
+  TESTNET: "Test SDF Network ; September 2015",
+  FUTURENET: "Test SDF Future Network ; October 2022",
+  STANDALONE: "Standalone Network ; Separate from SDF",
 };
 
 function normalizeWalletError(error: unknown): string {
@@ -191,6 +217,12 @@ export function WalletProvider({ children }: WalletProviderProps) {
       const walletNetwork = mapWalletNetwork(networkResult.network);
       const nextStatus: WalletStatus = walletNetwork.isSupported ? "connected" : "error";
 
+      // Sign in before marking the wallet connected: connected pages fire
+      // authenticated requests at once, and a 401 logs the user out.
+      if (interactive && walletNetwork.isSupported) {
+        await signIn(addressResult.address, walletNetwork.name);
+      }
+
       setConnected(addressResult.address, walletNetwork);
       setNetwork(walletNetwork);
       setStatus(nextStatus);
@@ -225,6 +257,51 @@ export function WalletProvider({ children }: WalletProviderProps) {
     return task;
   }
 
+  async function postAuth<T>(path: string, body: Record<string, string>): Promise<T> {
+    const response = await fetch(`${NEXT_PUBLIC_API_URL}/api/auth/${path}`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const payload = (await response.json().catch(() => ({}))) as {
+      data?: T;
+      message?: string;
+      error?: { message?: string };
+    };
+
+    if (!response.ok || !payload.data) {
+      throw new Error(payload.error?.message ?? payload.message ?? "Sign-in failed.");
+    }
+
+    return payload.data;
+  }
+
+  /**
+   * Signs the backend's challenge with Freighter and exchanges it for the
+   * httpOnly session cookie that authenticated API calls need.
+   */
+  async function signIn(publicKey: string, networkName: string) {
+    const { message } = await postAuth<{ message: string }>("challenge", { publicKey });
+
+    const api = (await loadFreighterApi()) as unknown as ExtendedFreighterApi;
+    const result = await api.signMessage(message, {
+      address: publicKey,
+      networkPassphrase: NETWORK_PASSPHRASES[networkName] ?? NETWORK_PASSPHRASES.TESTNET,
+    });
+
+    if (result.error || !result.signedMessage) {
+      throw new Error(normalizeWalletError(result.error ?? "Message signing was rejected."));
+    }
+
+    const signature =
+      typeof result.signedMessage === "string"
+        ? result.signedMessage
+        : result.signedMessage.toString("base64");
+
+    await postAuth("login", { publicKey, message, signature });
+  }
+
   async function connectWallet() {
     setStatus("connecting");
     setError(null, "connecting");
@@ -240,24 +317,22 @@ export function WalletProvider({ children }: WalletProviderProps) {
     (async () => {
       try {
         // Unregister service workers
-        if (typeof navigator !== "undefined" && 'serviceWorker' in navigator) {
+        if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
           try {
             const regs = await navigator.serviceWorker.getRegistrations();
             await Promise.all(regs.map((r) => r.unregister()));
           } catch (swErr) {
             // Non-fatal: log and continue
-            // eslint-disable-next-line no-console
             console.error("Service worker unregister failed:", swErr);
           }
         }
 
-        // Clear Cache Storage (all caches) — especially PWA cached responses
+        // Clear Cache Storage (all caches), especially PWA cached responses
         if (typeof caches !== "undefined") {
           try {
             const cacheKeys = await caches.keys();
             await Promise.all(cacheKeys.map((k) => caches.delete(k)));
           } catch (cacheErr) {
-            // eslint-disable-next-line no-console
             console.error("Cache clear failed:", cacheErr);
           }
         }
@@ -273,7 +348,6 @@ export function WalletProvider({ children }: WalletProviderProps) {
             }
           }
         } catch (lsErr) {
-          // eslint-disable-next-line no-console
           console.error("localStorage clear failed:", lsErr);
         }
 
@@ -285,13 +359,14 @@ export function WalletProvider({ children }: WalletProviderProps) {
             }
           }
         } catch (ssErr) {
-          // eslint-disable-next-line no-console
           console.error("sessionStorage clear failed:", ssErr);
         }
 
         // IndexedDB: delete databases whose name includes wallet-related substrings
         try {
-          const idbAny = indexedDB as unknown as { databases?: () => Promise<Array<{ name?: string }>> };
+          const idbAny = indexedDB as unknown as {
+            databases?: () => Promise<Array<{ name?: string }>>;
+          };
           if (typeof idbAny.databases === "function") {
             const dbs = await idbAny.databases();
             await Promise.all(
@@ -307,14 +382,12 @@ export function WalletProvider({ children }: WalletProviderProps) {
                     });
                   }
                 } catch (e) {
-                  // eslint-disable-next-line no-console
                   console.error("IndexedDB delete failed for", db.name, e);
                 }
               }),
             );
           }
         } catch (idbErr) {
-          // eslint-disable-next-line no-console
           console.error("IndexedDB cleanup failed:", idbErr);
         }
 
@@ -324,27 +397,20 @@ export function WalletProvider({ children }: WalletProviderProps) {
           window.location.replace(window.location.href);
         } catch (reloadErr) {
           // Fallback to reload
-          // eslint-disable-next-line no-console
           console.error("Force reload failed, falling back to location.reload():", reloadErr);
           window.location.reload();
         }
       } catch (err) {
         // Ensure we always reload to get a clean state
-        // eslint-disable-next-line no-console
         console.error("Disconnect cleanup unexpected error:", err);
         try {
           window.location.reload();
-        } catch {}
+        } catch (reloadErr) {
+          console.error("Reload after disconnect failed:", reloadErr);
+        }
       }
     })();
   }
-
-  const NETWORK_PASSPHRASES: Record<string, string> = {
-    PUBLIC: "Public Global Stellar Network ; October 2015",
-    TESTNET: "Test SDF Network ; September 2015",
-    FUTURENET: "Test SDF Future Network ; October 2022",
-    STANDALONE: "Standalone Network ; Separate from SDF",
-  };
 
   async function signTransaction(unsignedTxXdr: string): Promise<string> {
     const api = (await loadFreighterApi()) as unknown as ExtendedFreighterApi;
@@ -370,10 +436,13 @@ export function WalletProvider({ children }: WalletProviderProps) {
     throw new Error("Signing failed: No signed transaction returned.");
   }
 
-  async function refreshWallet() {
+  const syncWalletRef = useRef(syncWallet);
+  syncWalletRef.current = syncWallet;
+
+  const refreshWallet = useCallback(async () => {
     if (!shouldAutoReconnect && !address) return;
-    await syncWallet(false);
-  }
+    await syncWalletRef.current(false);
+  }, [shouldAutoReconnect, address]);
 
   // Initial check and Auto-reconnect
   useEffect(() => {
@@ -400,7 +469,7 @@ export function WalletProvider({ children }: WalletProviderProps) {
     return () => {
       cancelled = true;
     };
-  }, [shouldAutoReconnect]);
+  }, [shouldAutoReconnect, refreshWallet]);
 
   // Event Listeners
   useEffect(() => {
@@ -421,7 +490,7 @@ export function WalletProvider({ children }: WalletProviderProps) {
       }
 
       if (typeof api.watchNetwork === "function") {
-        unwatchNetwork = api.watchNetwork((newNetwork: string) => {
+        unwatchNetwork = api.watchNetwork(() => {
           void refreshWallet();
         });
       }
@@ -431,7 +500,7 @@ export function WalletProvider({ children }: WalletProviderProps) {
       if (unwatchAddress) unwatchAddress();
       if (unwatchNetwork) unwatchNetwork();
     };
-  }, [address]);
+  }, [address, disconnect, refreshWallet]);
 
   return (
     <WalletProviderContext.Provider

@@ -4,6 +4,7 @@ import { sorobanService } from './sorobanService.js';
 import { recordScoreReconciliationRun } from '../middleware/metrics.js';
 import { jobMetricsService } from './jobMetricsService.js';
 import logger from '../utils/logger.js';
+import { env } from '../config/env.js';
 
 interface ActiveBorrowerScoreRow {
   address: string;
@@ -28,24 +29,6 @@ export interface ScoreReconciliationResult {
   divergences: ScoreDivergence[];
 }
 
-function parsePositiveInt(value: string | undefined, fallback: number): number {
-  const parsed = Number.parseInt(value ?? '', 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
-
-function parseNonNegativeInt(value: string | undefined, fallback: number): number {
-  const parsed = Number.parseInt(value ?? '', 10);
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
-}
-
-function parseBoolean(value: string | undefined, fallback: boolean): boolean {
-  if (value == null) return fallback;
-  const normalized = value.trim().toLowerCase();
-  if (['1', 'true', 'yes', 'on'].includes(normalized)) return true;
-  if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
-  return fallback;
-}
-
 function chunk<T>(items: T[], size: number): T[][] {
   if (size <= 0) return [items];
   const out: T[][] = [];
@@ -57,19 +40,19 @@ function chunk<T>(items: T[], size: number): T[][] {
 
 class ScoreReconciliationService {
   private getBatchSize(): number {
-    return parsePositiveInt(process.env.SCORE_RECONCILIATION_BATCH_SIZE, 25);
+    return env.SCORE_RECONCILIATION_BATCH_SIZE;
   }
 
   private getMaxBorrowersPerRun(): number {
-    return parsePositiveInt(process.env.SCORE_RECONCILIATION_MAX_BORROWERS_PER_RUN, 500);
+    return env.SCORE_RECONCILIATION_MAX_BORROWERS_PER_RUN;
   }
 
   private isAutoCorrectEnabled(): boolean {
-    return parseBoolean(process.env.SCORE_RECONCILIATION_AUTOCORRECT_ENABLED, false);
+    return env.SCORE_RECONCILIATION_AUTOCORRECT_ENABLED;
   }
 
   private getAutoCorrectThreshold(): number {
-    return parseNonNegativeInt(process.env.SCORE_RECONCILIATION_AUTOCORRECT_THRESHOLD, 50);
+    return env.SCORE_RECONCILIATION_AUTOCORRECT_THRESHOLD;
   }
 
   private async fetchActiveBorrowerScores(): Promise<ActiveBorrowerScoreRow[]> {
@@ -91,9 +74,9 @@ class ScoreReconciliationService {
       )
       SELECT DISTINCT
         a.address,
-        s.current_score
+        s.score
       FROM active_loans a
-      LEFT JOIN scores s ON s.user_id = a.address
+      LEFT JOIN scores s ON s.borrower = a.address
       ORDER BY a.address ASC
       LIMIT $1
       `,
@@ -103,15 +86,14 @@ class ScoreReconciliationService {
     return result.rows.map((row) => {
       const record = row as {
         address?: string;
+        score?: number | string | null;
         current_score?: number | string | null;
       };
 
+      const val = record.score !== undefined ? record.score : record.current_score;
       return {
         address: String(record.address ?? ''),
-        dbScore:
-          record.current_score === null || record.current_score === undefined
-            ? null
-            : Number(record.current_score),
+        dbScore: val === null || val === undefined ? null : Number(val),
       };
     });
   }
@@ -242,18 +224,18 @@ let reconciliationInFlight = false;
 export function startScoreReconciliationScheduler(): void {
   if (reconciliationInterval) return;
 
-  if (process.env.NODE_ENV === 'test') {
+  if (env.NODE_ENV === 'test') {
     return;
   }
 
-  if (!process.env.REMITTANCE_NFT_CONTRACT_ID) {
+  if (!env.REMITTANCE_NFT_CONTRACT_ID) {
     logger
       .withContext()
       .warn('Score reconciliation scheduler disabled (set REMITTANCE_NFT_CONTRACT_ID)');
     return;
   }
 
-  const intervalMs = parsePositiveInt(process.env.SCORE_RECONCILIATION_INTERVAL_MS, 60 * 60 * 1000);
+  const intervalMs = env.SCORE_RECONCILIATION_INTERVAL_MS;
 
   const run = async () => {
     if (reconciliationInFlight) {

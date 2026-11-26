@@ -2,7 +2,7 @@ import { query } from '../db/connection.js';
 
 /**
  * Whitelist of columns allowed in dynamic SET clauses (issue #406).
- * Column names are never trusted from user input — only from these
+ * Column names are never trusted from user input, only from these
  * statically-defined sets. Any key in `data` that isn't listed here is
  * silently dropped so an attacker can't inject arbitrary SQL via
  * Object.keys(data).

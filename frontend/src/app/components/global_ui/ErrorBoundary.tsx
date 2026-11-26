@@ -107,7 +107,7 @@ export function ErrorFallback({
  * ErrorBoundary catches JavaScript errors anywhere in its child component tree
  * and displays a fallback UI instead of crashing the entire application.
  *
- * Must be a class component — React does not yet support error boundaries
+ * Must be a class component; React does not yet support error boundaries
  * as functional components.
  */
 export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {

@@ -5,12 +5,14 @@ process.env.INTERNAL_API_KEY = 'test-api-key';
 process.env.NODE_ENV = 'test';
 
 import { jest } from '@jest/globals';
+import type { Express } from 'express';
 
 // ESM-compatible mocking
 const mockQuery = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 jest.unstable_mockModule('../db/connection.js', () => ({
   query: mockQuery,
   default: { query: mockQuery, connect: jest.fn(), end: jest.fn() },
+  pool: { query: mockQuery, connect: jest.fn(), end: jest.fn() },
   withTransaction: jest.fn(),
 }));
 jest.unstable_mockModule('../db/transaction.js', () => ({
@@ -20,7 +22,7 @@ jest.unstable_mockModule('../db/transaction.js', () => ({
 
 let request: typeof import('supertest');
 let jwt: typeof import('jsonwebtoken');
-let app: any;
+let app: Express;
 // Dynamic imports after mocks
 beforeAll(async () => {
   ({ default: request } = await import('supertest'));
@@ -30,7 +32,7 @@ beforeAll(async () => {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 // Real Stellar-format public key so any key-format validation passes
-const TEST_PUBLIC_KEY = 'GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN';
+const TEST_PUBLIC_KEY = 'GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN7';
 const ADMIN_API_KEY = 'test-api-key';
 const LOAN_ID = 42;
 const DISPUTE_ID = 7;

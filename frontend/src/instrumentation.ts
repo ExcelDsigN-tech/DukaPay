@@ -13,6 +13,5 @@ export const onRequestError = async (
   ...args: any[]
 ) => {
   const { captureRequestError } = await import("@sentry/nextjs");
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   captureRequestError(...(args as Parameters<typeof captureRequestError>));
 };

@@ -19,7 +19,7 @@
 //! only the admin can `emergency_unpause`.
 //!
 //! The default quorum for DukaPay is 3-of-5: admin, security, ops, legal,
-//! community — configured once via `configure_upgrade_signers`.
+//! community, configured once via `configure_upgrade_signers`.
 
 use soroban_sdk::{
     contractimpl, contracttype, symbol_short, Address, BytesN, Env, IntoVal, Map, Symbol, Vec,
@@ -140,6 +140,7 @@ impl GovernanceContract {
             return Err(GovernanceError::InvalidUpgradeThreshold);
         }
 
+        GovernanceContract::bump_instance_ttl(&env);
         env.storage().instance().set(&KEY_UPG_SIGNERS, &unique);
         env.storage().instance().set(&KEY_UPG_THRESH, &threshold);
         if !env.storage().instance().has(&KEY_UPG_PAUSED) {
@@ -161,6 +162,10 @@ impl GovernanceContract {
     ) -> Result<(), GovernanceError> {
         proposer.require_auth();
         Self::require_signer_or_admin(&env, &proposer)?;
+
+        if target == env.current_contract_address() {
+            return Err(GovernanceError::InvalidUpgradeTarget);
+        }
 
         if let Some(pending) = Self::load_pending(&env) {
             // Allow replacing an upgrade that has already expired.
@@ -185,6 +190,7 @@ impl GovernanceContract {
             executable_after,
             approvals: Map::new(&env),
         };
+        GovernanceContract::bump_instance_ttl(&env);
         env.storage().instance().set(&KEY_UPG_PENDING, &pending);
 
         env.events().publish(
@@ -219,6 +225,7 @@ impl GovernanceContract {
         let approvals = pending.approvals.len();
         let threshold = Self::upgrade_threshold(&env)?;
         let id = pending.id;
+        GovernanceContract::bump_instance_ttl(&env);
         env.storage().instance().set(&KEY_UPG_PENDING, &pending);
 
         env.events().publish(
@@ -266,6 +273,7 @@ impl GovernanceContract {
 
         // Interaction first: if the target rejects the upgrade the whole tx traps
         // and no local state is mutated.
+        GovernanceContract::bump_instance_ttl(&env);
         env.invoke_contract::<()>(
             &pending.target,
             &symbol_short!("upgrade"),
@@ -295,6 +303,7 @@ impl GovernanceContract {
         Self::require_signer_or_admin(&env, &caller)?;
 
         let pending = Self::load_pending(&env).ok_or(GovernanceError::NoPendingUpgrade)?;
+        GovernanceContract::bump_instance_ttl(&env);
         env.storage().instance().remove(&KEY_UPG_PENDING);
 
         env.events().publish(
@@ -314,6 +323,7 @@ impl GovernanceContract {
     pub fn emergency_pause(env: Env, caller: Address) -> Result<(), GovernanceError> {
         caller.require_auth();
         Self::require_signer_or_admin(&env, &caller)?;
+        GovernanceContract::bump_instance_ttl(&env);
         env.storage().instance().set(&KEY_UPG_PAUSED, &true);
         env.events().publish(
             (symbol_short!("UpgPause"),),
@@ -326,10 +336,11 @@ impl GovernanceContract {
         Ok(())
     }
 
-    /// Lift the upgrade freeze. Admin-only — deliberately higher-bar than pausing.
+    /// Lift the upgrade freeze. Admin-only, deliberately higher-bar than pausing.
     pub fn emergency_unpause(env: Env) -> Result<(), GovernanceError> {
         let admin = GovernanceContract::read_admin(&env)?;
         admin.require_auth();
+        GovernanceContract::bump_instance_ttl(&env);
         env.storage().instance().set(&KEY_UPG_PAUSED, &false);
         env.events().publish(
             (symbol_short!("UpgUnpse"),),
@@ -345,10 +356,12 @@ impl GovernanceContract {
     // ── Views ─────────────────────────────────────────────────────────────────
 
     pub fn get_pending_upgrade(env: Env) -> Option<PendingUpgrade> {
+        GovernanceContract::bump_instance_ttl(&env);
         Self::load_pending(&env)
     }
 
     pub fn is_upgrade_paused(env: Env) -> bool {
+        GovernanceContract::bump_instance_ttl(&env);
         env.storage()
             .instance()
             .get(&KEY_UPG_PAUSED)
@@ -356,6 +369,7 @@ impl GovernanceContract {
     }
 
     pub fn get_upgrade_signers(env: Env) -> Vec<Address> {
+        GovernanceContract::bump_instance_ttl(&env);
         env.storage()
             .instance()
             .get(&KEY_UPG_SIGNERS)
@@ -363,10 +377,12 @@ impl GovernanceContract {
     }
 
     pub fn get_upgrade_threshold(env: Env) -> u32 {
+        GovernanceContract::bump_instance_ttl(&env);
         env.storage().instance().get(&KEY_UPG_THRESH).unwrap_or(0)
     }
 
     pub fn get_upgrade_approval_count(env: Env) -> Result<u32, GovernanceError> {
+        GovernanceContract::bump_instance_ttl(&env);
         Ok(Self::load_pending(&env)
             .ok_or(GovernanceError::NoPendingUpgrade)?
             .approvals
@@ -374,6 +390,7 @@ impl GovernanceContract {
     }
 
     pub fn has_approved_upgrade(env: Env, signer: Address) -> Result<bool, GovernanceError> {
+        GovernanceContract::bump_instance_ttl(&env);
         Ok(Self::load_pending(&env)
             .ok_or(GovernanceError::NoPendingUpgrade)?
             .approvals
@@ -383,6 +400,7 @@ impl GovernanceContract {
 
     /// Seconds until `execute_upgrade` is unblocked (0 once elapsed / none pending).
     pub fn upgrade_timelock_remaining(env: Env) -> u64 {
+        GovernanceContract::bump_instance_ttl(&env);
         match Self::load_pending(&env) {
             None => 0,
             Some(p) => {

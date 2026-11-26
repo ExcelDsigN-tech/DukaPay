@@ -7,6 +7,7 @@ import {
   refresh,
   verify,
   logout,
+  logoutAllSessions,
   submitKyc,
 } from '../controllers/authController.js';
 import {
@@ -17,11 +18,12 @@ import {
 import { getCsrfTokenController } from '../middleware/csrf.js';
 import { requireJwtAuth } from '../middleware/jwtAuth.js';
 import { validateBody } from '../middleware/validation.js';
+import { env } from '../config/env.js';
 
 const router = Router();
 
 // TEST/DEV ONLY: Register a test user
-if (process.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'development') {
+if (env.NODE_ENV === 'test' || env.NODE_ENV === 'development') {
   router.post('/register', registerTestUser);
 }
 
@@ -231,5 +233,24 @@ router.get('/verify', requireJwtAuth, verify);
  *         description: Missing or invalid Bearer token
  */
 router.post('/logout', requireJwtAuth, logout);
+
+/**
+ * @swagger
+ * /auth/logout-all:
+ *   post:
+ *     summary: Revoke all sessions for the authenticated user
+ *     description: >
+ *       Invalidates all active token families for the current user.
+ *       Use this after credential compromise to revoke all devices immediately.
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: All sessions revoked successfully
+ *       401:
+ *         description: Missing or invalid Bearer token
+ */
+router.post('/logout-all', requireJwtAuth, logoutAllSessions);
 
 export default router;

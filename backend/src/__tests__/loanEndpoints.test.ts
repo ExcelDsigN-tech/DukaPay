@@ -2,7 +2,6 @@ import request from 'supertest';
 import { jest } from '@jest/globals';
 import { Keypair } from '@stellar/stellar-sdk';
 import jwt from 'jsonwebtoken';
-import { generateJwtToken } from '../services/authService.js';
 
 type MockQueryResult = { rows: unknown[]; rowCount?: number };
 
@@ -116,6 +115,9 @@ jest.unstable_mockModule('../services/sorobanService.js', () => ({
 await import('../db/connection.js');
 await import('../services/sorobanService.js');
 const { default: app } = await import('../app.js');
+const { generateJwtToken } = await import('../services/authService.js');
+const { strictRateLimiter } = await import('../middleware/rateLimiter.js');
+const { ipKeyGenerator } = await import('express-rate-limit');
 
 const mockedQuery = mockQuery;
 
@@ -136,6 +138,9 @@ const bearerWithScopes = (publicKey: string, scopes: string[]) => ({
 beforeEach(() => {
   mockedQuery.mockReset();
   jest.clearAllMocks();
+  // strictRateLimiter (10 req / 45 min per IP) stays active under test; clear
+  // supertest's loopback counters so each test starts with a fresh budget.
+  for (const ip of ['127.0.0.1', '::1']) strictRateLimiter.resetKey(ipKeyGenerator(ip));
 });
 
 afterAll(() => {
@@ -219,7 +224,7 @@ describe('POST /api/loans/request', () => {
   it('should reject unauthenticated requests', async () => {
     const response = await request(app)
       .post('/api/loans/request')
-      .send({ amount: 1000, borrowerPublicKey: TEST_BORROWER });
+      .send({ amount: 1000, borrowerPublicKey: TEST_BORROWER, termLedgers: 518400 });
     expect(response.status).toBe(401);
   });
 
@@ -228,7 +233,7 @@ describe('POST /api/loans/request', () => {
     const response = await request(app)
       .post('/api/loans/request')
       .set(bearer(TEST_BORROWER))
-      .send({ amount: 1000, borrowerPublicKey: otherBorrower });
+      .send({ amount: 1000, borrowerPublicKey: otherBorrower, termLedgers: 518400 });
     expect(response.status).toBe(403);
   });
 
@@ -241,12 +246,76 @@ describe('POST /api/loans/request', () => {
     const response = await request(app)
       .post('/api/loans/request')
       .set(bearer(TEST_BORROWER))
-      .send({ amount: 1000, borrowerPublicKey: TEST_BORROWER });
+      .send({ amount: 1000, borrowerPublicKey: TEST_BORROWER, termLedgers: 518400 });
 
     expect(response.status).toBe(200);
     expect(response.body.success).toBe(true);
     expect(response.body.unsignedTxXdr).toBe('AAAA...base64xdr');
     expect(response.body.networkPassphrase).toBeDefined();
+  });
+
+  it('passes the term to the contract call builder', async () => {
+    mockBuildRequestLoanTx.mockResolvedValueOnce({
+      unsignedTxXdr: 'AAAA...base64xdr',
+      networkPassphrase: 'Test SDF Network ; September 2015',
+    });
+
+    const response = await request(app)
+      .post('/api/loans/request')
+      .set(bearer(TEST_BORROWER))
+      .send({ amount: 2000, borrowerPublicKey: TEST_BORROWER, termLedgers: 1036800 });
+
+    expect(response.status).toBe(200);
+    expect(mockBuildRequestLoanTx).toHaveBeenCalledWith(TEST_BORROWER, 20_000_000_000n, 1036800);
+  });
+
+  it('converts a decimal amount in USDC to stroops', async () => {
+    mockBuildRequestLoanTx.mockResolvedValueOnce({
+      unsignedTxXdr: 'AAAA...base64xdr',
+      networkPassphrase: 'Test SDF Network ; September 2015',
+    });
+
+    const response = await request(app)
+      .post('/api/loans/request')
+      .set(bearer(TEST_BORROWER))
+      .send({ amount: 250.5, borrowerPublicKey: TEST_BORROWER, termLedgers: 518400 });
+
+    expect(response.status).toBe(200);
+    expect(mockBuildRequestLoanTx).toHaveBeenCalledWith(TEST_BORROWER, 2_505_000_000n, 518400);
+  });
+
+  it('accepts one stroop (7 decimal places)', async () => {
+    mockBuildRequestLoanTx.mockResolvedValueOnce({
+      unsignedTxXdr: 'AAAA...base64xdr',
+      networkPassphrase: 'Test SDF Network ; September 2015',
+    });
+
+    const response = await request(app)
+      .post('/api/loans/request')
+      .set(bearer(TEST_BORROWER))
+      .send({ amount: 0.0000001, borrowerPublicKey: TEST_BORROWER, termLedgers: 518400 });
+
+    expect(response.status).toBe(200);
+    expect(mockBuildRequestLoanTx).toHaveBeenCalledWith(TEST_BORROWER, 1n, 518400);
+  });
+
+  it('rejects an amount with more than 7 decimal places', async () => {
+    const response = await request(app)
+      .post('/api/loans/request')
+      .set(bearer(TEST_BORROWER))
+      .send({ amount: 1.12345678, borrowerPublicKey: TEST_BORROWER, termLedgers: 518400 });
+
+    expect(response.status).toBe(400);
+    expect(mockBuildRequestLoanTx).not.toHaveBeenCalled();
+  });
+
+  it('rejects a request without a term (request_loan requires one)', async () => {
+    const response = await request(app)
+      .post('/api/loans/request')
+      .set(bearer(TEST_BORROWER))
+      .send({ amount: 1000, borrowerPublicKey: TEST_BORROWER });
+
+    expect(response.status).toBe(400);
   });
 
   it('should reject missing amount', async () => {
@@ -303,7 +372,7 @@ describe('GET /api/loans/:loanId', () => {
         rows: [
           {
             event_type: 'LoanRequested',
-            amount: '1000',
+            amount: '10000000000', // 1000 USDC in stroops,
             ledger: 10,
             ledger_closed_at: '2025-01-01T00:00:00.000Z',
             tx_hash: 'request-tx',
@@ -365,7 +434,7 @@ describe('GET /api/loans/:loanId/amortization-schedule', () => {
       rows: [
         {
           event_type: 'LoanRequested',
-          amount: '1000',
+          amount: '10000000000', // 1000 USDC in stroops,
           ledger_closed_at: '2025-01-01T00:00:00.000Z',
         },
         {

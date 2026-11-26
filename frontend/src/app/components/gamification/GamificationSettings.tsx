@@ -1,6 +1,6 @@
 "use client";
 
-import { Volume2, VolumeX, Sparkles, SparklesIcon } from "lucide-react";
+import { Volume2, VolumeX, Sparkles } from "lucide-react";
 import { useGamificationStore } from "@/app/stores/useGamificationStore";
 import { useSoundEffect } from "@/app/utils/soundManager";
 import { Card, CardHeader, CardTitle, CardContent } from "../ui/Card";

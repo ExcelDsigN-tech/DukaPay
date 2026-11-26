@@ -1,28 +1,64 @@
 import type { HttpClient } from './http.js';
-import { DukaPayError } from './errors.js';
 import type {
+  AgentAssignmentsResponse,
+  AgentDashboard,
+  AgentPairLimitsResponse,
+  AmortizationPreview,
+  AmortizationSchedule,
+  ApproveFloatTransferResponse,
+  AssignBorrowerResponse,
+  BorrowerLoanStatus,
+  BorrowerLoans,
   Challenge,
-  DataExport,
   DepositorPortfolio,
-  DsarRequest,
+  InitiateFloatTransferResponse,
   Loan,
   LoanConfig,
-  Notification,
+  LoanEvents,
+  DataExportResponse,
+  DsarCreatedResponse,
+  DsarStatusResponse,
+  GetNotificationsParams,
   NotificationEvent,
-  Paginated,
+  NotificationPreferences,
+  NotificationSuccessResponse,
+  NotificationsResponse,
+  PoolAnalyticsResponse,
   PoolStats,
-  Remittance,
+  RejectFloatTransferResponse,
+  RemittanceCreated,
+  RemittanceEnvelope,
+  RemittanceList,
+  RemittanceSubmitResult,
+  RemoveBorrowerResponse,
+  RepaymentPreview,
+  RepayTransaction,
   Score,
+  ScoreBreakdown,
+  ScoreHistory,
+  ScoreNFT,
   Session,
+  SetAgentPairLimitsResponse,
+  SubmitFloatTransferResponse,
   UnsignedTransaction,
+  UpdateNotificationPreferences,
   YieldHistoryPoint,
 } from './types.js';
+import { ValidationError } from './errors.js';
+import {
+  validateStellarAddress,
+  validateContractAddress,
+  validateAmount,
+  validatePositiveInt,
+  validateTokenAmount,
+} from './validation.js';
 
-const STELLAR_ADDRESS_RE = /^G[A-Z2-7]{55}$/;
-
-function validateStellarAddress(value: string, label: string): void {
-  if (!STELLAR_ADDRESS_RE.test(value)) {
-    throw new DukaPayError(`${label} must be a valid Stellar public key (G…)`);
+/** Matches the backend's float transfer ID format, so the ID is safe to put in a path. */
+function validateTransferId(value: unknown, fieldName: string): asserts value is string {
+  if (typeof value !== 'string' || !/^[A-Za-z0-9_-]{3,128}$/.test(value)) {
+    throw new ValidationError(
+      `Invalid ${fieldName}: must be 3-128 letters, digits, underscores or hyphens`,
+    );
   }
 }
 
@@ -31,11 +67,19 @@ export class AuthResource {
 
   /** Step 1 of wallet login: get a message for the wallet to sign. */
   challenge(publicKey: string): Promise<Challenge> {
+    validateStellarAddress(publicKey, 'publicKey');
     return this.http.post('/auth/challenge', { publicKey }, { anonymous: true });
   }
 
   /** Step 2: exchange the signed challenge for a session token. */
   login(params: { publicKey: string; message: string; signature: string }): Promise<Session> {
+    validateStellarAddress(params.publicKey, 'publicKey');
+    if (!params.message || typeof params.message !== 'string') {
+      throw new ValidationError('Invalid message: must be a non-empty string');
+    }
+    if (!params.signature || typeof params.signature !== 'string') {
+      throw new ValidationError('Invalid signature: must be a non-empty string');
+    }
     return this.http.post('/auth/login', params, { anonymous: true });
   }
 
@@ -46,6 +90,38 @@ export class AuthResource {
   logout(): Promise<void> {
     return this.http.post('/auth/logout');
   }
+
+  refresh(refreshToken: string): Promise<Session> {
+    if (!refreshToken || typeof refreshToken !== 'string') {
+      throw new ValidationError('Invalid refreshToken: must be a non-empty string');
+    }
+    // Anonymous: a 401 here must not trigger another refresh and wait on itself.
+    return this.http.post('/auth/refresh', { refreshToken }, { anonymous: true });
+  }
+
+  logoutAll(): Promise<void> {
+    return this.http.post('/auth/logout-all');
+  }
+
+  submitKyc(params: {
+    firstName: string;
+    lastName: string;
+    /** ISO date, YYYY-MM-DD. */
+    dateOfBirth?: string;
+    /** ISO 3166-1 alpha-2 country code. */
+    countryCode: string;
+  }): Promise<{ success: boolean; kycId: string }> {
+    if (!params.firstName || typeof params.firstName !== 'string') {
+      throw new ValidationError('Invalid firstName: must be a non-empty string');
+    }
+    if (!params.lastName || typeof params.lastName !== 'string') {
+      throw new ValidationError('Invalid lastName: must be a non-empty string');
+    }
+    if (typeof params.countryCode !== 'string' || params.countryCode.trim().length !== 2) {
+      throw new ValidationError('Invalid countryCode: must be a 2-letter country code');
+    }
+    return this.http.post('/auth/kyc', params);
+  }
 }
 
 export class LoansResource {
@@ -55,23 +131,187 @@ export class LoansResource {
     return this.http.get('/loans/config', { anonymous: true });
   }
 
-  list(params: { borrower?: string; status?: string; page?: number; pageSize?: number } = {}): Promise<
-    Paginated<Loan>
-  > {
-    return this.http.get('/loans', { query: params });
+  /**
+   * Lists the loans of a single borrower.
+   *
+   * The API exposes loans per borrower (`GET /loans/borrower/{borrower}`), so
+   * `borrower` is required and must match the authenticated wallet.
+   */
+  list(params: {
+    borrower: string;
+    status?: BorrowerLoanStatus;
+    from?: string;
+    to?: string;
+    limit?: number;
+    cursor?: string;
+  }): Promise<BorrowerLoans> {
+    validateStellarAddress(params.borrower, 'borrower');
+    return this.http.get(`/loans/borrower/${params.borrower}`, {
+      query: {
+        status: params.status,
+        from: params.from,
+        to: params.to,
+        limit: params.limit,
+        cursor: params.cursor,
+      },
+    });
   }
 
   get(loanId: number | string): Promise<Loan> {
+    validatePositiveInt(loanId, 'loanId');
     return this.http.get(`/loans/${loanId}`);
   }
 
-  /** Returns an unsigned XDR to be signed by the borrower's wallet. */
-  buildRepay(loanId: number | string, amount: string): Promise<UnsignedTransaction> {
-    return this.http.post(`/loans/${loanId}/build-repay`, { amount });
+  /**
+   * Returns the unsigned repayment XDR for a loan, to be signed by the
+   * borrower's wallet and then passed to {@link LoansResource.submit}.
+   *
+   * `amount` is in whole tokens (e.g. `250.5` USDC, up to 7 decimal places);
+   * the API converts it to stroops. `borrowerPublicKey` must match the
+   * authenticated wallet.
+   */
+  buildRepay(
+    loanId: number | string,
+    amount: number,
+    borrowerPublicKey: string,
+  ): Promise<RepayTransaction> {
+    validatePositiveInt(loanId, 'loanId');
+    validateTokenAmount(amount, 'amount');
+    validateStellarAddress(borrowerPublicKey, 'borrowerPublicKey');
+    return this.http.post(`/loans/${loanId}/repay`, { amount, borrowerPublicKey });
   }
 
   buildCancel(loanId: number | string): Promise<UnsignedTransaction> {
     return this.http.post(`/loans/${loanId}/build-cancel`);
+  }
+
+  /**
+   * Requests a new loan and returns the unsigned transaction XDR for signing
+   * and submission.
+   *
+   * `amount` is in whole tokens (e.g. `250.5` USDC, up to 7 decimal places);
+   * the API converts it to stroops. `termLedgers` is the loan term in ledgers.
+   * `borrowerPublicKey` must match the authenticated wallet.
+   */
+  requestLoan(
+    amount: number,
+    borrowerPublicKey: string,
+    termLedgers: number,
+  ): Promise<UnsignedTransaction> {
+    validateTokenAmount(amount, 'amount');
+    validateStellarAddress(borrowerPublicKey, 'borrowerPublicKey');
+    validatePositiveInt(termLedgers, 'termLedgers');
+    return this.http.post(`/loans/request`, { amount, borrowerPublicKey, termLedgers });
+  }
+
+  /**
+   * Builds the deposit collateral transaction for a loan and returns the
+   * unsigned XDR for signing.
+   *
+   * `amount` is in whole tokens (e.g. `250.5` USDC, up to 7 decimal places);
+   * the API converts it to stroops. `borrowerPublicKey` must match the
+   * authenticated wallet.
+   */
+  buildDepositCollateral(
+    loanId: number | string,
+    amount: number,
+    borrowerPublicKey: string,
+  ): Promise<UnsignedTransaction> {
+    validatePositiveInt(loanId, 'loanId');
+    validateTokenAmount(amount, 'amount');
+    validateStellarAddress(borrowerPublicKey, 'borrowerPublicKey');
+    return this.http.post(`/loans/${loanId}/build-deposit-collateral`, {
+      amount,
+      borrowerPublicKey,
+    });
+  }
+
+  /**
+   * Builds the release collateral transaction for a loan and returns the
+   * unsigned XDR for signing.
+   *
+   * `borrowerPublicKey` must match the authenticated wallet.
+   */
+  buildReleaseCollateral(
+    loanId: number | string,
+    borrowerPublicKey: string,
+  ): Promise<UnsignedTransaction> {
+    validatePositiveInt(loanId, 'loanId');
+    validateStellarAddress(borrowerPublicKey, 'borrowerPublicKey');
+    return this.http.post(`/loans/${loanId}/build-release-collateral`, {
+      borrowerPublicKey,
+    });
+  }
+
+  /**
+   * Builds the refinance transaction for a loan and returns the unsigned XDR
+   * for signing.
+   *
+   * `newAmount` is in whole tokens (e.g. `250.5` USDC, up to 7 decimal places);
+   * the API converts it to stroops. `newTerm` is the new loan term in ledgers.
+   * `borrowerPublicKey` must match the authenticated wallet.
+   */
+  buildRefinance(
+    loanId: number | string,
+    newAmount: number,
+    newTerm: number,
+    borrowerPublicKey: string,
+  ): Promise<UnsignedTransaction> {
+    validatePositiveInt(loanId, 'loanId');
+    validateTokenAmount(newAmount, 'newAmount');
+    validatePositiveInt(newTerm, 'newTerm');
+    validateStellarAddress(borrowerPublicKey, 'borrowerPublicKey');
+    return this.http.post(`/loans/${loanId}/build-refinance`, {
+      newAmount,
+      newTerm,
+      borrowerPublicKey,
+    });
+  }
+
+  /**
+   * Builds the extend transaction for a loan and returns the unsigned XDR
+   * for signing.
+   *
+   * `extraLedgers` is the number of additional ledgers to extend the loan
+   * term. `borrowerPublicKey` must match the authenticated wallet.
+   */
+  buildExtend(
+    loanId: number | string,
+    extraLedgers: number,
+    borrowerPublicKey: string,
+  ): Promise<UnsignedTransaction> {
+    validatePositiveInt(loanId, 'loanId');
+    validatePositiveInt(extraLedgers, 'extraLedgers');
+    validateStellarAddress(borrowerPublicKey, 'borrowerPublicKey');
+    return this.http.post(`/loans/${loanId}/build-extend`, {
+      extraLedgers,
+      borrowerPublicKey,
+    });
+  }
+
+  /**
+   * Builds the contest default transaction for a loan and returns the unsigned
+   * XDR for signing.
+   *
+   * `reason` must be at least 5 characters and at most 500 characters.
+   * `borrowerPublicKey` must match the authenticated wallet.
+   */
+  contestDefault(
+    loanId: number | string,
+    reason: string,
+    borrowerPublicKey: string,
+  ): Promise<UnsignedTransaction> {
+    validatePositiveInt(loanId, 'loanId');
+    if (typeof reason !== 'string' || reason.length < 5 || reason.length > 500) {
+      throw new ValidationError(
+        `Invalid reason: must be between 5 and 500 characters`,
+      );
+    }
+    validateStellarAddress(borrowerPublicKey, 'borrowerPublicKey');
+    return this.http.post(`/loans/${loanId}/contest-default`, {
+      reason,
+      borrowerPublicKey,
+    });
   }
 
   /** Submit a wallet-signed XDR for on-chain execution. */
@@ -79,47 +319,35 @@ export class LoansResource {
     return this.http.post(`/loans/${loanId}/submit`, { signedXdr });
   }
 
-  requestLoan(params: { amount: string; borrowerPublicKey: string }): Promise<Loan> {
-    return this.http.post('/loans/request', params);
+  /**
+   * Compute an amortization preview for a loan before applying.
+   * Amounts are in whole tokens.
+   */
+  amortizationPreview(params: { amount: number; termDays: 30 | 60 | 90 }): Promise<AmortizationPreview> {
+    validateTokenAmount(params.amount, 'amount');
+    if (![30, 60, 90].includes(params.termDays)) {
+      throw new ValidationError('Invalid termDays: must be 30, 60 or 90');
+    }
+    return this.http.post('/loans/amortization-preview', params);
   }
 
-  buildDepositCollateral(
-    loanId: number | string,
-    params: { amount: string; borrowerPublicKey: string },
-  ): Promise<UnsignedTransaction> {
-    return this.http.post(`/loans/${loanId}/build-deposit-collateral`, params);
-  }
-
-  buildReleaseCollateral(
-    loanId: number | string,
-    params: { borrowerPublicKey: string },
-  ): Promise<UnsignedTransaction> {
-    return this.http.post(`/loans/${loanId}/build-release-collateral`, params);
-  }
-
-  buildRefinance(
-    loanId: number | string,
-    params: { newAmount: string; newTerm: number; borrowerPublicKey: string },
-  ): Promise<UnsignedTransaction> {
-    return this.http.post(`/loans/${loanId}/build-refinance`, params);
-  }
-
-  buildExtend(
-    loanId: number | string,
-    params: { extraLedgers: number; borrowerPublicKey: string },
-  ): Promise<UnsignedTransaction> {
-    return this.http.post(`/loans/${loanId}/build-extend`, params);
+  amortizationSchedule(loanId: number | string): Promise<AmortizationSchedule> {
+    validatePositiveInt(loanId, 'loanId');
+    return this.http.get(`/loans/${loanId}/amortization-schedule`);
   }
 
   /**
-   * Contest a defaulted loan. `reason` must be one of the valid dispute reasons
-   * accepted by the backend.
+   * Returns the current repayment preview for an active loan.
+   * Amounts are in whole tokens.
    */
-  contestDefault(loanId: number | string, reason: string): Promise<Loan> {
-    if (!reason || typeof reason !== 'string' || reason.trim().length === 0) {
-      throw new DukaPayError('contestDefault: reason must be a non-empty string');
-    }
-    return this.http.post(`/loans/${loanId}/contest-default`, { reason });
+  repaymentPreview(loanId: number | string): Promise<RepaymentPreview> {
+    validatePositiveInt(loanId, 'loanId');
+    return this.http.get(`/loans/${loanId}/repayment-preview`);
+  }
+
+  events(loanId: number | string): Promise<LoanEvents> {
+    validatePositiveInt(loanId, 'loanId');
+    return this.http.get(`/loans/${loanId}/events`);
   }
 }
 
@@ -130,15 +358,22 @@ export class PoolResource {
     return this.http.get('/pool/stats', { query: { token } });
   }
 
-  analytics(): Promise<unknown> {
+  /**
+   * Aggregate protocol analytics. Public endpoint, cached server-side for 5 minutes.
+   *
+   * Resolves to the response envelope; read the snapshot from `.analytics`.
+   */
+  analytics(): Promise<PoolAnalyticsResponse> {
     return this.http.get('/pool/analytics', { anonymous: true });
   }
 
   depositor(address: string): Promise<DepositorPortfolio> {
+    validateStellarAddress(address, 'address');
     return this.http.get(`/pool/depositor/${address}`);
   }
 
   yieldHistory(address: string, days: 7 | 30 | 90 = 30, token?: string): Promise<YieldHistoryPoint[]> {
+    validateStellarAddress(address, 'address');
     return this.http.get(`/pool/depositor/${address}/yield-history`, { query: { days, token } });
   }
 
@@ -147,18 +382,35 @@ export class PoolResource {
   }
 
   buildDeposit(params: { token: string; amount: string; from: string }): Promise<UnsignedTransaction> {
+    validateStellarAddress(params.token, 'token');
+    validateAmount(params.amount, 'amount');
+    validateStellarAddress(params.from, 'from');
     return this.http.post('/pool/build-deposit', params);
   }
 
   buildWithdraw(params: { token: string; shares: string; from: string }): Promise<UnsignedTransaction> {
+    validateStellarAddress(params.token, 'token');
+    validateAmount(params.shares, 'shares');
+    validateStellarAddress(params.from, 'from');
     return this.http.post('/pool/build-withdraw', params);
   }
 
+  /**
+   * Builds the emergency withdraw transaction for a depositor and returns the
+   * unsigned XDR for signing.
+   *
+   * `shares` is in whole tokens (up to 7 decimal places); the API converts it
+   * to stroops. `token` is the pool token's contract address (C...).
+   * `depositorPublicKey` must match the authenticated wallet.
+   */
   buildEmergencyWithdraw(params: {
     depositorPublicKey: string;
     token: string;
-    shares: string;
+    shares: number;
   }): Promise<UnsignedTransaction> {
+    validateStellarAddress(params.depositorPublicKey, 'depositorPublicKey');
+    validateContractAddress(params.token, 'token');
+    validateTokenAmount(params.shares, 'shares');
     return this.http.post('/pool/build-emergency-withdraw', params);
   }
 }
@@ -166,59 +418,282 @@ export class PoolResource {
 export class ScoresResource {
   constructor(private http: HttpClient) {}
 
+  /**
+   * Credit score for a wallet. The route is mounted at `/score` (singular) and
+   * `userId` is the wallet's Stellar address.
+   */
   get(address: string): Promise<Score> {
-    return this.http.get(`/scores/${address}`);
+    validateStellarAddress(address, 'address');
+    return this.http.get(`/score/${address}`);
   }
 
-  leaderboard(limit = 50): Promise<Score[]> {
-    return this.http.get('/scores/leaderboard', { query: { limit }, anonymous: true });
+  history(address: string): Promise<ScoreHistory> {
+    validateStellarAddress(address, 'address');
+    return this.http.get(`/score/${address}/history`);
+  }
+
+  nft(address: string): Promise<ScoreNFT> {
+    validateStellarAddress(address, 'address');
+    return this.http.get(`/score/${address}/nft`);
+  }
+
+  breakdown(userId: string): Promise<ScoreBreakdown> {
+    validateStellarAddress(userId, 'userId');
+    return this.http.get(`/score/${userId}/breakdown`);
   }
 }
 
 export class RemittanceResource {
   constructor(private http: HttpClient) {}
 
-  list(params: { sender?: string; recipient?: string } = {}): Promise<Paginated<Remittance>> {
-    return this.http.get('/remittance', { query: params });
+  /**
+   * Lists the authenticated sender's remittances. The route is mounted at
+   * `/remittances` (plural) and paginates with a keyset cursor.
+   */
+  list(
+    params: {
+      status?: 'pending' | 'processing' | 'completed' | 'failed';
+      from?: string;
+      to?: string;
+      q?: string;
+      limit?: number;
+      cursor?: string;
+    } = {},
+  ): Promise<RemittanceList> {
+    return this.http.get('/remittances', { query: params });
   }
 
-  get(id: string): Promise<Remittance> {
-    return this.http.get(`/remittance/${id}`);
+  get(id: string): Promise<RemittanceEnvelope> {
+    return this.http.get(`/remittances/${id}`);
   }
 
-  buildSend(params: { recipient: string; amount: string; from: string }): Promise<UnsignedTransaction> {
-    return this.http.post('/remittance/build-send', params);
+  /**
+   * Creates a remittance and returns the stored record, including the unsigned
+   * transaction XDR in `data.xdr`. Sign that XDR and pass it to
+   * {@link RemittanceResource.submit} to settle it on-chain.
+   *
+   * The sender is taken from the authenticated session, so it is not a
+   * parameter here.
+   */
+  buildSend(params: {
+    recipient: string;
+    amount: number;
+    fromCurrency: 'USDC' | 'EURC' | 'PHP';
+    toCurrency: 'USDC' | 'EURC' | 'PHP';
+    memo?: string;
+  }): Promise<RemittanceCreated> {
+    validateStellarAddress(params.recipient, 'recipient');
+    validatePositiveInt(params.amount, 'amount');
+    return this.http.post('/remittances', {
+      recipientAddress: params.recipient,
+      amount: params.amount,
+      fromCurrency: params.fromCurrency,
+      toCurrency: params.toCurrency,
+      ...(params.memo ? { memo: params.memo } : {}),
+    });
+  }
+
+  /** Submits the signed XDR for a created remittance. */
+  submit(id: string, signedXdr: string): Promise<{ success: boolean; data: RemittanceSubmitResult }> {
+    return this.http.post(`/remittances/${id}/submit`, { signedXdr });
+  }
+}
+
+export class AgentsResource {
+  constructor(private http: HttpClient) {}
+
+  /** Lists borrower wallets assigned to the authenticated agent (`GET /agents/my-assignments`). */
+  myAssignments(): Promise<AgentAssignmentsResponse> {
+    return this.http.get('/agents/my-assignments');
+  }
+
+  /** Assigns a borrower wallet to an agent (`POST /agents/{agentPublicKey}/assignees`, admin only). */
+  assignBorrower(params: {
+    agentPublicKey: string;
+    borrowerPublicKey: string;
+  }): Promise<AssignBorrowerResponse> {
+    validateStellarAddress(params.agentPublicKey, 'agentPublicKey');
+    validateStellarAddress(params.borrowerPublicKey, 'borrowerPublicKey');
+    if (params.agentPublicKey === params.borrowerPublicKey) {
+      throw new ValidationError('agentPublicKey and borrowerPublicKey must be different');
+    }
+    return this.http.post(`/agents/${params.agentPublicKey}/assignees`, {
+      borrowerPublicKey: params.borrowerPublicKey,
+    });
+  }
+
+  /** Revokes a borrower assignment from an agent (`DELETE /agents/{agentPublicKey}/assignees/{borrowerPublicKey}`, admin only). */
+  removeBorrower(params: {
+    agentPublicKey: string;
+    borrowerPublicKey: string;
+  }): Promise<RemoveBorrowerResponse> {
+    validateStellarAddress(params.agentPublicKey, 'agentPublicKey');
+    validateStellarAddress(params.borrowerPublicKey, 'borrowerPublicKey');
+    return this.http.delete(
+      `/agents/${params.agentPublicKey}/assignees/${params.borrowerPublicKey}`,
+    );
+  }
+
+  /** Fetches agent dashboard metrics (`GET /agents/dashboard`). */
+  dashboard(): Promise<AgentDashboard> {
+    return this.http.get('/agents/dashboard');
+  }
+
+  /** Clears the cached agent dashboard snapshot (`DELETE /agents/dashboard/cache`). */
+  clearDashboardCache(): Promise<{ success: boolean; message: string }> {
+    return this.http.delete('/agents/dashboard/cache');
+  }
+
+  /** Initiates an agent-to-agent float transfer (`POST /agents/float-transfer`). */
+  initiateFloatTransfer(params: {
+    fromAgent: string;
+    toAgent: string;
+    /** Whole tokens (e.g. 250.5 USDC), up to 7 decimal places. */
+    amount: number;
+    reason?: string;
+  }): Promise<InitiateFloatTransferResponse> {
+    validateStellarAddress(params.fromAgent, 'fromAgent');
+    validateStellarAddress(params.toAgent, 'toAgent');
+    if (params.fromAgent === params.toAgent) {
+      throw new ValidationError('fromAgent and toAgent must be different');
+    }
+    validateTokenAmount(params.amount, 'amount');
+    return this.http.post('/agents/float-transfer', {
+      fromAgent: params.fromAgent,
+      toAgent: params.toAgent,
+      amount: params.amount,
+      ...(params.reason !== undefined ? { reason: params.reason } : {}),
+    });
+  }
+
+  /** Approves a pending agent float transfer (`POST /agents/float-transfer/{id}/approve`). */
+  approveFloatTransfer(transferId: string): Promise<ApproveFloatTransferResponse> {
+    validateTransferId(transferId, 'transferId');
+    return this.http.post(`/agents/float-transfer/${transferId}/approve`);
+  }
+
+  /** Submits the fully signed float transfer for Stellar confirmation. */
+  submitFloatTransfer(
+    transferId: string,
+    signedTxXdr: string,
+  ): Promise<SubmitFloatTransferResponse> {
+    validateTransferId(transferId, 'transferId');
+    if (typeof signedTxXdr !== 'string' || signedTxXdr.trim().length === 0) {
+      throw new ValidationError('signedTxXdr is required');
+    }
+    return this.http.post(`/agents/float-transfer/${transferId}/submit`, { signedTxXdr });
+  }
+
+  /** Rejects a pending agent float transfer (`POST /agents/float-transfer/{id}/reject`). */
+  rejectFloatTransfer(transferId: string): Promise<RejectFloatTransferResponse> {
+    validateTransferId(transferId, 'transferId');
+    return this.http.post(`/agents/float-transfer/${transferId}/reject`);
+  }
+
+  /** Retrieves daily and weekly float transfer limits for an agent pair (`GET /agents/float-transfer/limits`). */
+  getPairLimits(params: {
+    fromAgent: string;
+    toAgent: string;
+  }): Promise<AgentPairLimitsResponse> {
+    validateStellarAddress(params.fromAgent, 'fromAgent');
+    validateStellarAddress(params.toAgent, 'toAgent');
+    return this.http.get('/agents/float-transfer/limits', {
+      query: {
+        fromAgent: params.fromAgent,
+        toAgent: params.toAgent,
+      },
+    });
+  }
+
+  /** Updates daily and weekly float transfer limits for an agent pair (`PUT /agents/float-transfer/limits`, admin only). */
+  setPairLimits(params: {
+    fromAgent: string;
+    toAgent: string;
+    /** Whole tokens (e.g. 250.5 USDC), up to 7 decimal places. */
+    dailyLimit: number;
+    /** Whole tokens (e.g. 250.5 USDC), up to 7 decimal places. */
+    weeklyLimit: number;
+  }): Promise<SetAgentPairLimitsResponse> {
+    validateStellarAddress(params.fromAgent, 'fromAgent');
+    validateStellarAddress(params.toAgent, 'toAgent');
+    if (params.fromAgent === params.toAgent) {
+      throw new ValidationError('fromAgent and toAgent must be different');
+    }
+    validateTokenAmount(params.dailyLimit, 'dailyLimit');
+    validateTokenAmount(params.weeklyLimit, 'weeklyLimit');
+    return this.http.put('/agents/float-transfer/limits', {
+      fromAgent: params.fromAgent,
+      toAgent: params.toAgent,
+      dailyLimit: params.dailyLimit,
+      weeklyLimit: params.weeklyLimit,
+    });
   }
 }
 
 export class NotificationsResource {
   constructor(private http: HttpClient) {}
 
-  list(params: { page?: number; pageSize?: number } = {}): Promise<Paginated<Notification>> {
-    return this.http.get('/notifications', { query: params });
+  list(params: GetNotificationsParams = {}): Promise<NotificationsResponse> {
+    return this.http.get('/notifications', {
+      query: {
+        type: params.type,
+        status: params.status,
+        from: params.from,
+        to: params.to,
+        limit: params.limit,
+      },
+    });
   }
 
-  markRead(ids: string[]): Promise<void> {
+  getPreferences(): Promise<NotificationPreferences> {
+    return this.http.get('/notifications/preferences');
+  }
+
+  updatePreferences(preferences: UpdateNotificationPreferences): Promise<NotificationPreferences> {
+    if (typeof preferences.emailEnabled !== 'boolean' || typeof preferences.smsEnabled !== 'boolean') {
+      throw new ValidationError('emailEnabled and smsEnabled must be booleans');
+    }
+    if (preferences.smsEnabled && !preferences.phone) {
+      throw new ValidationError('phone is required when smsEnabled is true');
+    }
+    if (
+      preferences.perTypeOverrides &&
+      Object.values(preferences.perTypeOverrides).some((enabled) => typeof enabled !== 'boolean')
+    ) {
+      throw new ValidationError('perTypeOverrides values must be booleans');
+    }
+    return this.http.put('/notifications/preferences', preferences);
+  }
+
+  markRead(ids: number[]): Promise<NotificationSuccessResponse> {
+    if (!Array.isArray(ids) || ids.length === 0) {
+      throw new ValidationError('ids must be a non-empty array of notification IDs');
+    }
+    if (ids.length > 100) {
+      throw new ValidationError('ids cannot contain more than 100 notification IDs');
+    }
+    if (ids.some((id) => !Number.isInteger(id) || id <= 0)) {
+      throw new ValidationError('ids must contain positive integers');
+    }
     return this.http.post('/notifications/mark-read', { ids });
   }
 
-  markAllRead(): Promise<void> {
+  markAllRead(): Promise<NotificationSuccessResponse> {
     return this.http.post('/notifications/mark-all-read');
   }
 
   /**
-   * Open a Server-Sent Events stream for real-time notifications.
+   * Streams notifications from `GET /notifications/stream` (Server-Sent Events).
    *
-   * Parses `event`, `id`, and multi-line `data` fields from the SSE stream.
-   * Comment and heartbeat frames (lines starting with `:`) are silently skipped.
-   * The stream stops cleanly when `signal` is aborted — the `onEvent` callback
-   * will not be called after abort.
+   * Calls `onEvent` for each event. Parses `event`, `id` and multi-line `data`
+   * fields; comment and heartbeat frames (lines starting with `:`) are skipped.
+   * Resolves when the server closes the stream, or cleanly (without throwing)
+   * when `signal` is aborted. Throws a `DukaPayError` for a non-2xx response.
    *
    * ```ts
    * const ctrl = new AbortController();
-   * await client.notifications.stream((evt) => console.log(evt), { signal: ctrl.signal });
-   * // Later:
-   * ctrl.abort();
+   * void client.notifications.stream((evt) => console.log(evt.data), { signal: ctrl.signal });
+   * ctrl.abort(); // stop
    * ```
    */
   async stream(
@@ -226,89 +701,68 @@ export class NotificationsResource {
     options: { signal?: AbortSignal } = {},
   ): Promise<void> {
     const { signal } = options;
-
-    const token =
-      typeof (this.http as unknown as { token?: unknown }).token === 'function'
-        ? await (this.http as unknown as { token: () => string | null })
-            .token()
-        : (this.http as unknown as { token?: string }).token;
-
-    const baseUrl = (this.http as unknown as { baseUrl: string }).baseUrl;
-    const url = `${baseUrl}/notifications/stream`;
-
-    const res = await fetch(url, {
-      headers: {
-        Accept: 'text/event-stream',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      signal,
-    });
-
-    if (!res.ok) {
-      throw new DukaPayError(
-        `SSE stream request failed: ${res.status} ${res.statusText}`,
-      );
+    let res: Response;
+    try {
+      res = await this.http.openStream('/notifications/stream', signal);
+    } catch (err) {
+      if (signal?.aborted) return;
+      throw err;
     }
-
-    if (!res.body) {
-      throw new DukaPayError('SSE stream: response body is null');
-    }
+    if (!res.body) return;
 
     const reader = res.body.getReader();
+    // Unblock a pending read() when the caller aborts.
+    const onAbort = () => void reader.cancel().catch(() => undefined);
+    signal?.addEventListener('abort', onAbort, { once: true });
     const decoder = new TextDecoder();
     let buffer = '';
-    let currentEvent: Partial<NotificationEvent> = {};
+    let id: string | undefined;
+    let event: string | undefined;
+    let dataLines: string[] = [];
 
-    const flush = () => {
-      if (currentEvent.data !== undefined) {
-        onEvent(currentEvent as NotificationEvent);
+    const dispatch = () => {
+      if (dataLines.length > 0 && !signal?.aborted) {
+        try {
+          const data = JSON.parse(dataLines.join('\n')) as NotificationEvent['data'];
+          onEvent({ id, event, data });
+        } catch {
+          // Not JSON: skip the frame.
+        }
       }
-      currentEvent = {};
+      event = undefined;
+      dataLines = [];
     };
 
     try {
-      while (true) {
+      while (!signal?.aborted) {
         const { done, value } = await reader.read();
         if (done) break;
-
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
         buffer = lines.pop() ?? '';
 
         for (const raw of lines) {
-          const line = raw.trimEnd();
-
+          const line = raw.endsWith('\r') ? raw.slice(0, -1) : raw;
           if (line === '') {
-            flush();
+            dispatch();
             continue;
           }
-
           if (line.startsWith(':')) continue; // comment / heartbeat
 
-          const colonIdx = line.indexOf(':');
-          if (colonIdx === -1) continue;
-
-          const field = line.slice(0, colonIdx);
-          const val = line.slice(colonIdx + 1).replace(/^ /, '');
-
-          if (field === 'id') {
-            currentEvent.id = val;
-          } else if (field === 'event') {
-            currentEvent.event = val;
-          } else if (field === 'data') {
-            try {
-              currentEvent.data = JSON.parse(val) as Notification;
-            } catch {
-              // non-JSON data frame — skip
-            }
-          }
+          const colon = line.indexOf(':');
+          const field = colon === -1 ? line : line.slice(0, colon);
+          const val = colon === -1 ? '' : line.slice(colon + 1).replace(/^ /, '');
+          if (field === 'data') dataLines.push(val);
+          else if (field === 'event') event = val;
+          else if (field === 'id') id = val;
         }
       }
     } catch (err) {
-      if (signal?.aborted) return; // clean stop
+      if (signal?.aborted) return;
       throw err;
     } finally {
-      reader.releaseLock();
+      signal?.removeEventListener('abort', onAbort);
+      await reader.cancel().catch(() => undefined);
     }
   }
 }
@@ -316,31 +770,38 @@ export class NotificationsResource {
 export class PrivacyResource {
   constructor(private http: HttpClient) {}
 
-  requestAccess(params: { publicKey: string; reason: string }): Promise<DsarRequest> {
+  /** Requests a copy of the wallet's data (DSAR access). `reason`: 10-1000 characters. */
+  requestAccess(params: { publicKey: string; reason: string }): Promise<DsarCreatedResponse> {
     validateStellarAddress(params.publicKey, 'publicKey');
     return this.http.post('/privacy/dsar/access', params);
   }
 
+  /** Deletes the wallet's PII and anonymizes its financial records. */
   requestDeletion(params: {
     publicKey: string;
     reason: string;
     confirmDeletion: true;
-  }): Promise<DsarRequest> {
+  }): Promise<DsarCreatedResponse> {
     validateStellarAddress(params.publicKey, 'publicKey');
     return this.http.post('/privacy/dsar/delete', params);
   }
 
-  anonymize(params: { publicKey: string; reason: string }): Promise<DsarRequest> {
+  /** Anonymizes the wallet's data for analytics. */
+  anonymize(params: { publicKey: string; reason: string }): Promise<DsarCreatedResponse> {
     validateStellarAddress(params.publicKey, 'publicKey');
     return this.http.post('/privacy/anonymize', params);
   }
 
-  getRequest(dsarId: string): Promise<DsarRequest> {
-    return this.http.get(`/privacy/dsar/${dsarId}`);
+  getRequest(dsarId: string): Promise<DsarStatusResponse> {
+    if (typeof dsarId !== 'string' || dsarId.trim() === '') {
+      throw new ValidationError('Invalid dsarId: must be a non-empty string');
+    }
+    return this.http.get(`/privacy/dsar/${encodeURIComponent(dsarId)}`);
   }
 
-  export(publicKey: string): Promise<DataExport> {
+  export(publicKey: string): Promise<DataExportResponse> {
     validateStellarAddress(publicKey, 'publicKey');
     return this.http.get(`/privacy/export/${publicKey}`);
   }
 }
+

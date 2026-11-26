@@ -1,5 +1,5 @@
 /**
- * Cross-layer money policy — backend implementation.
+ * Cross-layer money policy: backend implementation.
  *
  * This module is the *only* sanctioned place in the backend to divide, round
  * or split a stroop-denominated (`bigint`) amount. Every service that reads
@@ -39,7 +39,7 @@ export const STROOP_SCALE = SCALE;
 export const STROOP_DECIMALS = SCALE_DECIMALS;
 /** Default rounding mode every layer agrees on for settlement math. */
 export const DEFAULT_MODE = MODE as RoundingMode;
-/** Fractional digits used for *display only* — settlement always uses {@link STROOP_DECIMALS}. */
+/** Fractional digits used for *display only*; settlement always uses {@link STROOP_DECIMALS}. */
 export const DISPLAY_DECIMAL_PLACES = DISPLAY_DP;
 
 /**
@@ -141,8 +141,37 @@ export function toStroops(input: string, mode: RoundingMode = DEFAULT_MODE): big
 }
 
 /**
+ * Convert an API amount in whole token units (e.g. `250.5` USDC) to stroops.
+ * Validate the input with `positiveAmountSchema` first: it guarantees at most
+ * {@link STROOP_DECIMALS} fractional digits, so this conversion is exact.
+ */
+export function amountToStroops(value: number): bigint {
+  return toStroops(value.toFixed(STROOP_DECIMALS));
+}
+
+/**
+ * Read a stroop value from Postgres or the chain as a whole-stroop bigint.
+ * NUMERIC strings with a fractional part (computed interest) round to the
+ * nearest stroop; null or empty reads as zero.
+ */
+export function toWholeStroops(value: string | number | bigint | null | undefined): bigint {
+  if (value === null || value === undefined || value === '') return 0n;
+  if (typeof value === 'bigint') return value;
+  const text = typeof value === 'number' ? value.toFixed(STROOP_DECIMALS) : value;
+  return roundDiv(toStroops(text), STROOP_SCALE);
+}
+
+/**
+ * Convert a stroop value to whole tokens for an API response, e.g.
+ * `2505000000` -> `250.5`. Inverse of {@link amountToStroops}.
+ */
+export function stroopsToAmount(value: string | number | bigint | null | undefined): number {
+  return Number(fromStroops(toWholeStroops(value)));
+}
+
+/**
  * Format an exact stroop amount as a full-precision decimal string (no
- * rounding — this is the settlement-precision representation, not the
+ * rounding; this is the settlement-precision representation, not the
  * display-truncated one). Inverse of {@link toStroops} for values that fit
  * exactly at stroop precision: `toStroops(fromStroops(x)) === x`.
  */

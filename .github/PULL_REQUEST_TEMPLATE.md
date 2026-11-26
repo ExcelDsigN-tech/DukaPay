@@ -1,12 +1,39 @@
-## Pull Request Checklist
+<!-- PR title: Conventional Commits, e.g. fix(contracts): express max loan in stroops -->
 
-Please ensure your PR follows these steps, mirroring our `CONTRIBUTING.md` guidelines.
+### Overview
 
-- [ ] I have read the `CONTRIBUTING.md` document.
-- [ ] My code follows the code style of this project.
-- [ ] I have added tests to cover my changes.
-- [ ] All new and existing tests passed.
-- [ ] I have updated the documentation accordingly.
-- [ ] I have verified the changes locally.
-- [ ] For security-sensitive changes, I have attached a completed `.github/THREAT_MODEL.md` and requested security champion review.
-- [ ] Security gates have passed, or any findings are documented and reviewed.
+<!-- What changed and why. -->
+
+Closes #
+
+### Feature Summary
+
+-
+
+### Technical Implementation
+
+<!-- Logic changes, state management, storage keys, contract interactions.
+     Call out breaking changes and deploy steps (migrations, redeploys, env vars). -->
+
+### Test Coverage
+
+<!-- Unit/integration tests added or changed, edge cases covered, CI result. -->
+
+-
+
+### Checklists
+
+**Issue Definition of Done**
+
+<!-- Copy every item from the linked issue's Definition of Done and tick each one this PR meets. -->
+
+- [ ] 
+
+**General**
+
+- [ ] Ran `./scripts/ci-local.sh <area>` and it passes
+- [ ] Tests added or updated for the change
+- [ ] No skipped tests, removed assertions or raised limits
+- [ ] Docs updated if behaviour changed
+- [ ] Conventional Commits title and messages
+- [ ] Security-sensitive change: `.github/THREAT_MODEL.md` attached and maintainer review requested

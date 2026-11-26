@@ -1,7 +1,18 @@
-import { describe, it, expect, beforeAll } from '@jest/globals';
+import {
+  describe,
+  it,
+  expect,
+  beforeAll,
+  afterAll,
+  beforeEach,
+  afterEach,
+  jest,
+} from '@jest/globals';
 import request from 'supertest';
 import app from '../app.js';
+import { cacheService } from '../services/cacheService.js';
 import { Keypair } from '@stellar/stellar-sdk';
+import crypto from 'crypto';
 
 describe('Auth API', () => {
   beforeAll(() => {
@@ -19,6 +30,7 @@ describe('Auth API', () => {
 
       expect(response.body.success).toBe(true);
       expect(response.body.data.message).toContain('Sign this message');
+      expect(response.body.data.message).toContain('Domain:');
       expect(response.body.data.nonce).toBeDefined();
       expect(response.body.data.timestamp).toBeDefined();
       expect(response.body.data.expiresIn).toBe(5 * 60 * 1000);
@@ -41,6 +53,17 @@ describe('Auth API', () => {
   });
 
   describe('POST /api/auth/login', () => {
+    let originalTrustProxy: unknown;
+
+    beforeAll(() => {
+      originalTrustProxy = app.get('trust proxy');
+      app.set('trust proxy', 1);
+    });
+
+    afterAll(() => {
+      app.set('trust proxy', originalTrustProxy ?? false);
+    });
+
     it('should login with valid signature', async () => {
       const keypair = Keypair.random();
 
@@ -64,6 +87,63 @@ describe('Auth API', () => {
       expect(loginResponse.body.success).toBe(true);
       expect(loginResponse.body.data.token).toBeDefined();
       expect(loginResponse.body.data.publicKey).toBe(keypair.publicKey());
+    });
+
+    it('should reject a fresh message that was not issued as a challenge', async () => {
+      const keypair = Keypair.random();
+      const message = `Sign this message to authenticate with DukaPay.\n\nTimestamp: ${Date.now()}\n`;
+      const signature = keypair.sign(Buffer.from(message, 'utf-8')).toString('base64');
+
+      await request(app)
+        .post('/api/auth/login')
+        .set('X-Forwarded-For', '198.51.100.8')
+        .send({ publicKey: keypair.publicKey(), message, signature })
+        .expect(401);
+    });
+
+    it('should reject reuse of a successfully consumed challenge', async () => {
+      const keypair = Keypair.random();
+      const challenge = await request(app)
+        .post('/api/auth/challenge')
+        .send({ publicKey: keypair.publicKey() })
+        .expect(200);
+      const message = challenge.body.data.message as string;
+      const signature = keypair.sign(Buffer.from(message, 'utf-8')).toString('base64');
+      const loginPayload = { publicKey: keypair.publicKey(), message, signature };
+
+      await request(app)
+        .post('/api/auth/login')
+        .set('X-Forwarded-For', '198.51.100.9')
+        .send(loginPayload)
+        .expect(200);
+      await request(app)
+        .post('/api/auth/login')
+        .set('X-Forwarded-For', '198.51.100.9')
+        .send(loginPayload)
+        .expect(401);
+    });
+
+    it('should reject an expired server-issued challenge', async () => {
+      const keypair = Keypair.random();
+      const now = Date.now();
+      const dateNow = jest.spyOn(Date, 'now').mockReturnValue(now - 6 * 60 * 1000);
+      let message = '';
+      try {
+        const challenge = await request(app)
+          .post('/api/auth/challenge')
+          .send({ publicKey: keypair.publicKey() })
+          .expect(200);
+        message = challenge.body.data.message as string;
+      } finally {
+        dateNow.mockRestore();
+      }
+      const signature = keypair.sign(Buffer.from(message, 'utf-8')).toString('base64');
+
+      await request(app)
+        .post('/api/auth/login')
+        .set('X-Forwarded-For', '198.51.100.10')
+        .send({ publicKey: keypair.publicKey(), message, signature })
+        .expect(401);
     });
 
     it('should reject invalid signature', async () => {
@@ -96,6 +176,117 @@ describe('Auth API', () => {
       const response = await request(app).post('/api/auth/login').send({}).expect(400);
 
       expect(response.body.success).toBe(false);
+    });
+  });
+
+  describe('JWT cookie attributes', () => {
+    // The in-memory login limiter allows 5 requests/min per IP and the suites
+    // above already use the default supertest IP. X-Forwarded-For is only
+    // honoured when Express trusts the proxy, so enable it for these tests
+    // only; restoring it afterwards keeps the rate-limiting suite intact.
+    let originalTrustProxy: unknown;
+
+    const CLIENT_IP = '198.51.100.7';
+
+    beforeAll(() => {
+      originalTrustProxy = app.get('trust proxy');
+      app.set('trust proxy', 1);
+    });
+
+    afterAll(() => {
+      app.set('trust proxy', originalTrustProxy ?? false);
+    });
+
+    async function loginAndGetAccessCookie(
+      publicKey: string,
+      message: string,
+      signature: string,
+    ): Promise<string | undefined> {
+      const response = await request(app)
+        .post('/api/auth/login')
+        .set('X-Forwarded-For', CLIENT_IP)
+        .send({ publicKey, message, signature })
+        .expect(200);
+
+      const rawSetCookie = response.headers['set-cookie'] as unknown as
+        | string[]
+        | string
+        | undefined;
+      const cookies = Array.isArray(rawSetCookie)
+        ? rawSetCookie
+        : rawSetCookie
+          ? [rawSetCookie]
+          : [];
+      const cookieName = process.env.JWT_COOKIE_NAME ?? 'dukapay_jwt';
+      return cookies.find((cookie) => cookie.startsWith(`${cookieName}=`));
+    }
+
+    it('sets an httpOnly, SameSite=Strict access cookie (no Secure outside production)', async () => {
+      const keypair = Keypair.random();
+
+      const challenge = await request(app)
+        .post('/api/auth/challenge')
+        .set('X-Forwarded-For', CLIENT_IP)
+        .send({ publicKey: keypair.publicKey() })
+        .expect(200);
+
+      const message = challenge.body.data.message as string;
+      const signature = keypair.sign(Buffer.from(message, 'utf-8')).toString('base64');
+
+      const accessCookie = await loginAndGetAccessCookie(keypair.publicKey(), message, signature);
+
+      expect(accessCookie).toBeDefined();
+      expect(accessCookie).toContain('HttpOnly');
+      expect(accessCookie).toContain('SameSite=Strict');
+      expect(accessCookie).toContain('Path=/');
+      expect(accessCookie).not.toContain('Secure');
+    });
+
+    it('adds the Secure flag to the access cookie when NODE_ENV is production', async () => {
+      const originalNodeEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'production';
+
+      // Outside NODE_ENV=test, challenges live in Redis, which CI doesn't run.
+      // Back the three challenge-store calls with a Map so the real
+      // store/verify/consume flow still runs.
+      const store = new Map<string, string>();
+      const spies = [
+        jest.spyOn(cacheService, 'setRequired').mockImplementation(async (key, value) => {
+          store.set(key, JSON.stringify(value));
+        }),
+        jest.spyOn(cacheService, 'get').mockImplementation(async (key) => {
+          const value = store.get(key);
+          return value === undefined ? null : JSON.parse(value);
+        }),
+        jest.spyOn(cacheService, 'deleteIfMatch').mockImplementation(async (key, expected) => {
+          if (store.get(key) !== JSON.stringify(expected)) return false;
+          store.delete(key);
+          return true;
+        }),
+      ];
+
+      try {
+        const keypair = Keypair.random();
+
+        const challenge = await request(app)
+          .post('/api/auth/challenge')
+          .set('X-Forwarded-For', CLIENT_IP)
+          .send({ publicKey: keypair.publicKey() })
+          .expect(200);
+
+        const message = challenge.body.data.message as string;
+        const signature = keypair.sign(Buffer.from(message, 'utf-8')).toString('base64');
+
+        const accessCookie = await loginAndGetAccessCookie(keypair.publicKey(), message, signature);
+
+        expect(accessCookie).toBeDefined();
+        expect(accessCookie).toContain('HttpOnly');
+        expect(accessCookie).toContain('SameSite=Strict');
+        expect(accessCookie).toContain('Secure');
+      } finally {
+        process.env.NODE_ENV = originalNodeEnv;
+        spies.forEach((spy) => spy.mockRestore());
+      }
     });
   });
 
@@ -242,6 +433,31 @@ describe('authService unit tests', () => {
       expect(result).toBe(true);
     });
 
+    it('should return true for a SEP-53 signature (Freighter signMessage)', () => {
+      const keypair = Keypair.random();
+      const message = 'test message';
+      const digest = crypto
+        .createHash('sha256')
+        .update(Buffer.from(`Stellar Signed Message:\n${message}`, 'utf-8'))
+        .digest();
+      const signature = keypair.sign(digest).toString('base64');
+
+      const result = authService.verifySignature(keypair.publicKey(), message, signature);
+      expect(result).toBe(true);
+    });
+
+    it('should return false for a SEP-53 signature over a different message', () => {
+      const keypair = Keypair.random();
+      const digest = crypto
+        .createHash('sha256')
+        .update(Buffer.from('Stellar Signed Message:\nother message', 'utf-8'))
+        .digest();
+      const signature = keypair.sign(digest).toString('base64');
+
+      const result = authService.verifySignature(keypair.publicKey(), 'test message', signature);
+      expect(result).toBe(false);
+    });
+
     it('should return false for wrong signer', () => {
       const keypair1 = Keypair.random();
       const keypair2 = Keypair.random();
@@ -280,9 +496,22 @@ describe('authService unit tests', () => {
   });
 
   describe('verifyChallengeTimestamp', () => {
+    // Freeze the clock: the service reads Date.now() itself, so a real clock
+    // can tick between building the timestamp and checking it.
+    const NOW = 1_700_000_000_000;
+    let dateNow: jest.SpiedFunction<typeof Date.now>;
+
+    beforeEach(() => {
+      dateNow = jest.spyOn(Date, 'now').mockReturnValue(NOW);
+    });
+
+    afterEach(() => {
+      dateNow.mockRestore();
+    });
+
     it('should accept timestamp at the window edge', () => {
       const maxAge = 5 * 60 * 1000; // 5 minutes
-      const timestamp = Date.now() - maxAge;
+      const timestamp = NOW - maxAge;
 
       const result = authService.verifyChallengeTimestamp(timestamp, maxAge);
       expect(result).toBe(true);
@@ -290,15 +519,23 @@ describe('authService unit tests', () => {
 
     it('should accept timestamp under the window', () => {
       const maxAge = 5 * 60 * 1000;
-      const timestamp = Date.now() - 1000; // 1 second ago
+      const timestamp = NOW - 1000; // 1 second ago
 
       const result = authService.verifyChallengeTimestamp(timestamp, maxAge);
       expect(result).toBe(true);
     });
 
+    it('should reject timestamp 1ms past the window edge', () => {
+      const maxAge = 5 * 60 * 1000;
+      const timestamp = NOW - maxAge - 1;
+
+      const result = authService.verifyChallengeTimestamp(timestamp, maxAge);
+      expect(result).toBe(false);
+    });
+
     it('should reject timestamp over the window', () => {
       const maxAge = 5 * 60 * 1000;
-      const timestamp = Date.now() - maxAge - 1000; // 1 second too old
+      const timestamp = NOW - maxAge - 1000; // 1 second too old
 
       const result = authService.verifyChallengeTimestamp(timestamp, maxAge);
       expect(result).toBe(false);
@@ -306,7 +543,7 @@ describe('authService unit tests', () => {
 
     it('should accept future timestamp within tolerance', () => {
       const maxAge = 5 * 60 * 1000;
-      const timestamp = Date.now() + 1000; // 1 second in future
+      const timestamp = NOW + 1000; // 1 second in future
 
       const result = authService.verifyChallengeTimestamp(timestamp, maxAge);
       expect(result).toBe(true);
@@ -400,12 +637,12 @@ describe('authService unit tests', () => {
       ).rejects.toThrow(/revoked/i);
     });
 
-    it('should support /api/v1/auth/refresh endpoint', async () => {
+    it('should support /api/auth/refresh endpoint', async () => {
       const keypair = Keypair.random();
       const initialPair = await authService.generateTokenPair(keypair.publicKey());
 
       const response = await request(app)
-        .post('/api/v1/auth/refresh')
+        .post('/api/auth/refresh')
         .send({ refreshToken: initialPair.refreshToken })
         .expect(200);
 

@@ -115,6 +115,15 @@ describe("mapTransactionError with backend error codes", () => {
     expect(result.message).toMatch(/unavailable/i);
   });
 
+  it.each(["SOLVENCY_VIOLATED", "INSUFFICIENT_FLOAT"])(
+    "maps %s to a transaction failure message",
+    (code) => {
+      const result = mapTransactionError({ code });
+      expect(result.category).toBe("unknown");
+      expect(result.message).toBe(ERROR_CODE_MESSAGES[code]);
+    },
+  );
+
   it("maps an ApiRequestError instance carrying a code", () => {
     const error = new Error("Loan not found");
     (error as Error & { code?: string }).code = "LOAN_NOT_FOUND";
@@ -163,6 +172,8 @@ describe("ERROR_CODE_MESSAGES", () => {
       "LOAN_NOT_ACTIVE",
       "INVALID_LOAN_ID",
       "INVALID_TX_XDR",
+      "SOLVENCY_VIOLATED",
+      "INSUFFICIENT_FLOAT",
     ];
 
     for (const code of expectedCodes) {

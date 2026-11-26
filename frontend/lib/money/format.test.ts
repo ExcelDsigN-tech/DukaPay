@@ -9,7 +9,7 @@ import {
 } from "./format";
 
 // `tsc` rejects BigInt literal syntax (`0n`) below ES2020, and this
-// frontend's tsconfig.json targets ES2017 — see format.ts's header comment.
+// frontend's tsconfig.json targets ES2017; see format.ts's header comment.
 const b = (n: number): bigint => BigInt(n);
 
 describe("roundDiv", () => {
@@ -97,7 +97,7 @@ describe("parseAmount", () => {
   it("a truncated 2dp display value never re-parses to more precision than it shows", () => {
     const stroops = parseAmount("1.999999"); // sub-cent dust
     const displayed = formatStroops(stroops); // rounds to 2dp
-    // 1.999999 rounds to 2.00 at 2dp — the *display* value equals the
+    // 1.999999 rounds to 2.00 at 2dp: the *display* value equals the
     // settlement value here, demonstrating the invariant: formatStroops
     // never fabricates precision, and re-parsing the display string never
     // produces a value with fractional digits beyond what was shown.

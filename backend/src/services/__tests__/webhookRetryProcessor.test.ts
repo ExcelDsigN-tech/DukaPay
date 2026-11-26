@@ -24,6 +24,15 @@ jest.unstable_mockModule('../jobMetricsService.js', () => ({
   },
 }));
 
+// The dispatch-time SSRF guard (#641) resolves every callback host. Stub DNS
+// so tests don't hit the network: real lookups made send order and timing
+// nondeterministic. Plain functions so mock resets can't clear them.
+jest.unstable_mockModule('node:dns/promises', () => {
+  const resolve4 = async () => ['93.184.216.34'];
+  const resolve6 = async () => [] as string[];
+  return { default: { resolve4, resolve6 }, resolve4, resolve6 };
+});
+
 const { WebhookService, getRetryDelayMs } = await import('../webhookService.js');
 
 const MAX_RETRY_ATTEMPTS = 4;

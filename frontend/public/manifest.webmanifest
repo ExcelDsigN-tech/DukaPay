@@ -1,11 +1,11 @@
 {
   "name": "DukaPay",
   "short_name": "DukaPay",
-  "description": "Decentralized lending for migrant workers — remittance-based credit scoring",
+  "description": "Turn the corner shop into a bank branch. DukaPay is an open, auditable agent banking network on Stellar, where agents cash in and out against on-chain solvency, backing cross-border remittances and micro-loans.",
   "start_url": "/en",
   "display": "standalone",
   "background_color": "#ffffff",
-  "theme_color": "#1a1a2e",
+  "theme_color": "#0b1020",
   "orientation": "portrait",
   "categories": ["finance", "lending"],
   "lang": "en",
@@ -21,6 +21,18 @@
       "sizes": "512x512",
       "type": "image/svg+xml",
       "purpose": "any maskable"
+    },
+    {
+      "src": "/images/android-chrome-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/images/android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
     }
   ]
 }

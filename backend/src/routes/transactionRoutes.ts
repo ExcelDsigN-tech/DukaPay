@@ -1,6 +1,12 @@
 import { Router } from 'express';
 import { listMyTransactions } from '../controllers/transactionController.js';
 import { requireJwtAuth } from '../middleware/jwtAuth.js';
+import { validateBody, validateParams, validateQuery } from '../middleware/validation.js';
+import {
+  emptyTransactionBodySchema,
+  emptyTransactionParamsSchema,
+  listMyTransactionsQuerySchema,
+} from '../schemas/transactionSchemas.js';
 
 const router = Router();
 
@@ -21,13 +27,20 @@ const router = Router();
  *         name: page
  *         schema:
  *           type: integer
+ *           minimum: 1
  *           default: 1
  *       - in: query
  *         name: limit
  *         schema:
  *           type: integer
+ *           minimum: 1
  *           default: 20
- *           maximum: 100
+ *           maximum: 500
+ *       - in: query
+ *         name: cursor
+ *         schema:
+ *           type: string
+ *         description: Optional positive integer cursor for cursor-based pagination
  *     responses:
  *       200:
  *         description: Transactions retrieved successfully.
@@ -82,9 +95,18 @@ const router = Router();
  *                       type: integer
  *                     totalPages:
  *                       type: integer
+ *       400:
+ *         description: Invalid pagination query parameters.
  *       401:
  *         description: Missing or invalid Bearer token.
  */
-router.get('/me', requireJwtAuth, listMyTransactions);
+router.get(
+  '/me',
+  requireJwtAuth,
+  validateParams(emptyTransactionParamsSchema),
+  validateQuery(listMyTransactionsQuerySchema),
+  validateBody(emptyTransactionBodySchema),
+  listMyTransactions,
+);
 
 export default router;

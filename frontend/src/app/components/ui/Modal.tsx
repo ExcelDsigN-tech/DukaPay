@@ -70,12 +70,12 @@ const Modal: React.FC<ModalProps> = ({
             aria-label={!title ? ariaLabel : undefined}
             tabIndex={-1}
             className={cn(
-              "relative w-full overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-zinc-950 dark:border dark:border-zinc-800 focus:outline-none",
+              "relative flex max-h-full w-full flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-zinc-950 dark:border dark:border-zinc-800 focus:outline-none",
               sizeClasses[size],
               className,
             )}
           >
-            <div className="flex items-center justify-between border-b border-gray-100 p-6 dark:border-zinc-800">
+            <div className="flex shrink-0 items-center justify-between border-b border-gray-100 p-6 dark:border-zinc-800">
               {title && (
                 <h3 id={titleId} className="text-xl font-semibold text-gray-900 dark:text-zinc-100">
                   {title}
@@ -90,7 +90,7 @@ const Modal: React.FC<ModalProps> = ({
                 <X size={20} />
               </button>
             </div>
-            <div className="p-6">{children}</div>
+            <div className="overflow-y-auto p-6">{children}</div>
           </motion.div>
         </div>
       )}

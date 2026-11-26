@@ -1,4 +1,4 @@
-// GENERATED FILE — do not edit by hand.
+// GENERATED FILE: do not edit by hand.
 //
 // Derived from `money-policy.json` at the repository root by
 // `scripts/gen-money.ts`. Run `npx ts-node scripts/gen-money.ts` from the

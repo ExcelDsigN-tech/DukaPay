@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { idempotencyMiddleware } from '../middleware/idempotency.js';
+import { idempotencyMiddleware, idempotencyCircuitBreaker } from '../middleware/idempotency.js';
 import { cacheService } from '../services/cacheService.js';
 import { jest } from '@jest/globals';
 
@@ -12,10 +12,15 @@ describe('Idempotency Middleware', () => {
   let next: NextFunction;
 
   beforeEach(() => {
+    idempotencyCircuitBreaker.reset();
     req = {
       header: jest.fn() as unknown as Request['header'],
       method: 'POST',
       originalUrl: '/api/test',
+      baseUrl: '/api',
+      path: '/test',
+      ip: '127.0.0.1',
+      user: { publicKey: 'GUSER1' },
     };
     res = {
       status: jest.fn().mockReturnThis() as unknown as Response['status'],
@@ -27,11 +32,11 @@ describe('Idempotency Middleware', () => {
     };
     next = jest.fn();
 
-    // Mock cacheService explicitly for each test if needed
-    // In ESM with Jest, mocking can be tricky, so we rely on manual mocks of the singleton instance if possible
-    // or use jest.spyOn if the instance is exported.
     jest.spyOn(cacheService, 'get').mockReset();
     jest.spyOn(cacheService, 'set').mockReset();
+    jest.spyOn(cacheService, 'reserve').mockReset().mockResolvedValue(true);
+    jest.spyOn(cacheService, 'setRequired').mockReset().mockResolvedValue(undefined);
+    jest.spyOn(cacheService, 'deleteIfMatch').mockReset().mockResolvedValue(true);
   });
 
   afterEach(() => {
@@ -55,7 +60,7 @@ describe('Idempotency Middleware', () => {
 
     await idempotencyMiddleware(req as Request, res as Response, next);
 
-    expect(cacheService.get).toHaveBeenCalledWith(`idemp:${key}`);
+    expect(cacheService.get).toHaveBeenCalledWith(`idemp:user:GUSER1:POST:/api/test:${key}`);
     expect(res.status).toHaveBeenCalledWith(201);
     expect(res.set).toHaveBeenCalledWith('X-Idempotency-Cache', 'HIT');
     expect(res.json).toHaveBeenCalledWith(cachedResponse.body);
@@ -94,5 +99,115 @@ describe('Idempotency Middleware', () => {
 
     expect(next).toHaveBeenCalled();
     expect(res.on).toHaveBeenCalledWith('finish', expect.any(Function));
+    expect(cacheService.reserve).toHaveBeenCalledWith(
+      `idemp:user:GUSER1:POST:/api/test:${key}:inflight`,
+      expect.any(String),
+      24 * 60 * 60,
+    );
+  });
+
+  it('returns 409 when another request already holds the scoped in-flight lock', async () => {
+    const key = 'busy-key';
+    asMock(req.header).mockReturnValue(key);
+    (cacheService.get as jest.Mock<() => Promise<unknown>>).mockResolvedValue(null);
+    (cacheService.reserve as jest.Mock<() => Promise<boolean>>).mockResolvedValue(false);
+
+    await idempotencyMiddleware(req as Request, res as Response, next);
+
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('only allows one concurrent request with a scoped key to reach the handler', async () => {
+    let reserved = false;
+    (cacheService.get as jest.Mock<() => Promise<unknown>>).mockResolvedValue(null);
+    (cacheService.reserve as jest.Mock<() => Promise<boolean>>).mockImplementation(async () => {
+      if (reserved) return false;
+      reserved = true;
+      return true;
+    });
+
+    const makeRequest = () =>
+      ({
+        ...req,
+        header: jest.fn().mockReturnValue('concurrent-key'),
+      }) as unknown as Request;
+    const makeResponse = () =>
+      ({
+        status: jest.fn().mockReturnThis(),
+        set: jest.fn().mockReturnThis(),
+        json: jest.fn().mockReturnThis(),
+        on: jest.fn(),
+        statusCode: 200,
+      }) as unknown as Response;
+    const firstNext = jest.fn();
+    const secondNext = jest.fn();
+    const firstResponse = makeResponse();
+    const secondResponse = makeResponse();
+
+    await Promise.all([
+      idempotencyMiddleware(makeRequest(), firstResponse, firstNext),
+      idempotencyMiddleware(makeRequest(), secondResponse, secondNext),
+    ]);
+
+    expect(firstNext.mock.calls.length + secondNext.mock.calls.length).toBe(1);
+    expect(
+      [firstResponse, secondResponse].some((response) =>
+        (response.status as jest.Mock).mock.calls.some(([status]) => status === 409),
+      ),
+    ).toBe(true);
+  });
+
+  it('scopes cache and reservation keys by principal, method, and route', async () => {
+    asMock(req.header).mockReturnValue('shared-key');
+    (cacheService.get as jest.Mock<() => Promise<unknown>>).mockResolvedValue(null);
+    (req as Request & { user?: { publicKey: string } }).user = { publicKey: 'GUSER2' };
+
+    await idempotencyMiddleware(req as Request, res as Response, next);
+
+    expect(cacheService.get).toHaveBeenCalledWith('idemp:user:GUSER2:POST:/api/test:shared-key');
+    expect(cacheService.reserve).toHaveBeenCalledWith(
+      'idemp:user:GUSER2:POST:/api/test:shared-key:inflight',
+      expect.any(String),
+      24 * 60 * 60,
+    );
+  });
+
+  it('should return 503 Service Unavailable when Redis fails on get', async () => {
+    const key = 'error-key';
+    asMock(req.header).mockReturnValue(key);
+    (cacheService.get as jest.Mock<() => Promise<unknown>>).mockRejectedValue(
+      new Error('Redis connection error'),
+    );
+
+    await idempotencyMiddleware(req as Request, res as Response, next);
+
+    expect(res.status).toHaveBeenCalledWith(503);
+    expect(res.json).toHaveBeenCalledWith({
+      error: 'Service Unavailable',
+      message: 'Idempotency service temporarily unavailable. Please retry later.',
+    });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('should reject with 503 when circuit breaker is open', async () => {
+    const key = 'circuit-key';
+    asMock(req.header).mockReturnValue(key);
+
+    // Trip the circuit breaker by recording failures
+    idempotencyCircuitBreaker.recordFailure();
+    idempotencyCircuitBreaker.recordFailure();
+    idempotencyCircuitBreaker.recordFailure();
+    expect(idempotencyCircuitBreaker.isOpen()).toBe(true);
+
+    await idempotencyMiddleware(req as Request, res as Response, next);
+
+    expect(res.status).toHaveBeenCalledWith(503);
+    expect(res.json).toHaveBeenCalledWith({
+      error: 'Service Unavailable',
+      message: 'Idempotency service temporarily unavailable. Please retry later.',
+    });
+    expect(cacheService.get).not.toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalled();
   });
 });

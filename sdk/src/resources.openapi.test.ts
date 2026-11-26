@@ -1,138 +1,218 @@
 /**
- * Verifies that the DukaPay SDK builder methods target paths that exist in the
- * backend OpenAPI spec and use the correct HTTP method.
+ * resources.openapi.test.ts
  *
- * These tests do not make real HTTP requests. Instead they inspect the URL and
- * method captured by the injected `fetch` mock and compare them against the
- * paths documented in `backend/src/swagger/openapi.json`.
+ * Contract test: every path the SDK calls must exist in the backend's OpenAPI
+ * spec (`backend/src/swagger/openapi.json`, kept in sync by CI's
+ * `openapi:validate` job).
+ *
+ * Unit tests with a mocked HTTP client only assert the SDK's own strings, so a
+ * rename or a moved mount on the backend used to ship 404s to integrators while
+ * CI stayed green. Driving the real resource classes through a recording fake
+ * client and matching the recorded paths against the spec closes that gap.
  */
 
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { describe, expect, it, vi } from 'vitest';
-import { HttpClient } from './http.js';
-import { LoansResource, PoolResource } from './resources.js';
+import { fileURLToPath } from 'node:url';
+import { describe, expect, it } from 'vitest';
+import type { HttpClient } from './http.js';
+import {
+  AgentsResource,
+  AuthResource,
+  LoansResource,
+  NotificationsResource,
+  PoolResource,
+  PrivacyResource,
+  ScoresResource,
+  RemittanceResource,
+} from './resources.js';
 
-// Load the backend OpenAPI spec relative to this file's location in the monorepo
-const specPath = join(
-  new URL('.', import.meta.url).pathname,
-  '../../backend/src/swagger/openapi.json',
-);
-const spec = JSON.parse(readFileSync(specPath, 'utf-8')) as {
+const ADDRESS = 'GDZST3XVCDTUJ76ZAV2HA72KYRF5KKDTDQH2CBLFGEXU5PZC3T7KRMHQ';
+const ADDRESS_B = 'GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H';
+
+interface Recorded {
+  method: string;
+  path: string;
+}
+
+/** Records the method + path of every call made through the resources. */
+function recordingClient() {
+  const calls: Recorded[] = [];
+  const record =
+    (method: string) =>
+    (path: string): Promise<unknown> => {
+      calls.push({ method, path });
+      return Promise.resolve({});
+    };
+
+  const http = {
+    get: record('GET'),
+    post: record('POST'),
+    put: record('PUT'),
+    patch: record('PATCH'),
+    delete: record('DELETE'),
+    openStream: (path: string): Promise<Response> => {
+      calls.push({ method: 'GET', path });
+      return Promise.resolve(new Response(null, { status: 200 }));
+    },
+  } as unknown as HttpClient;
+
+  return { http, calls };
+}
+
+interface OpenApiSpec {
   paths: Record<string, Record<string, unknown>>;
-};
-
-function hasPath(method: string, path: string): boolean {
-  return Object.prototype.hasOwnProperty.call(spec.paths[path] ?? {}, method.toLowerCase());
 }
 
-const VALID_ADDR = 'G' + 'A'.repeat(55);
+const specPath = fileURLToPath(
+  new URL('../../backend/src/swagger/openapi.json', import.meta.url),
+);
 
-function makeHttp(mockFetch: ReturnType<typeof vi.fn>): HttpClient {
-  return new HttpClient({ baseUrl: 'https://api.example.com', fetch: mockFetch });
+function loadSpec(): OpenApiSpec {
+  return JSON.parse(readFileSync(specPath, 'utf8')) as OpenApiSpec;
 }
 
-function okResponse(body: unknown = {}): Response {
-  return new Response(JSON.stringify(body), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' },
-  });
+/**
+ * Turns a concrete request path into the spec's templated form, e.g.
+ * `/loans/42/repay` → `/loans/{loanId}/repay`. Returns undefined when no
+ * documented path has the same shape.
+ */
+function toSpecPath(path: string, spec: OpenApiSpec): string | undefined {
+  if (spec.paths[path]) return path;
+
+  const segments = path.split('/');
+  for (const [specPath, operations] of Object.entries(spec.paths)) {
+    const specSegments = specPath.split('/');
+    if (specSegments.length !== segments.length) continue;
+
+    const matches = specSegments.every((segment, i) =>
+      segment.startsWith('{')
+        ? segments[i] !== undefined && segments[i] !== ''
+        : segment === segments[i],
+    );
+    if (matches && Object.keys(operations).length > 0) {
+      return specPath;
+    }
+  }
+  return undefined;
 }
 
-// ── LoansResource builder paths ───────────────────────────────────────────────
+describe('SDK paths against the backend OpenAPI spec', () => {
+  const spec = loadSpec();
 
-describe('OpenAPI coverage — LoansResource builders', () => {
-  it('POST /loans/request is in the spec', () => {
-    expect(hasPath('post', '/loans/request')).toBe(true);
+  it('loads a spec with paths', () => {
+    expect(Object.keys(spec.paths).length).toBeGreaterThan(0);
   });
 
-  it('requestLoan targets POST /loans/request', async () => {
-    const mockFetch = vi.fn().mockResolvedValue(okResponse({ id: 1 }));
-    const loans = new LoansResource(makeHttp(mockFetch));
-    await loans.requestLoan({ amount: '1000000', borrowerPublicKey: VALID_ADDR });
-    const [url, init] = mockFetch.mock.calls[0] as [URL, RequestInit];
-    expect(url.pathname).toBe('/loans/request');
-    expect((init.method ?? 'POST').toUpperCase()).toBe('POST');
-  });
+  it('every SDK request maps to a documented endpoint', async () => {
+    const { http, calls } = recordingClient();
 
-  it('POST /loans/{loanId}/build-deposit-collateral is in the spec', () => {
-    expect(hasPath('post', '/loans/{loanId}/build-deposit-collateral')).toBe(true);
-  });
+    const auth = new AuthResource(http);
+    const loans = new LoansResource(http);
+    const pool = new PoolResource(http);
+    const scores = new ScoresResource(http);
+    const remittance = new RemittanceResource(http);
+    const agents = new AgentsResource(http);
+    const notifications = new NotificationsResource(http);
 
-  it('buildDepositCollateral targets POST /loans/:id/build-deposit-collateral', async () => {
-    const mockFetch = vi.fn().mockResolvedValue(okResponse({ xdr: 'abc' }));
-    const loans = new LoansResource(makeHttp(mockFetch));
-    await loans.buildDepositCollateral(1, { amount: '100', borrowerPublicKey: VALID_ADDR });
-    const [url] = mockFetch.mock.calls[0] as [URL];
-    expect(url.pathname).toMatch(/\/loans\/\d+\/build-deposit-collateral/);
-  });
+    await auth.challenge(ADDRESS);
+    await auth.login({ publicKey: ADDRESS, message: 'msg', signature: 'sig' });
+    await auth.verify();
+    await auth.logout();
+    await auth.refresh('refresh-token');
+    await auth.logoutAll();
+    await auth.submitKyc({ firstName: 'Ada', lastName: 'Lovelace', countryCode: 'KE' });
 
-  it('POST /loans/{loanId}/build-release-collateral is in the spec', () => {
-    expect(hasPath('post', '/loans/{loanId}/build-release-collateral')).toBe(true);
-  });
+    await loans.config();
+    await loans.list({ borrower: ADDRESS, status: 'active', limit: 20 });
+    await loans.get(42);
+    await loans.buildRepay(42, 100, ADDRESS);
+    await loans.buildCancel(42);
+    await loans.submit(42, 'signed-xdr');
+    await loans.amortizationPreview({ amount: 250, termDays: 30 });
+    await loans.amortizationSchedule(42);
+    await loans.repaymentPreview(42);
+    await loans.events(42);
 
-  it('buildReleaseCollateral targets POST /loans/:id/build-release-collateral', async () => {
-    const mockFetch = vi.fn().mockResolvedValue(okResponse({ xdr: 'abc' }));
-    const loans = new LoansResource(makeHttp(mockFetch));
-    await loans.buildReleaseCollateral(2, { borrowerPublicKey: VALID_ADDR });
-    const [url] = mockFetch.mock.calls[0] as [URL];
-    expect(url.pathname).toMatch(/\/loans\/\d+\/build-release-collateral/);
-  });
+    await pool.stats(ADDRESS);
+    await pool.analytics();
+    await pool.depositor(ADDRESS);
+    await pool.yieldHistory(ADDRESS, 30, ADDRESS);
+    await pool.sharePrice(ADDRESS);
+    await pool.buildDeposit({ token: ADDRESS, amount: '100', from: ADDRESS });
+    await pool.buildWithdraw({ token: ADDRESS, shares: '50', from: ADDRESS });
 
-  it('POST /loans/{loanId}/build-refinance is in the spec', () => {
-    expect(hasPath('post', '/loans/{loanId}/build-refinance')).toBe(true);
-  });
+    await scores.get(ADDRESS);
+    await scores.history(ADDRESS);
+    await scores.nft(ADDRESS);
+    await scores.breakdown(ADDRESS);
 
-  it('buildRefinance targets POST /loans/:id/build-refinance', async () => {
-    const mockFetch = vi.fn().mockResolvedValue(okResponse({ xdr: 'abc' }));
-    const loans = new LoansResource(makeHttp(mockFetch));
-    await loans.buildRefinance(3, { newAmount: '2000', newTerm: 30, borrowerPublicKey: VALID_ADDR });
-    const [url] = mockFetch.mock.calls[0] as [URL];
-    expect(url.pathname).toMatch(/\/loans\/\d+\/build-refinance/);
-  });
-
-  it('POST /loans/{loanId}/build-extend is in the spec', () => {
-    expect(hasPath('post', '/loans/{loanId}/build-extend')).toBe(true);
-  });
-
-  it('buildExtend targets POST /loans/:id/build-extend', async () => {
-    const mockFetch = vi.fn().mockResolvedValue(okResponse({ xdr: 'abc' }));
-    const loans = new LoansResource(makeHttp(mockFetch));
-    await loans.buildExtend(4, { extraLedgers: 500, borrowerPublicKey: VALID_ADDR });
-    const [url] = mockFetch.mock.calls[0] as [URL];
-    expect(url.pathname).toMatch(/\/loans\/\d+\/build-extend/);
-  });
-
-  it('POST /loans/{loanId}/contest-default is in the spec', () => {
-    expect(hasPath('post', '/loans/{loanId}/contest-default')).toBe(true);
-  });
-
-  it('contestDefault targets POST /loans/:id/contest-default', async () => {
-    const mockFetch = vi.fn().mockResolvedValue(okResponse({ id: 5 }));
-    const loans = new LoansResource(makeHttp(mockFetch));
-    await loans.contestDefault(5, 'Payment confirmed on-chain');
-    const [url] = mockFetch.mock.calls[0] as [URL];
-    expect(url.pathname).toMatch(/\/loans\/\d+\/contest-default/);
-  });
-});
-
-// ── PoolResource builder paths ────────────────────────────────────────────────
-
-describe('OpenAPI coverage — PoolResource builders', () => {
-  it('POST /pool/build-emergency-withdraw is in the spec', () => {
-    expect(hasPath('post', '/pool/build-emergency-withdraw')).toBe(true);
-  });
-
-  it('buildEmergencyWithdraw targets POST /pool/build-emergency-withdraw', async () => {
-    const mockFetch = vi.fn().mockResolvedValue(okResponse({ xdr: 'xyz' }));
-    const pool = new PoolResource(makeHttp(mockFetch));
-    await pool.buildEmergencyWithdraw({
-      depositorPublicKey: VALID_ADDR,
-      token: VALID_ADDR,
-      shares: '100',
+    await remittance.list({ status: 'pending', limit: 10 });
+    await remittance.get('remittance-id');
+    await remittance.buildSend({
+      recipient: ADDRESS,
+      amount: 100,
+      fromCurrency: 'USDC',
+      toCurrency: 'EURC',
     });
-    const [url, init] = mockFetch.mock.calls[0] as [URL, RequestInit];
-    expect(url.pathname).toBe('/pool/build-emergency-withdraw');
-    expect((init.method ?? 'POST').toUpperCase()).toBe('POST');
+    await remittance.submit('remittance-id', 'signed-xdr');
+
+    await agents.myAssignments();
+    await agents.assignBorrower({ agentPublicKey: ADDRESS, borrowerPublicKey: ADDRESS_B });
+    await agents.removeBorrower({ agentPublicKey: ADDRESS, borrowerPublicKey: ADDRESS_B });
+    await agents.dashboard();
+    await agents.clearDashboardCache();
+    await agents.initiateFloatTransfer({
+      fromAgent: ADDRESS,
+      toAgent: ADDRESS_B,
+      amount: 5000,
+      reason: 'rebalance',
+    });
+    await agents.approveFloatTransfer('ft_12345');
+    await agents.submitFloatTransfer('ft_12345', 'c2lnbmVkLXhkcg==');
+    await agents.rejectFloatTransfer('ft_12345');
+    await agents.getPairLimits({ fromAgent: ADDRESS, toAgent: ADDRESS_B });
+    await agents.setPairLimits({
+      fromAgent: ADDRESS,
+      toAgent: ADDRESS_B,
+      dailyLimit: 200000,
+      weeklyLimit: 800000,
+    });
+
+    await notifications.list({ type: 'repayment_due', status: 'unread', limit: 10 });
+    await notifications.getPreferences();
+    await notifications.updatePreferences({
+      emailEnabled: true,
+      smsEnabled: false,
+      phone: null,
+      perTypeOverrides: {},
+    });
+    await notifications.markRead([1, 2]);
+    await notifications.markAllRead();
+    await notifications.stream(() => {});
+
+    const privacy = new PrivacyResource(http);
+    const reason = 'I would like a copy of my data';
+    await privacy.requestAccess({ publicKey: ADDRESS, reason });
+    await privacy.requestDeletion({ publicKey: ADDRESS, reason, confirmDeletion: true });
+    await privacy.anonymize({ publicKey: ADDRESS, reason });
+    await privacy.getRequest('dsar-1');
+    await privacy.export(ADDRESS);
+
+    // Sanity check on the fixture itself: a renamed SDK method would otherwise
+    // silently stop being exercised.
+    expect(calls.length).toBeGreaterThanOrEqual(54);
+
+    const mismatches = calls
+      .map((call) => {
+        const specPath = toSpecPath(call.path, spec);
+        const operations = specPath ? spec.paths[specPath] : undefined;
+        const documented = operations
+          ? Object.keys(operations).some((m) => m.toLowerCase() === call.method.toLowerCase())
+          : false;
+        return documented ? null : `${call.method} ${call.path}`;
+      })
+      .filter((mismatch): mismatch is string => mismatch !== null);
+
+    expect(mismatches).toEqual([]);
   });
 });

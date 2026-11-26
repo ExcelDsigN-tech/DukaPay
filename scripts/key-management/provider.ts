@@ -1,5 +1,5 @@
 /**
- * provider.ts — provider-agnostic signing-key adapter for DukaPay.
+ * provider.ts: provider-agnostic signing-key adapter for DukaPay.
  *
  * This is a SCAFFOLD. It defines the `SigningProvider` interface and two
  * reference implementations (AWS CloudHSM, Fireblocks). Real key material is
@@ -54,7 +54,7 @@ export class CloudHsmProvider implements SigningProvider {
     // TODO: call AWS KMS / CloudHSM sign with this.keyRef.
     // const kms = new KMSClient(...);
     // const out = await kms.send(new SignCommand({ KeyId: this.keyRef, Message: payload }));
-    throw new Error("CloudHsmProvider.sign not wired — implement per your AWS account");
+    throw new Error("CloudHsmProvider.sign not wired; implement per your AWS account");
   }
   async publicKey(): Promise<string> {
     throw new Error("CloudHsmProvider.publicKey not wired");
@@ -80,7 +80,7 @@ export class FireblocksProvider implements SigningProvider {
   }
   async sign(payload: Buffer): Promise<string> {
     // TODO: use Fireblocks SDK transaction / raw signing with this.keyRef.
-    throw new Error("FireblocksProvider.sign not wired — implement per your Fireblocks vault");
+    throw new Error("FireblocksProvider.sign not wired; implement per your Fireblocks vault");
   }
   async publicKey(): Promise<string> {
     throw new Error("FireblocksProvider.publicKey not wired");

@@ -2,6 +2,7 @@ import cron from 'node-cron';
 import { jobMetricsService } from '../services/jobMetricsService.js';
 import { applyScoreDecay, getInactiveBorrowers } from '../services/scoreDecayService.js';
 import logger from '../utils/logger.js';
+import { env } from '../config/env.js';
 
 // In-memory guard to prevent overlapping execution states
 let isRunning = false;
@@ -38,7 +39,7 @@ export async function runScoreDecayJob(): Promise<void> {
     logger
       .withContext()
       .info('Score decay processing pass completed successfully.', { processed: borrowers.length });
-  } catch (error: any) {
+  } catch (error: unknown) {
     await jobMetricsService.recordFailure(
       'score-decay-job',
       error instanceof Error ? error : String(error),
@@ -57,13 +58,13 @@ export async function runScoreDecayJob(): Promise<void> {
  * Standardized to match existing infrastructure schedules.
  */
 export function startScoreDecayScheduler() {
-  if (process.env.NODE_ENV === 'test') {
+  if (env.NODE_ENV === 'test') {
     logger.withContext().info('Skipping score decay scheduler activation inside test profiles.');
     return { stop: () => {} };
   }
 
   // Run daily at midnight (0 0 * * *) or configure to match required administrative intervals
-  const cronExpression = process.env.SCORE_DECAY_CRON || '0 0 * * *';
+  const cronExpression = env.SCORE_DECAY_CRON;
 
   const task = cron.schedule(cronExpression, async () => {
     await runScoreDecayJob();

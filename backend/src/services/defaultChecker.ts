@@ -15,13 +15,14 @@ import { cacheService } from './cacheService.js';
 import { jobMetricsService } from './jobMetricsService.js';
 import { fromStroops } from '../money/decimal.js';
 import { hasUnresolvedLedgerGaps } from './ledgerCheckpoints.js';
+import { env } from '../config/env.js';
 
 /**
  * Owed-vs-paid reconciliation for a single loan, computed entirely in
  * `bigint` stroops (see `backend/src/money/decimal.ts`). `owedStroops` is
  * the originally approved principal; `paidStroops` is every `LoanRepaid`
  * amount summed to date. `driftStroops` is `owedStroops - paidStroops`
- * clamped at zero once the loan is fully repaid — a nonzero value here
+ * clamped at zero once the loan is fully repaid; a nonzero value here
  * after a `LoanRepaid`/`LoanDefaulted` terminal event indicates the kind of
  * cross-layer rounding drift issue #1378 closes.
  */
@@ -37,7 +38,7 @@ export interface LoanReconciliation {
 /**
  * Sums the `LoanApproved` principal and every `LoanRepaid` amount recorded
  * for `loanId` in `contract_events`, in exact integer stroops. Every
- * comparison here is `bigint` arithmetic — never `Number` — so the result
+ * comparison here is `bigint` arithmetic (never `Number`), so the result
  * agrees with the on-chain pool balance to the stroop, regardless of how
  * large the amount is.
  */
@@ -76,11 +77,6 @@ export async function reconcileLoanStroops(loanId: number): Promise<LoanReconcil
   };
 }
 
-/**
- * Mirrors `LoanManager::DEFAULT_TERM_LEDGERS` in `contracts/loan_manager/src/lib.rs`.
- * Used to estimate on-chain due ledgers from indexed `LoanApproved` events.
- */
-const DEFAULT_TERM_LEDGERS = 17_280;
 const LOCK_KEY = 'default_checker:running';
 const LOCK_TTL_SECONDS = 600; // 10 minutes - prevents stuck locks from crashed runs
 
@@ -105,19 +101,14 @@ export interface DefaultCheckRunResult {
   ledgersPastOldestDue?: number;
   batches: DefaultCheckBatchResult[];
   /**
-   * True when this run was deliberately skipped instead of evaluating loans
-   * — currently only set when the indexer has an unresolved ('suspect')
-   * ledger gap for the loan manager contract (issue #1376). Conclusions
+   * True when this run was deliberately skipped instead of evaluating loans.
+   * Currently only set when the indexer has an unresolved ('suspect')
+   * ledger gap for the loan manager contract. Conclusions
    * drawn from `contract_events` are unreliable until the gap is
    * reconciled, so no defaults are submitted for this run.
    */
   skipped?: boolean;
   skippedReason?: string;
-}
-
-function parsePositiveInt(value: string | undefined, fallback: number): number {
-  const n = parseInt(value ?? '', 10);
-  return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
 function chunk<T>(items: T[], size: number): T[][] {
@@ -165,17 +156,14 @@ export class DefaultChecker {
   private currentLockValue: string | null = null;
 
   constructor() {
-    this.contractId = process.env.LOAN_MANAGER_CONTRACT_ID || '';
-    this.termLedgers = parsePositiveInt(process.env.LOAN_TERM_LEDGERS, DEFAULT_TERM_LEDGERS);
-    this.batchSize = parsePositiveInt(process.env.DEFAULT_CHECK_BATCH_SIZE, 25);
-    this.batchTimeoutMs = parsePositiveInt(
-      process.env.DEFAULT_CHECK_BATCH_TIMEOUT_MS,
-      5 * 60 * 1000,
-    );
-    this.maxLoansPerRun = parsePositiveInt(process.env.DEFAULT_CHECK_MAX_LOANS_PER_RUN, 500);
-    this.pollAttempts = parsePositiveInt(process.env.DEFAULT_CHECK_POLL_ATTEMPTS, 30);
-    this.pollSleepMs = parsePositiveInt(process.env.DEFAULT_CHECK_POLL_SLEEP_MS, 1_000);
-    this.concurrency = parsePositiveInt(process.env.DEFAULT_CHECK_CONCURRENCY, 3);
+    this.contractId = env.LOAN_MANAGER_CONTRACT_ID ?? '';
+    this.termLedgers = env.LOAN_TERM_LEDGERS;
+    this.batchSize = env.DEFAULT_CHECK_BATCH_SIZE;
+    this.batchTimeoutMs = env.DEFAULT_CHECK_BATCH_TIMEOUT_MS;
+    this.maxLoansPerRun = env.DEFAULT_CHECK_MAX_LOANS_PER_RUN;
+    this.pollAttempts = env.DEFAULT_CHECK_POLL_ATTEMPTS;
+    this.pollSleepMs = env.DEFAULT_CHECK_POLL_SLEEP_MS;
+    this.concurrency = env.DEFAULT_CHECK_CONCURRENCY;
   }
 
   private assertConfigured(): {
@@ -189,7 +177,7 @@ export class DefaultChecker {
       );
     }
 
-    const secret = process.env.LOAN_MANAGER_ADMIN_SECRET;
+    const secret = env.LOAN_MANAGER_ADMIN_SECRET;
     if (!secret) {
       throw AppError.internal(
         'Default checker misconfiguration: LOAN_MANAGER_ADMIN_SECRET is not set',
@@ -215,9 +203,9 @@ export class DefaultChecker {
    * Whether the indexer has an unresolved ('suspect') ledger gap for the
    * loan manager contract. `fetchOverdueLoanIds`/`fetchOverdueStats` derive
    * loan state entirely from indexed `contract_events`, so a gap means a
-   * `LoanApproved`, `LoanRepaid`, or `LoanDefaulted` event could be missing
-   * — submitting `check_defaults` against that view risks a false default
-   * (issue #1376). Extracted as its own method so tests can stub it out
+   * `LoanApproved`, `LoanRepaid`, or `LoanDefaulted` event could be missing;
+   * submitting `check_defaults` against that view risks a false default
+   * Extracted as its own method so tests can stub it out
    * without needing a live database.
    */
   private async hasSuspectLedgerRanges(): Promise<boolean> {
@@ -499,7 +487,7 @@ export class DefaultChecker {
         logger
           .withContext()
           .warn(
-            'default_checker: lock already expired or owned by another instance — skipping delete',
+            'default_checker: lock already expired or owned by another instance; skipping delete',
           );
       }
     } catch (error) {
@@ -651,11 +639,11 @@ let inFlight = false;
 export function startDefaultCheckerScheduler(): void {
   if (interval) return;
 
-  if (process.env.NODE_ENV === 'test') {
+  if (env.NODE_ENV === 'test') {
     return;
   }
 
-  if (!process.env.LOAN_MANAGER_CONTRACT_ID || !process.env.LOAN_MANAGER_ADMIN_SECRET) {
+  if (!env.LOAN_MANAGER_CONTRACT_ID || !env.LOAN_MANAGER_ADMIN_SECRET) {
     logger
       .withContext()
       .warn(
@@ -664,7 +652,7 @@ export function startDefaultCheckerScheduler(): void {
     return;
   }
 
-  const intervalMs = parsePositiveInt(process.env.DEFAULT_CHECK_INTERVAL_MS, 30 * 60 * 1000);
+  const intervalMs = env.DEFAULT_CHECK_INTERVAL_MS;
 
   interval = setInterval(() => {
     void (async () => {

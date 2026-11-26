@@ -5,8 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useSSE, type RealtimeStatus } from "./useSSE";
 import { queryKeys } from "./useApi";
 import { useUserStore } from "../stores/useUserStore";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+import { NEXT_PUBLIC_API_URL } from "../lib/apiConfig";
 
 const LOAN_REFRESH_EVENTS = new Set([
   "LoanRepaid",
@@ -52,7 +51,7 @@ export function useLoanStream(loanId: string | undefined): RealtimeStatus {
 
   const sseUrl =
     borrowerAddress && loanId
-      ? `${API_URL}/api/events/stream?borrower=${encodeURIComponent(borrowerAddress)}`
+      ? `${NEXT_PUBLIC_API_URL}/api/events/stream?borrower=${encodeURIComponent(borrowerAddress)}`
       : null;
 
   return useSSE<LoanStreamEvent>({

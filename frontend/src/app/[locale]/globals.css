@@ -7,14 +7,75 @@
   --background: #ffffff;
   --foreground: #171717;
   --focus-ring: #4f46e5;
+  /* Accent as text/links. Indigo-600 on white is 6.29:1 (AA). */
+  --accent-text: #4f46e5;
+
+  /* ── Brand (see docs/DESIGN.md "Brand identity") ── */
+  --brand-teal: #18d6b0;
+  --brand-blue: #3b82f6;
+  --brand-indigo: #6366f1;
+  --brand-ink: #0b1020;
+  --brand-slate: #64748b;
+  --brand-paper: #f5f7fa;
+  /* Logo, wordmark "Pay" and hero moments only. Never on buttons or body text. */
+  --brand-gradient: linear-gradient(135deg, #18d6b0 0%, #3b82f6 52%, #6366f1 100%);
+
+  /* ── App themes (Figma "DukaPay" variables). Paper is light, Cobalt is dark. ── */
+  --canvas: #f6f7f9;
+  --surface: #ffffff;
+  --subtle: #f1f3f6;
+  --nav-active: #e9edf3;
+  --line: #e3e7ee;
+  --line-strong: #cbd2dd;
+  --fg: #0b1020;
+  --fg-muted: #4f586c;
+  --link: #2f5bea;
+  --primary: #0b1020;
+  --primary-hover: #1e2740;
+  --on-primary: #f6f7f9;
+  --ok: #15803d;
+  --warning: #b45309;
+  --warning-bg: #fff7e6;
+  --warning-border: #f3d9a4;
+  --danger: #b91c1c;
+  --gold: #8f5b0e;
+  color-scheme: light;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-focus-ring: var(--focus-ring);
+  --color-accent-text: var(--accent-text);
+  --color-brand-teal: var(--brand-teal);
+  --color-brand-blue: var(--brand-blue);
+  --color-brand-indigo: var(--brand-indigo);
+  --color-brand-ink: var(--brand-ink);
+  --color-brand-slate: var(--brand-slate);
+  --color-brand-paper: var(--brand-paper);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-sora), var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-subtle: var(--subtle);
+  --color-nav-active: var(--nav-active);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-link: var(--link);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-on-primary: var(--on-primary);
+  /* Alias for components written shadcn-style (ConfirmTransactionDialog). */
+  --color-primary-foreground: var(--on-primary);
+  --color-ok: var(--ok);
+  --color-warning: var(--warning);
+  --color-warning-bg: var(--warning-bg);
+  --color-warning-border: var(--warning-border);
+  --color-danger: var(--danger);
+  --color-gold: var(--gold);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -22,19 +83,67 @@
     /* WCAG AA Compliant: #ededed on #0a0a0a (15.5:1) */
     --background: #0a0a0a;
     --foreground: #ededed;
+    /* #4F46E5 on #0a0a0a is 3.15:1 (focus ring OK, text fails AA). Indigo-400 is 6.64:1. */
+    --accent-text: #818cf8;
   }
 }
 
-/* Class-based dark mode for manual toggle */
+/* Class-based dark mode for manual toggle. The head script in app/layout.tsx
+   resolves "system" to this class, so Cobalt follows the OS without a media query. */
 .dark {
   --background: #0a0a0a;
   --foreground: #ededed;
+  --accent-text: #818cf8;
+  --canvas: #070b16;
+  --surface: #0f1526;
+  --subtle: #141b30;
+  --nav-active: #18213a;
+  --line: #1f2840;
+  --line-strong: #323d5c;
+  --fg: #eef2fa;
+  --fg-muted: #a1aac0;
+  --link: #7aa2ff;
+  --primary: #5b8cff;
+  --primary-hover: #7aa2ff;
+  --on-primary: #070b16;
+  --ok: #4ade80;
+  --warning: #fbbf24;
+  --warning-bg: #1e1a10;
+  --warning-border: #4a3b17;
+  --danger: #fca5a5;
+  --gold: #f2b84b;
+  color-scheme: dark;
+}
+
+/* ── Kingdom theme scope ─────────────────────────────────────────── */
+/* Decision: the neutral shell above stays as the app-wide chrome; the
+   Obsidian/neon palette below governs ONLY the gamified surfaces
+   (see docs/DESIGN.md Scope). Apply with <div class="kingdom">. */
+.kingdom {
+  --kingdom-bg: #0d0d12;
+  --kingdom-surface: #16161f;
+  --kingdom-primary: #7c3aed;
+  /* Brand teal. #18D6B0 on #0D0D12 is 10.42:1 (AAA). */
+  --kingdom-secondary: #18d6b0;
+  --kingdom-success: #22c55e;
+  --kingdom-warning: #f59e0b;
+  --kingdom-danger: #ef4444;
+  --kingdom-text: #f1f5f9;
+  /* #64748B on #0D0D12 is 4.07:1: large-text/decorative only, NOT body copy. */
+  --kingdom-text-muted: #64748b;
+  /* #9AA4B5 on #0D0D12 is 7.71:1 (AAA). Use for body copy on obsidian. */
+  --kingdom-text-muted-aa: #9aa4b5;
+  /* Raw #7C3AED as text on #0D0D12 is 3.40:1 (fails AA). Use this lighter
+     purple for text; reserve #7C3AED fills for white-text CTAs (5.70:1, AA). */
+  --kingdom-primary-text: #a78bfa;
+  background: var(--kingdom-bg);
+  color: var(--kingdom-text);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--canvas);
+  color: var(--fg);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
   @apply antialiased transition-colors duration-200;
 }
 

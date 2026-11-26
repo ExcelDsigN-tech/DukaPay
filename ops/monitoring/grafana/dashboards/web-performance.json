@@ -55,7 +55,7 @@
       "id": 3,
       "options": { "legend": { "showLegend": true }, "tooltip": { "mode": "multi" } },
       "targets": [{ "expr": "lcp_milliseconds", "refId": "A" }],
-      "title": "LCP (Lighthouse) — budget < 2500ms",
+      "title": "LCP (Lighthouse): budget < 2500ms",
       "type": "timeseries"
     },
     {
@@ -71,7 +71,7 @@
       "id": 4,
       "options": { "legend": { "showLegend": true }, "tooltip": { "mode": "multi" } },
       "targets": [{ "expr": "tti_milliseconds", "refId": "A" }],
-      "title": "TTI (Lighthouse) — budget < 3500ms",
+      "title": "TTI (Lighthouse): budget < 3500ms",
       "type": "timeseries"
     },
     {
@@ -87,7 +87,7 @@
       "id": 5,
       "options": { "legend": { "showLegend": true }, "tooltip": { "mode": "multi" } },
       "targets": [{ "expr": "cls_value", "refId": "A" }],
-      "title": "CLS (Lighthouse) — budget < 0.1",
+      "title": "CLS (Lighthouse): budget < 0.1",
       "type": "timeseries"
     },
     {
@@ -103,7 +103,7 @@
       "id": 6,
       "options": { "legend": { "showLegend": true }, "tooltip": { "mode": "multi" } },
       "targets": [{ "expr": "bundle_size_kb", "refId": "A" }],
-      "title": "Largest JS bundle (gzip KB) — budget < 200KB",
+      "title": "Largest JS bundle (gzip KB): budget < 200KB",
       "type": "timeseries"
     }
   ],

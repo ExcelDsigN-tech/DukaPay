@@ -1,8 +1,8 @@
 /**
  * Accessibility regression tests for the shared modal focus trap.
  *
- * `useModalFocusTrap` backs every modal in the app, so a regression here —
- * focus escaping the modal, or the trap never releasing on close — would break
+ * `useModalFocusTrap` backs every modal in the app, so a regression here (
+ * focus escaping the modal, or the trap never releasing on close) would break
  * keyboard accessibility everywhere at once, silently and without any visual
  * symptom.
  *
@@ -13,8 +13,8 @@
  *  - The Tab handler listens on `document` and only intervenes at the *edges*
  *    of the focusable set, letting the browser move focus in between. jsdom
  *    does not implement native Tab traversal, so the interior steps are driven
- *    explicitly with `.focus()`; the wrap-around at each edge — which is the
- *    part the hook actually owns — is asserted from the real handler.
+ *    explicitly with `.focus()`; the wrap-around at each edge (which is the
+ *    part the hook actually owns) is asserted from the real handler.
  */
 
 import { renderHook } from "@testing-library/react";

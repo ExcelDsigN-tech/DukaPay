@@ -9,6 +9,8 @@ import { Card, CardContent } from "../../components/ui/Card";
 import { WizardSkeleton } from "../../components/skeletons/WizardSkeleton";
 import { useCreditScore, useMinimumScore } from "../../hooks/useApi";
 import { useToastStore } from "../../stores/useToastStore";
+import { useLocale } from "next-intl";
+import { formatNumber } from "../../utils/formatLocale";
 import {
   useWalletStore,
   selectWalletAddress,
@@ -59,6 +61,7 @@ function getScoreBandMax(score: number): number {
 }
 
 export default function RequestLoanPage() {
+  const locale = useLocale();
   const borrowerAddress = useWalletStore(selectWalletAddress);
   const isWalletConnected = useWalletStore(selectIsWalletConnected);
   const [successLoanId, setSuccessLoanId] = useState<string | null>(null);
@@ -115,35 +118,41 @@ export default function RequestLoanPage() {
   const isCheckingEligibility =
     isWalletConnected && (isLoadingConfig || (isLoadingScore && !!borrowerAddress));
 
-  const hasEligibilityError = Boolean(configError || scoreError);
+  // The rate comes from the loan config; without it the wizard can't quote terms.
+  const interestRatePercent = minScoreConfig?.interestRatePercent;
+  const hasEligibilityError = Boolean(
+    configError || scoreError || (!isLoadingConfig && interestRatePercent === undefined),
+  );
 
   if (successLoanId) {
     return (
-      <main className="mx-auto max-w-3xl space-y-6 p-8">
+      <div className="mx-auto max-w-3xl space-y-6 p-8">
         <Card>
           <CardContent className="space-y-4 p-8 text-center">
             <CheckCircle2 className="mx-auto h-12 w-12 text-green-500" />
             <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
               Loan Request Submitted
             </h1>
-            <p className="text-zinc-600 dark:text-zinc-400">Request ID: {successLoanId}</p>
+            <p className="break-all text-zinc-600 dark:text-zinc-400">
+              Transaction: {successLoanId}
+            </p>
             <p className="text-sm text-zinc-500 dark:text-zinc-400">
               Next steps: monitor approval status and prepare repayment before the due date.
             </p>
             <div className="flex justify-center gap-3 pt-2">
-              <Link href="/loans">
+              <Link href={`/${locale}/loans`}>
                 <Button variant="outline">View Loans</Button>
               </Link>
               <Button onClick={() => setSuccessLoanId(null)}>Request Another</Button>
             </div>
           </CardContent>
         </Card>
-      </main>
+      </div>
     );
   }
 
   return (
-    <main className="mx-auto max-w-4xl space-y-8 p-8">
+    <div className="mx-auto max-w-4xl space-y-8 p-8">
       <header className="space-y-2">
         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-indigo-600">
           Borrower Portal
@@ -229,7 +238,7 @@ export default function RequestLoanPage() {
               Eligibility: score {resolvedCreditScore} / minimum {minimumScore}
             </p>
             <p className="mt-1 text-zinc-500 dark:text-zinc-400">
-              Maximum loan amount currently available: ${maxAmount.toLocaleString("en-US")}
+              Maximum loan amount currently available: ${formatNumber(maxAmount, locale)}
             </p>
           </div>
 
@@ -238,11 +247,12 @@ export default function RequestLoanPage() {
               borrowerAddress={borrowerAddress!}
               creditScore={resolvedCreditScore}
               maxAmount={maxAmount}
+              interestRatePercent={interestRatePercent!}
               onSuccess={setSuccessLoanId}
             />
           </Suspense>
         </div>
       )}
-    </main>
+    </div>
   );
 }

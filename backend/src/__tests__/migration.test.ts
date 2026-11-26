@@ -1,28 +1,10 @@
-import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
-import { query, getClient } from '../db/connection.js';
+import { it, expect, beforeAll, afterAll } from '@jest/globals';
+import { query, getClient, closePool } from '../db/connection.js';
 import { runner as migrate } from 'node-pg-migrate';
 import type { PoolClient } from 'pg';
+import { describeIfDb } from './helpers/dbProbe.js';
 
-let databaseAvailable = false;
-
-beforeAll(async () => {
-  try {
-    await query('SELECT 1');
-    databaseAvailable = true;
-  } catch {
-    databaseAvailable = false;
-  }
-});
-
-const describeIf = (name: string, fn: () => void) => {
-  if (databaseAvailable) {
-    describe(name, fn);
-  } else {
-    describe.skip(`${name} (skipped: no database)`, fn);
-  }
-};
-
-describeIf('Migrations', () => {
+describeIfDb('Migrations', () => {
   let client: PoolClient;
 
   beforeAll(async () => {
@@ -33,12 +15,15 @@ describeIf('Migrations', () => {
     if (client) {
       client.release();
     }
+    await closePool();
   });
 
   const runMigrations = async (direction: 'up' | 'down') => {
     await migrate({
       dbClient: client,
-      dir: './migrations',
+      migrationsTable: 'pgmigrations',
+      dir: 'migrations/*.cjs',
+      useGlob: true,
       direction,
       count: Infinity,
     });

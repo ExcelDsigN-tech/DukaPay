@@ -1,6 +1,7 @@
-// Service for score decay logic — exponential time-weighted decay
+// Service for score decay logic: exponential time-weighted decay
 // Implements: score * e^(-lambda * days_since_event) where lambda = ln(2)/halfLife
 import { query } from '../db/connection.js';
+import { env } from '../config/env.js';
 
 export const MIN_SCORE = 300;
 export const MAX_SCORE = 850;
@@ -11,11 +12,9 @@ export const DEFAULT_HALF_LIFE_DAYS = 30;
 export const DEFAULT_PENALTY_HALF_LIFE_DAYS = 90;
 
 export const HALF_LIFE_BY_EVENT: Record<string, number> = {
-  LoanRepaid: Number.parseInt(process.env.SCORE_DECAY_HALF_LIFE_REPAID ?? '', 10) || DEFAULT_HALF_LIFE_DAYS,
-  LoanApproved: Number.parseInt(process.env.SCORE_DECAY_HALF_LIFE_APPROVED ?? '', 10) || DEFAULT_HALF_LIFE_DAYS,
-  LoanDefaulted:
-    Number.parseInt(process.env.SCORE_DECAY_HALF_LIFE_DEFAULTED ?? '', 10) ||
-    DEFAULT_PENALTY_HALF_LIFE_DAYS,
+  LoanRepaid: env.SCORE_DECAY_HALF_LIFE_REPAID || DEFAULT_HALF_LIFE_DAYS,
+  LoanApproved: env.SCORE_DECAY_HALF_LIFE_APPROVED || DEFAULT_HALF_LIFE_DAYS,
+  LoanDefaulted: env.SCORE_DECAY_HALF_LIFE_DEFAULTED || DEFAULT_PENALTY_HALF_LIFE_DAYS,
   default: DEFAULT_HALF_LIFE_DAYS,
 };
 
@@ -88,7 +87,13 @@ export async function recordDecayEvent(event: DecayEvent): Promise<void> {
     `INSERT INTO decay_events (borrower, event_type, event_timestamp, initial_score, half_life_days)
      VALUES ($1, $2, $3, $4, $5)
      ON CONFLICT DO NOTHING`,
-    [event.borrower, event.event_type, event.event_timestamp, event.initial_score, event.half_life_days],
+    [
+      event.borrower,
+      event.event_type,
+      event.event_timestamp,
+      event.initial_score,
+      event.half_life_days,
+    ],
   );
 }
 

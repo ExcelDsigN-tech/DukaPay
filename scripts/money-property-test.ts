@@ -6,7 +6,7 @@
  *   contract (i128 stroops)
  *     -> Postgres NUMERIC(38,0) (exact integer stroops, string-serialized)
  *     -> frontend display string (`formatStroops`, full 7dp settlement
- *        precision — the precision a "confirm before you sign" screen must
+ *        precision: the precision a "confirm before you sign" screen must
  *        use, never the 2dp presentation-only precision)
  *     -> user re-parses that exact string (`parseAmount`)
  *     -> back to stroops
@@ -98,7 +98,7 @@ function main(): void {
     }
 
     // Cross-check: backend and frontend must independently produce the
-    // *same* full-precision display string for the same stroop value — this
+    // *same* full-precision display string for the same stroop value. This
     // is the actual "conversions aren't inverse operations across layers"
     // failure mode issue #1378 describes.
     if (backendDisplay !== frontendDisplay) {
@@ -112,7 +112,7 @@ function main(): void {
   }
 
   console.log(
-    `money-property-test: OK — ${checked} cases, zero drift, seed=0x${seed.toString(16)}`,
+    `money-property-test: OK, ${checked} cases, zero drift, seed=0x${seed.toString(16)}`,
   );
 }
 

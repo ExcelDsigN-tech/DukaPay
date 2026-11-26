@@ -1,6 +1,7 @@
 use super::*;
+use soroban_sdk::testutils::storage::Instance as _;
 use soroban_sdk::testutils::{Address as _, Ledger, LedgerInfo};
-use soroban_sdk::{Address, BytesN, Env, Vec};
+use soroban_sdk::{Address, BytesN, Env, IntoVal, Symbol, Val, Vec};
 #[allow(deprecated)]
 #[contract]
 pub struct MockTarget;
@@ -34,14 +35,14 @@ impl MockTarget {
 fn setup() -> (Env, GovernanceContractClient<'static>, Address, Address) {
     let env = Env::default();
     env.mock_all_auths();
-    let id = env.register(GovernanceContract, ());
-    let client = GovernanceContractClient::new(&env, &id);
     let admin = Address::generate(&env);
 
     let target_id = env.register(MockTarget, ());
     let target = target_id.clone();
 
-    client.initialize(&admin, &target);
+    let id = env.register(GovernanceContract, (&admin, &target));
+    let client = GovernanceContractClient::new(&env, &id);
+
     (env, client, admin, target)
 }
 
@@ -108,6 +109,18 @@ fn initialize_sets_admin() {
 }
 
 #[test]
+fn read_entrypoint_reextends_instance_ttl() {
+    let (env, client, admin, _) = setup();
+    let contract_id = client.address.clone();
+    env.ledger()
+        .set_sequence_number(env.ledger().sequence() + 510_000);
+
+    assert_eq!(client.get_admin(), admin);
+    let ttl_after = env.as_contract(&contract_id, || env.storage().instance().get_ttl());
+    assert!(ttl_after > 400_000);
+}
+
+#[test]
 fn exposes_target_pending_admin_and_approval_queries() {
     let (env, client, admin, target) = setup();
     let proposed = Address::generate(&env);
@@ -128,10 +141,17 @@ fn exposes_target_pending_admin_and_approval_queries() {
 }
 
 #[test]
-fn double_initialize_panics() {
-    let (env, client, _, _) = setup();
-    let result = client.try_initialize(&Address::generate(&env), &Address::generate(&env));
-    assert_eq!(result, Err(Ok(GovernanceError::AlreadyInitialized)));
+fn test_no_callable_initializer_after_deploy() {
+    let (env, client, admin, target) = setup();
+    let result = env.try_invoke_contract::<Val, Val>(
+        &client.address,
+        &Symbol::new(&env, "initialize"),
+        (admin, target).into_val(&env),
+    );
+    assert!(
+        result.is_err(),
+        "old initialize entrypoint is still callable"
+    );
 }
 
 #[test]

@@ -1,9 +1,10 @@
 import type { MetadataRoute } from "next";
 import { getSiteUrl } from "./lib/metadata";
+import { LOCALES } from "./lib/locales";
 
 const BASE_URL = getSiteUrl().toString();
 
-const locales = ["en", "es", "tl"] as const;
+const locales = LOCALES;
 
 function getAlternates(path: string) {
   return {

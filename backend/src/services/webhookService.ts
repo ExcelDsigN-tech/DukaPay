@@ -1,11 +1,114 @@
 import crypto from 'node:crypto';
+import dns from 'node:dns/promises';
+import net from 'node:net';
 import { query } from '../db/connection.js';
 import logger from '../utils/logger.js';
+import {
+  encryptField,
+  serializeEncryptedField,
+  deserializeEncryptedField,
+  decryptField,
+} from './piiCrypto.js';
+import { env } from '../config/env.js';
 
-// #1520 — this array is the single source of truth for which event types
+// Private, loopback, link-local, carrier-grade NAT and unspecified ranges.
+// BlockList also matches IPv4-mapped IPv6 (e.g. ::ffff:127.0.0.1).
+const BLOCKED_RANGES = new net.BlockList();
+for (const [address, prefix] of [
+  ['0.0.0.0', 8],
+  ['10.0.0.0', 8],
+  ['100.64.0.0', 10],
+  ['127.0.0.0', 8],
+  ['169.254.0.0', 16],
+  ['172.16.0.0', 12],
+  ['192.168.0.0', 16],
+] as const) {
+  BLOCKED_RANGES.addSubnet(address, prefix, 'ipv4');
+}
+for (const [address, prefix] of [
+  ['::', 128],
+  ['::1', 128],
+  ['fc00::', 7],
+  ['fe80::', 10],
+] as const) {
+  BLOCKED_RANGES.addSubnet(address, prefix, 'ipv6');
+}
+
+/** True for IP literals in a blocked range. Non-IP strings return false. */
+function isPrivateIp(ip: string): boolean {
+  const addr = ip.replace(/^\[|\]$/g, '');
+  const family = net.isIP(addr);
+  if (family === 0) return false;
+  return BLOCKED_RANGES.check(addr, family === 4 ? 'ipv4' : 'ipv6');
+}
+
+/**
+ * Registration-time check on a callback URL hostname (no DNS lookup).
+ * Dispatch re-checks the resolved addresses via assertCallbackUrlSafe.
+ */
+export function isPrivateHost(hostname: string): boolean {
+  const host = hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  if (host === 'localhost' || host.endsWith('.localhost')) return true;
+  if (host === 'metadata.google.internal') return true;
+  // Unqualified single-label hostnames (e.g. "internal", "db")
+  if (net.isIP(host) === 0 && !host.includes('.')) return true;
+  return isPrivateIp(host);
+}
+
+/** Thrown when a callback URL points at a private address; retrying won't help. */
+class DisallowedCallbackUrlError extends Error {}
+
+/**
+ * Resolves the hostname in callbackUrl and throws if any resolved address
+ * is a private/loopback/link-local IP, preventing SSRF via DNS rebinding.
+ * Logs the rejected attempt without including the full URL to avoid leaking
+ * potentially sensitive path or query components.
+ */
+async function assertCallbackUrlSafe(callbackUrl: string): Promise<void> {
+  let hostname: string;
+  try {
+    hostname = new URL(callbackUrl).hostname;
+  } catch {
+    throw new Error('Invalid webhook callback URL');
+  }
+
+  // Skip resolution for IP literals; validate directly.
+  const bare = hostname.replace(/^\[|\]$/g, '');
+  if (net.isIP(bare) !== 0) {
+    if (isPrivateIp(bare)) {
+      logger.withContext().warn('Webhook dispatch blocked: callback URL resolves to private IP', {
+        hostname,
+      });
+      throw new DisallowedCallbackUrlError(
+        `Webhook callback URL resolves to a disallowed address: ${hostname}`,
+      );
+    }
+    return;
+  }
+
+  let addresses: string[];
+  try {
+    const records = await dns.resolve4(hostname).catch(() => [] as string[]);
+    const records6 = await dns.resolve6(hostname).catch(() => [] as string[]);
+    addresses = [...records, ...records6];
+  } catch {
+    addresses = [];
+  }
+
+  for (const addr of addresses) {
+    if (isPrivateIp(addr)) {
+      logger.withContext().warn('Webhook dispatch blocked: callback URL resolves to private IP', {
+        hostname,
+      });
+      throw new DisallowedCallbackUrlError(`Webhook callback URL resolves to a disallowed address`);
+    }
+  }
+}
+
+// #1520: this array is the single source of truth for which event types
 // external webhook subscribers can register for. docs/webhooks.md's
 // "Supported Event Types" section is a human-readable mirror of this list
-// (kept manually in sync) — update both together whenever an entry is
+// (kept manually in sync); update both together whenever an entry is
 // added, removed, or renamed here.
 export const SUPPORTED_WEBHOOK_EVENT_TYPES = [
   'LoanRequested',
@@ -73,6 +176,15 @@ export const SUPPORTED_WEBHOOK_EVENT_TYPES = [
   'GovCncl',
   'GovEmerg',
   'GovExp',
+  // Agent registry / agent vault events (Issue #774).
+  'AgentRegistered',
+  'AgentStatusChanged',
+  'BondUpdated',
+  'CollateralWithdrawn',
+  'FloatMinted',
+  'FloatBurned',
+  'FloatTransferred',
+  'VaultSettled',
 ] as const;
 
 export type WebhookEventType = (typeof SUPPORTED_WEBHOOK_EVENT_TYPES)[number];
@@ -125,19 +237,129 @@ interface RegisterWebhookInput {
 interface PreparedWebhookPayload {
   body: string;
   payload: Record<string, unknown>;
+  timestamp: string;
+  nonce: string;
 }
 
-function parsePositiveInt(value: string | undefined, fallback: number): number {
-  const parsed = Number.parseInt(value ?? '', 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+// Maximum acceptable age (in seconds) of a webhook timestamp for replay
+// protection.  Consumers should compare the header timestamp against
+// `Date.now()` and reject requests older than this window.
+export const WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS = 300;
+
+// Maximum acceptable age (in seconds) of a nonce that we've already seen.
+// Combined with the timestamp tolerance this bounds the window during which
+// a replay attack could succeed.
+export const WEBHOOK_NONCE_RETENTION_SECONDS = 600;
+
+function generateNonce(): string {
+  return crypto.randomBytes(16).toString('hex');
+}
+
+async function decryptWebhookSecret(token: string, subscriptionId: string): Promise<string> {
+  if (!token.startsWith('pii:v')) {
+    return token;
+  }
+  const encrypted = deserializeEncryptedField(token);
+  return decryptField(
+    subscriptionId,
+    'webhook_secret',
+    encrypted.ciphertext,
+    encrypted.gcm_nonce,
+    encrypted.dek_wrapped,
+    encrypted.dek_kek_id,
+    'webhook_service',
+    'sign_delivery',
+    crypto.randomUUID(),
+  );
+}
+
+// Compute the HMAC-SHA256 signature for a webhook delivery.
+//
+// The signed payload is the concatenation of:
+//   `<timestamp>.<nonce>.<body_hex>`
+//
+// The body is hex-encoded so that the signed string is always ASCII and
+// unambiguous (prevents ambiguity from newlines / control characters in
+// the body).
+export function computeWebhookSignature(
+  secret: string,
+  timestamp: string,
+  nonce: string,
+  body: string,
+): string {
+  const bodyHex = Buffer.from(body, 'utf8').toString('hex');
+  const signedPayload = `${timestamp}.${nonce}.${bodyHex}`;
+  return crypto.createHmac('sha256', secret).update(signedPayload).digest('hex');
+}
+
+// Verify a webhook signature.  Returns `true` when the provided signature
+// matches the expected value computed from *any* of the candidate secrets
+// (this supports seamless key rotation where a previous secret is still
+// accepted for a limited window after a new secret is provisioned).
+//
+// Consumers should additionally check the timestamp header against
+// `WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS` and deduplicate nonces.
+export function verifyWebhookSignature(
+  signature: string | undefined,
+  candidateSecrets: string[],
+  timestamp: string | undefined,
+  nonce: string | undefined,
+  body: string,
+): boolean {
+  if (!signature || !timestamp || !nonce) {
+    return false;
+  }
+
+  // Strip an optional "sha256=" prefix (GitHub/Stripe convention) so the
+  // function accepts both raw hex and prefixed formats.
+  const cleanSignature = signature.replace(/^sha256=/i, '');
+
+  for (const secret of candidateSecrets) {
+    if (!secret) {
+      continue;
+    }
+    const expected = computeWebhookSignature(secret, timestamp, nonce, body);
+    if (crypto.timingSafeEqual(Buffer.from(cleanSignature, 'hex'), Buffer.from(expected, 'hex'))) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+// Parse the `x-dukapay-timestamp` header and return the Unix epoch seconds
+// as a number, or `undefined` when the header is absent / invalid.
+export function parseWebhookTimestamp(header: string | undefined): number | undefined {
+  if (header === undefined) {
+    return undefined;
+  }
+  const parsed = Number.parseInt(header, 10);
+  if (Number.isNaN(parsed) || parsed < 0) {
+    return undefined;
+  }
+  return parsed;
+}
+
+// Build the list of candidate secrets used for signature verification.
+//
+// The *primary* secret comes from `WEBHOOK_SECRET`.  Any additional
+// secrets listed in `WEBHOOK_ROTATION_SECRETS` (comma-separated) are
+// appended so that consumers who are in the middle of a key rotation can
+// still verify deliveries signed with a previous secret.
+export function getWebhookCandidateSecrets(): string[] {
+  const primary = env.WEBHOOK_SECRET?.trim();
+  const rotation = env.WEBHOOK_ROTATION_SECRETS;
+
+  const secrets = primary ? [primary, ...rotation] : rotation;
+  return secrets.length > 0 ? secrets : [''];
 }
 
 function getWebhookRequestTimeoutMs(): number {
-  return parsePositiveInt(process.env.WEBHOOK_REQUEST_TIMEOUT_MS, 30 * 1000);
+  return env.WEBHOOK_REQUEST_TIMEOUT_MS;
 }
 
 function getWebhookMaxPayloadBytes(): number {
-  return parsePositiveInt(process.env.WEBHOOK_MAX_PAYLOAD_BYTES, 64 * 1024);
+  return env.WEBHOOK_MAX_PAYLOAD_BYTES;
 }
 
 function summarizeOversizedPayload(
@@ -192,6 +414,8 @@ function summarizeOversizedPayloadMinimal(
 
 function prepareWebhookPayload(payload: Record<string, unknown>): PreparedWebhookPayload {
   const body = JSON.stringify(payload);
+  const timestamp = String(Math.floor(Date.now() / 1000));
+  const nonce = generateNonce();
   const payloadBytes = Buffer.byteLength(body);
   const maxPayloadBytes = getWebhookMaxPayloadBytes();
   const eventId = typeof payload.eventId === 'string' ? payload.eventId : undefined;
@@ -222,6 +446,8 @@ function prepareWebhookPayload(payload: Record<string, unknown>): PreparedWebhoo
     return {
       body: summarizedBody,
       payload: summarizedPayload,
+      timestamp,
+      nonce,
     };
   }
 
@@ -237,6 +463,8 @@ function prepareWebhookPayload(payload: Record<string, unknown>): PreparedWebhoo
   return {
     body,
     payload,
+    timestamp,
+    nonce,
   };
 }
 
@@ -244,7 +472,16 @@ async function postWebhook(
   callbackUrl: string,
   body: string,
   signature: string | undefined,
+  timestamp: string,
+  nonce: string,
 ): Promise<Response> {
+  // Re-validate the resolved IP at dispatch time to close the DNS-rebinding
+  // window (registration-time hostname check alone is insufficient; see #641).
+  // ponytail: the checked IP isn't pinned, so a DNS answer that changes
+  // between this lookup and fetch() still gets through. Pin it with an undici
+  // Agent `connect.lookup` if webhook registration ever opens beyond admins.
+  await assertCallbackUrlSafe(callbackUrl);
+
   const timeoutMs = getWebhookRequestTimeoutMs();
   const controller = new AbortController();
   const timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);
@@ -255,13 +492,19 @@ async function postWebhook(
       method: 'POST',
       headers: {
         'content-type': 'application/json',
+        'x-dukapay-timestamp': timestamp,
+        'x-dukapay-nonce': nonce,
         // X-DukaPay-Signature uses the GitHub/Stripe-style "sha256=<hex>"
         // format so subscribers can verify payload integrity (see
         // docs/wiki/webhook-signatures.md for the verification recipe).
+        // The signature covers the signed payload:
+        //   "<timestamp>.<nonce>.<body_hex>"
         ...(signature && { 'x-dukapay-signature': `sha256=${signature}` }),
       },
       body,
       signal: controller.signal,
+      // A redirect would skip the address check above; a 3xx counts as a failed delivery.
+      redirect: 'manual',
     });
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
@@ -330,11 +573,15 @@ export class WebhookService {
         if (delivery.attempt_count >= MAX_RETRY_ATTEMPTS) {
           continue;
         }
+        const encryptedSecret = delivery.secret || undefined;
+        const plainSecret = encryptedSecret
+          ? await decryptWebhookSecret(encryptedSecret, String(delivery.subscription_id))
+          : undefined;
         await WebhookService.retryWebhookDelivery(
           delivery.id,
           delivery.subscription_id,
           delivery.callback_url,
-          delivery.secret || undefined,
+          plainSecret,
           delivery.event_id,
           delivery.event_type as WebhookEventType,
           delivery.payload,
@@ -360,13 +607,19 @@ export class WebhookService {
     const body = preparedPayload.body;
 
     const signature = secret
-      ? crypto.createHmac('sha256', secret).update(body).digest('hex')
+      ? computeWebhookSignature(secret, preparedPayload.timestamp, preparedPayload.nonce, body)
       : undefined;
 
     let response: Response | null = null;
 
     try {
-      response = await postWebhook(callbackUrl, body, signature);
+      response = await postWebhook(
+        callbackUrl,
+        body,
+        signature,
+        preparedPayload.timestamp,
+        preparedPayload.nonce,
+      );
 
       const successful = response.ok;
       const newAttemptCount = attemptCount + 1;
@@ -432,8 +685,9 @@ export class WebhookService {
       }
     } catch (error) {
       const newAttemptCount = attemptCount + 1;
+      // A blocked (private-address) callback fails every retry, so stop now.
       const nextRetryTime =
-        newAttemptCount < MAX_RETRY_ATTEMPTS
+        newAttemptCount < MAX_RETRY_ATTEMPTS && !(error instanceof DisallowedCallbackUrlError)
           ? new Date(Date.now() + getRetryDelayMs(newAttemptCount))
           : null;
 
@@ -474,14 +728,29 @@ export class WebhookService {
   }
 
   async registerSubscription(input: RegisterWebhookInput): Promise<WebhookSubscription> {
+    let encryptedSecret: string | null = null;
+    if (input.secret) {
+      const encrypted = await encryptField(input.secret);
+      encryptedSecret = serializeEncryptedField(encrypted);
+    }
+
     const result = await query(
       `INSERT INTO webhook_subscriptions (callback_url, event_types, secret, is_active)
        VALUES ($1, $2::jsonb, $3, true)
        RETURNING id, callback_url, event_types, secret, is_active, created_at, updated_at`,
-      [input.callbackUrl, JSON.stringify(input.eventTypes), input.secret ?? null],
+      [input.callbackUrl, JSON.stringify(input.eventTypes), encryptedSecret],
     );
 
     return this.mapSubscriptionRow(result.rows[0] as Record<string, unknown>);
+  }
+
+  async rotateWebhookSecret(id: number, newSecret: string): Promise<void> {
+    const encrypted = await encryptField(newSecret);
+    const token = serializeEncryptedField(encrypted);
+    await query(`UPDATE webhook_subscriptions SET secret = $1, updated_at = NOW() WHERE id = $2`, [
+      token,
+      id,
+    ]);
   }
 
   async listSubscriptions(): Promise<WebhookSubscription[]> {
@@ -541,14 +810,18 @@ export class WebhookService {
       );
 
       await Promise.all(
-        webhooksResult.rows.map((hook) =>
-          this.sendToWebhook(
+        webhooksResult.rows.map(async (hook) => {
+          const rawSecret = (hook as { secret?: string | null }).secret ?? undefined;
+          const plainSecret = rawSecret
+            ? await decryptWebhookSecret(rawSecret, String((hook as { id: number }).id))
+            : undefined;
+          return this.sendToWebhook(
             Number((hook as { id: number }).id),
             String((hook as { callback_url: string }).callback_url),
-            ((hook as { secret?: string | null }).secret ?? undefined) || undefined,
+            plainSecret,
             preparedPayload,
-          ),
-        ),
+          );
+        }),
       );
     } catch (error) {
       logger.withContext().error('Error during webhook dispatch', {
@@ -568,11 +841,17 @@ export class WebhookService {
     const body = payload.body;
 
     const signature = secret
-      ? crypto.createHmac('sha256', secret).update(body).digest('hex')
+      ? computeWebhookSignature(secret, payload.timestamp, payload.nonce, body)
       : undefined;
 
     try {
-      const response = await postWebhook(callbackUrl, body, signature);
+      const response = await postWebhook(
+        callbackUrl,
+        body,
+        signature,
+        payload.timestamp,
+        payload.nonce,
+      );
 
       const successful = response.ok;
 
@@ -668,13 +947,10 @@ export class WebhookService {
   }
 
   private mapSubscriptionRow(row: Record<string, unknown>): WebhookSubscription {
-    const secret = typeof row.secret === 'string' && row.secret.length > 0 ? row.secret : undefined;
-
     return {
       id: Number(row.id),
       callbackUrl: String(row.callback_url),
       eventTypes: (row.event_types as WebhookEventType[]) ?? [],
-      ...(secret ? { secret } : {}),
       isActive: Boolean(row.is_active),
       createdAt: new Date(String(row.created_at)),
       updatedAt: new Date(String(row.updated_at)),

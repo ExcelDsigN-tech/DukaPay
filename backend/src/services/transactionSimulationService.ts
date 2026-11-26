@@ -81,19 +81,19 @@ function extractWarnings(simulation: unknown): string[] {
   if (sim.cost?.cpuInsns) {
     const cpuInsns = BigInt(sim.cost.cpuInsns);
     if (cpuInsns > 100_000_000n) {
-      warnings.push('High CPU instruction count — transaction may be slow or exceed ledger limits');
+      warnings.push('High CPU instruction count: transaction may be slow or exceed ledger limits');
     }
   }
 
   if (sim.cost?.memBytes) {
     const memBytes = BigInt(sim.cost.memBytes);
     if (memBytes > 5_000_000n) {
-      warnings.push('High memory usage — transaction may exceed ledger limits');
+      warnings.push('High memory usage: transaction may exceed ledger limits');
     }
   }
 
   if (sim.events && sim.events.length > 20) {
-    warnings.push('Large number of events — review for unexpected side effects');
+    warnings.push('Large number of events: review for unexpected side effects');
   }
 
   return warnings;
@@ -115,6 +115,15 @@ export class TransactionSimulationService {
     sourceAccount: string,
     skipCache = false,
   ): Promise<SimulationResult> {
+    if (!function_.trim()) {
+      throw AppError.badRequest('Contract function is required');
+    }
+    if (!Array.isArray(args)) {
+      throw AppError.badRequest('Simulation arguments must be an array');
+    }
+    if (!StrKey.isValidEd25519PublicKey(sourceAccount)) {
+      throw AppError.badRequest('Invalid source account format');
+    }
     // Validate contract address
     if (!StrKey.isValidContract(contractId)) {
       throw AppError.badRequest('Invalid contract ID format');

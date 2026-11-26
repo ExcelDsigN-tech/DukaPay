@@ -3,17 +3,23 @@ import { it, expect, jest } from '@jest/globals';
 jest.setTimeout(30000);
 
 /**
- * Conditional test helper — runs tests only when a real PostgreSQL database
+ * Conditional test helper: runs tests only when a real PostgreSQL database
  * is reachable. In CI without a DB service, the tests are skipped.
+ *
+ * The probe pool is closed even when the DB is up: with DB_POOL_MIN > 0 it
+ * keeps its idle connection forever and the Jest worker never exits.
  */
 async function withDb(then: () => Promise<void>): Promise<void> {
-  const { query } = await import('../db/connection.js');
+  jest.resetModules();
+  const { query, closePool } = await import('../db/connection.js');
   try {
     await query('SELECT 1');
-    await then();
   } catch {
-    // database not available — skip
+    return; // database not available, skip
+  } finally {
+    await closePool();
   }
+  await then();
 }
 
 describe('Database connection pool', () => {
@@ -33,7 +39,7 @@ describe('Database connection pool', () => {
       jest.resetModules();
       const { getClient, closePool } = await import('../db/connection.js');
 
-      // Acquire the only connection — pool is now saturated.
+      // Acquire the only connection; the pool is now saturated.
       const client = await getClient();
 
       // A second acquire should reject within connectionTimeoutMillis.
@@ -62,5 +68,32 @@ describe('Database connection pool', () => {
     jest.resetModules();
     const { closePool } = await import('../db/connection.js');
     await closePool();
+  });
+
+  it('configures statement_timeout on the pool from DB_STATEMENT_TIMEOUT_MS env var', async () => {
+    process.env.DB_STATEMENT_TIMEOUT_MS = '25000';
+
+    jest.resetModules();
+    const { pool, closePool } = await import('../db/connection.js');
+    expect(pool.options.statement_timeout).toBe(25000);
+    await closePool();
+  });
+
+  it('applies statement_timeout to acquired connections', async () => {
+    await withDb(async () => {
+      process.env.DB_STATEMENT_TIMEOUT_MS = '25000';
+
+      jest.resetModules();
+      const { getClient, closePool } = await import('../db/connection.js');
+
+      const client = await getClient();
+      try {
+        const res = await client.query('SHOW statement_timeout');
+        expect(res.rows[0].statement_timeout).toMatch(/^25(s|000ms)$/);
+      } finally {
+        client.release();
+        await closePool();
+      }
+    });
   });
 });

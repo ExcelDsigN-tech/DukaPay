@@ -6,10 +6,11 @@
 //!   * horizontal scaling via deterministic contract sharding
 //!   * Prometheus health metrics (lag, throughput, error rate) on `/metrics`
 //!
-//! Configuration is entirely environment-driven — see `README.md`.
+//! Configuration is entirely environment-driven; see `README.md`.
 
 mod checkpoint;
 mod config;
+mod dead_letter;
 mod metrics;
 mod pipeline;
 mod rpc;

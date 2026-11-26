@@ -3,11 +3,22 @@
 
 title = "DukaPay gitleaks config"
 
+# Without this, a config file replaces gitleaks' built-in rules instead of
+# adding to them, and an allowlist-only file scans with zero rules.
+[extend]
+useDefault = true
+
 [allowlist]
   # Allowlist rules that are known false positives in this repo.
   description = "Global allowlist"
 
-  # Test files may contain example secrets
+  # Test files may contain example secrets. Docs, README, and .env.example
+  # files are expected to contain placeholder credentials (your_jwt_secret,
+  # sample/dummy/xxx/changeme, etc.) so they're exempted wholesale rather
+  # than pattern-matched: a [[rules]] block with these regexes would
+  # *flag* every doc mentioning "example" or "test" as a leak instead of
+  # allowing it (see issue caught in commit 0178aed's weekly gitleaks scan:
+  # ~4,835 false positives from this exact mistake).
   paths = [
     '''test/''',
     '''__tests__/''',
@@ -15,22 +26,22 @@ title = "DukaPay gitleaks config"
     '''\.spec\.ts$''',
     '''\.test\.js$''',
     '''\.spec\.js$''',
-  ]
-
-[[rules]]
-  id = "dsa-key-in-env-docs"
-  description = "Allow example keys in documentation and .env.example files"
-  regex = '''(?i)(example|placeholder|your_|sample|dummy|fake|test|xxx|changeme)'''
-  paths = [
     '''\.env\.example$''',
     '''docs/''',
     '''README''',
   ]
 
-[[rules]]
-  id = "jwt-secret-example"
-  description = "Allow placeholder JWT secrets in env example files"
-  regex = '''JWT_SECRET\s*=\s*['\"]?your[_-]jwt[_-]secret'''
-  paths = [
-    '''\.env\.example$''',
+  # Stellar contract addresses (C + 55 base32 chars) are public on-chain IDs
+  # that generic-api-key mistakes for keys. Secret seeds start with S, so
+  # this doesn't hide them.
+  regexes = [
+    '''^C[A-Z2-7]{55}$''',
+    # Truncated placeholder token address in scripts/deploy-config.json at 40f6da18.
+    '''^CAS3J7GYCCXG7W35XU4643F2M3T63BGCV2X4D6C4V7G4X6C4$''',
+  ]
+
+  # #784 committed a fake ghp_ token as a gitleaks self-test fixture; the
+  # fixture is now generated at runtime (#808). Never a real credential.
+  commits = [
+    "c966b6e34de5e93892bc8d7167f5ab59b0433066",
   ]

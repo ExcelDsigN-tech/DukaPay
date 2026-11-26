@@ -3,6 +3,7 @@ import { xdr } from '@stellar/stellar-sdk';
 import { query } from '../db/connection.js';
 import { EventIndexer, type SorobanRawEvent } from '../services/eventIndexer.js';
 import {
+  isPrivateHost,
   SUPPORTED_WEBHOOK_EVENT_TYPES,
   webhookService,
   type WebhookEventType,
@@ -18,36 +19,16 @@ import {
 import { parseCappedLimit } from '../utils/queryHelpers.js';
 import logger from '../utils/logger.js';
 
-/**
- * Returns true if the hostname resolves to a private, loopback, or link-local
- * address that should never receive outbound webhook deliveries (SSRF guard).
- */
-function isPrivateHost(hostname: string): boolean {
-  // Strip IPv6 brackets
-  const host = hostname.replace(/^\[|\]$/g, '');
-
-  // Loopback
-  if (host === 'localhost' || host === '::1') return true;
-  if (/^127\./.test(host)) return true;
-
-  // Link-local (169.254.x.x, fe80::)
-  if (/^169\.254\./.test(host)) return true;
-  if (/^fe80:/i.test(host)) return true;
-
-  // Private IPv4 ranges (RFC 1918)
-  if (/^10\./.test(host)) return true;
-  if (/^172\.(1[6-9]|2\d|3[01])\./.test(host)) return true;
-  if (/^192\.168\./.test(host)) return true;
-
-  // AWS / GCP metadata endpoints
-  if (host === '169.254.169.254' || host === 'metadata.google.internal') return true;
-
-  // Catch-all for unqualified single-label hostnames (e.g. "internal", "db")
-  if (!host.includes('.') && host !== '::1') return true;
-
-  return false;
-}
 import { getStellarRpcUrl } from '../config/stellar.js';
+import { amountToStroops } from '../money/decimal.js';
+import { eventAmountFields } from '../money/eventAmounts.js';
+import { env } from '../config/env.js';
+
+/** Money event amounts go out in whole tokens; see money/eventAmounts.ts. */
+const withApiAmount = (row: Record<string, unknown>) => ({
+  ...row,
+  ...eventAmountFields(row.event_type, row.amount),
+});
 
 const buildEventFilters = (req: Request, baseParams: unknown[], initialWhereClause: string) => {
   const { status, dateRange, amountRange } = parseQueryParams(req);
@@ -71,7 +52,11 @@ const buildEventFilters = (req: Request, baseParams: unknown[], initialWhereClau
   }
 
   if (amountRange) {
-    params.push(amountRange.min, amountRange.max);
+    // amount_range is in whole tokens; contract_events.amount is stroops.
+    params.push(
+      amountToStroops(amountRange.min).toString(),
+      amountToStroops(amountRange.max).toString(),
+    );
     appendCondition(`CAST(amount AS NUMERIC) BETWEEN $${params.length - 1} AND $${params.length}`);
   }
 
@@ -96,10 +81,10 @@ type QuarantineEventRow = {
 
 const buildIndexerFromConfig = (): EventIndexer => {
   const contractIds = [
-    process.env.LOAN_MANAGER_CONTRACT_ID,
-    process.env.LENDING_POOL_CONTRACT_ID,
-    process.env.REMITTANCE_NFT_CONTRACT_ID,
-    process.env.MULTISIG_GOVERNANCE_CONTRACT_ID,
+    env.LOAN_MANAGER_CONTRACT_ID,
+    env.LENDING_POOL_CONTRACT_ID,
+    env.REMITTANCE_NFT_CONTRACT_ID,
+    env.MULTISIG_GOVERNANCE_CONTRACT_ID,
   ].filter((id): id is string => Boolean(id && id.trim().length > 0));
 
   if (contractIds.length === 0) {
@@ -107,7 +92,7 @@ const buildIndexerFromConfig = (): EventIndexer => {
   }
 
   const rpcUrl = getStellarRpcUrl();
-  const batchSize = Number(process.env.INDEXER_BATCH_SIZE ?? 100);
+  const batchSize = env.INDEXER_BATCH_SIZE;
 
   return new EventIndexer({
     rpcUrl,
@@ -334,7 +319,7 @@ export const getBorrowerEvents = async (req: Request, res: Response) => {
       success: true,
       data: {
         address: borrower,
-        items: events,
+        items: events.map(withApiAmount),
       },
       page: {
         next_cursor: nextCursor,
@@ -457,7 +442,7 @@ export const getLoanEvents = async (req: Request, res: Response) => {
       success: true,
       data: {
         loanId: Number.parseInt(loanId, 10),
-        items: events,
+        items: events.map(withApiAmount),
       },
       page: {
         next_cursor: nextCursor,
@@ -566,7 +551,7 @@ export const getRecentEvents = async (req: Request, res: Response) => {
     res.json({
       success: true,
       data: {
-        items: events,
+        items: events.map(withApiAmount),
       },
       page: {
         next_cursor: nextCursor,
@@ -764,7 +749,7 @@ export const reindexLedgerRange = async (req: Request, res: Response) => {
       });
     }
 
-    const maxRange = Number(process.env.REINDEX_MAX_RANGE ?? 25000);
+    const maxRange = env.REINDEX_MAX_RANGE;
     const requestedRange = toLedger - fromLedger + 1;
     if (requestedRange > maxRange) {
       return res.status(400).json({
@@ -913,7 +898,11 @@ export const reprocessQuarantinedEvents = async (req: Request, res: Response) =>
           continue;
         }
 
+        // Sequential on purpose: events apply in ledger order, and one bad
+        // event must not block the rest. Admin-only, capped at 500.
+        // eslint-disable-next-line no-await-in-loop
         await indexer.ingestRawEvents([rawEvent]);
+        // eslint-disable-next-line no-await-in-loop
         await query('DELETE FROM quarantine_events WHERE id = $1', [row.id]);
         deleted += 1;
       } catch (error) {

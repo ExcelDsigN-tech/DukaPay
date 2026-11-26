@@ -1,33 +1,27 @@
 import pg, { type PoolClient } from 'pg';
 import logger from '../utils/logger.js';
 import { databaseQueryDuration } from '../metrics/index.js';
+import { env } from '../config/env.js';
 
 export type { PoolClient };
 
 const { Pool } = pg;
 
 // Parse pool configuration from environment
-const maxPoolSize = process.env.DB_POOL_MAX ? parseInt(process.env.DB_POOL_MAX, 10) : 10;
-const minPoolSize = process.env.DB_POOL_MIN ? parseInt(process.env.DB_POOL_MIN, 10) : 2;
-const idleTimeoutMillis = process.env.DB_IDLE_TIMEOUT_MS
-  ? parseInt(process.env.DB_IDLE_TIMEOUT_MS, 10)
-  : 30000;
-const connectionTimeoutMillis = process.env.DB_CONN_TIMEOUT_MS
-  ? parseInt(process.env.DB_CONN_TIMEOUT_MS, 10)
-  : 10000;
-const statementTimeoutMillis = process.env.DB_STATEMENT_TIMEOUT_MS
-  ? parseInt(process.env.DB_STATEMENT_TIMEOUT_MS, 10)
-  : 30000;
-const slowQueryThresholdMs = process.env.DB_SLOW_QUERY_THRESHOLD_MS
-  ? parseInt(process.env.DB_SLOW_QUERY_THRESHOLD_MS, 10)
-  : 100;
+const maxPoolSize = env.DB_POOL_MAX;
+const minPoolSize = env.DB_POOL_MIN;
+const idleTimeoutMillis = env.DB_IDLE_TIMEOUT_MS;
+const connectionTimeoutMillis = env.DB_CONN_TIMEOUT_MS;
+const statementTimeoutMillis = env.DB_STATEMENT_TIMEOUT_MS;
+const slowQueryThresholdMs = env.DB_SLOW_QUERY_THRESHOLD_MS;
 
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: env.DATABASE_URL,
   min: minPoolSize,
   max: maxPoolSize,
   idleTimeoutMillis,
   connectionTimeoutMillis,
+  statement_timeout: statementTimeoutMillis,
 });
 
 let isShuttingDown = false;
@@ -45,9 +39,11 @@ const metricsInterval = setInterval(() => {
 // Unref the interval so it doesn't keep the process alive
 metricsInterval.unref();
 
-// Set statement_timeout on every newly acquired connection (parameterized — issue #406)
+// Set statement_timeout on every newly acquired connection (with catch handler to avoid unhandled rejections)
 pool.on('connect', (client) => {
-  client.query('SET statement_timeout = $1', [statementTimeoutMillis]);
+  client.query(`SET statement_timeout = ${statementTimeoutMillis}`).catch((err: Error) => {
+    logger.warn('Failed to set statement_timeout on client connect', { error: err.message });
+  });
 });
 
 // Log idle client errors
@@ -208,9 +204,15 @@ export const closePool = async (options?: { timeoutMs?: number }) => {
 
 export { pool, pool as default };
 
-// Add drain method for graceful shutdown
-if (!(pool as any).drain) {
-  (pool as any).drain = async () => {
+// `pg.Pool` exposes no `drain()`, so attach one for graceful-shutdown callers
+// that expect it. Typed via an intersection instead of `any` so the optional
+// member stays checked.
+type DrainablePool = typeof pool & { drain?: () => Promise<void> };
+
+const drainablePool = pool as DrainablePool;
+
+if (!drainablePool.drain) {
+  drainablePool.drain = async () => {
     await pool.end();
   };
 }

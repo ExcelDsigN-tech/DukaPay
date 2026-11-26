@@ -71,7 +71,7 @@ function profileRow(overrides: Record<string, unknown> = {}) {
   };
 }
 
-describe('/user/profile', () => {
+describe('/api/user/profile', () => {
   beforeEach(() => {
     queryMock.mockReset();
   });
@@ -86,7 +86,7 @@ describe('/user/profile', () => {
     });
 
     const response = await request(app)
-      .get('/user/profile')
+      .get('/api/user/profile')
       .set('Authorization', `Bearer ${bearerToken()}`);
 
     expect(response.status).toBe(200);
@@ -132,7 +132,7 @@ describe('/user/profile', () => {
       });
 
     const response = await request(app)
-      .patch('/user/profile')
+      .patch('/api/user/profile')
       .set('Authorization', `Bearer ${bearerToken()}`)
       .send({
         displayName: 'Ada Lovelace',
@@ -160,7 +160,7 @@ describe('/user/profile', () => {
 
   it('rejects invalid patch payloads', async () => {
     const response = await request(app)
-      .patch('/user/profile')
+      .patch('/api/user/profile')
       .set('Authorization', `Bearer ${bearerToken()}`)
       .send({ email: 'not-an-email' });
 
@@ -170,7 +170,7 @@ describe('/user/profile', () => {
   });
 
   it('rejects unauthenticated requests', async () => {
-    const response = await request(app).get('/user/profile');
+    const response = await request(app).get('/api/user/profile');
 
     expect(response.status).toBe(401);
     expect(queryMock).not.toHaveBeenCalled();
