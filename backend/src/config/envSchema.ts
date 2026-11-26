@@ -123,6 +123,7 @@ export const envShape = {
   AGENT_FLOAT_TRANSFER_SIGNATURE_TTL_HOURS: positiveInt(24),
   AGENT_OPERATOR_PUBLIC_KEY: optionalString(),
   AGENT_OPERATOR_SECRET: optionalString(),
+  AGENT_VAULT_OPERATOR_SECRET: optionalString(),
   POOL_TOKEN_ADDRESS: optionalString(),
   LOAN_MANAGER_ADMIN_SECRET: optionalString(),
   SCORE_RECONCILIATION_SOURCE_SECRET: optionalString(),

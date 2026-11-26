@@ -673,7 +673,16 @@
     "buildRegistration": "Build registration",
     "activateAgent": "Activate agent",
     "topUpBond": "Top up bond",
-    "agentActionSubmitted": "Agent transaction submitted."
+    "agentActionSubmitted": "Agent transaction submitted.",
+    "cashPickupTitle": "Cash pickup redemptions",
+    "cashPickupDescription": "Enter the recipient's one-time code, hand over cash, and sign burn_float.",
+    "cashPickupEmpty": "No credited cash pickup claims awaiting redemption.",
+    "cashPickupSelectClaim": "Select claim",
+    "cashPickupCodeLabel": "One-time code",
+    "cashPickupCodePlaceholder": "Enter 8-character code",
+    "cashPickupRedeemButton": "Hand over cash & sign burn_float",
+    "cashPickupMissingInput": "Select a claim and enter the recipient's one-time code.",
+    "cashPickupRedeemed": "Cash pickup redeemed and burn_float confirmed."
   },
   "Governance": {
     "title": "Governance Console",
@@ -946,6 +955,17 @@
       "label": "Token",
       "helper": "Select the currency for remittance"
     },
+    "deliveryMethod": {
+      "label": "Delivery Method",
+      "wallet": "Wallet (direct transfer)",
+      "cashPickup": "Cash pickup (via local agent)",
+      "helper": "Choose direct wallet transfer or agent cash pickup"
+    },
+    "recipientRegion": {
+      "label": "Recipient Region",
+      "placeholder": "e.g. LAGOS",
+      "helper": "Region used to match an eligible cash pickup agent"
+    },
     "amount": {
       "label": "Amount",
       "decimalsHelper": "Up to {decimals} decimal places supported."
@@ -962,7 +982,8 @@
       "recipientInvalid": "Invalid Stellar address format (must be 56 characters starting with G)",
       "amountRequired": "Amount is required",
       "amountPositive": "Amount must be greater than 0",
-      "memoTooLong": "Memo must be 28 characters or less"
+      "memoTooLong": "Memo must be 28 characters or less",
+      "regionRequired": "Recipient region is required for cash pickup"
     },
     "warning": {
       "title": "Before sending:",

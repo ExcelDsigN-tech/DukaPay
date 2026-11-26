@@ -15,6 +15,7 @@ import {
   startDefaultCheckerScheduler,
   stopDefaultCheckerScheduler,
 } from './services/defaultChecker.js';
+import { startCashPickupMintRetryScheduler } from './services/cashPickupService.js';
 import {
   startWebhookRetryProcessor,
   stopWebhookRetryProcessor,
@@ -92,6 +93,9 @@ const server = app.listen(port, () => {
 
   // Start periodic on-chain default checks (if configured)
   startDefaultCheckerScheduler();
+
+  // Start periodic retry for failed cash-pickup mint_float claims
+  startCashPickupMintRetryScheduler();
 
   // Start webhook retry processor (5m/15m/45m backoff via WebhookService.processRetries)
   startWebhookRetryProcessor();

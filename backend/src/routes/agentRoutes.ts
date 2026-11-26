@@ -17,6 +17,8 @@ import {
   removeBorrowerParamsSchema,
   agentApplicationBodySchema,
   agentApplicationIdParamsSchema,
+  cashPickupRedeemBuildBodySchema,
+  cashPickupRedeemConfirmBodySchema,
 } from '../schemas/agentSchemas.js';
 import {
   getAgentDashboard,
@@ -34,6 +36,9 @@ import {
   getPendingAgentApplications,
   buildApplicationRegistration,
   getMyAgentStatus,
+  getAgentCashPickupClaims,
+  buildCashPickupRedeemTx,
+  confirmCashPickupRedeem,
 } from '../controllers/agentMvpController.js';
 
 const router = Router();
@@ -549,6 +554,32 @@ router.delete(
   validateQuery(emptyAgentQuerySchema),
   validateBody(emptyAgentBodySchema),
   clearAgentDashboardCache,
+);
+
+router.get(
+  '/cash-pickup/claims',
+  requireJwtAuth,
+  validateParams(emptyAgentParamsSchema),
+  validateQuery(emptyAgentQuerySchema),
+  getAgentCashPickupClaims,
+);
+
+router.post(
+  '/cash-pickup/redeem',
+  requireJwtAuth,
+  validateParams(emptyAgentParamsSchema),
+  validateQuery(emptyAgentQuerySchema),
+  validateBody(cashPickupRedeemBuildBodySchema),
+  buildCashPickupRedeemTx,
+);
+
+router.post(
+  '/cash-pickup/redeem/confirm',
+  requireJwtAuth,
+  validateParams(emptyAgentParamsSchema),
+  validateQuery(emptyAgentQuerySchema),
+  validateBody(cashPickupRedeemConfirmBodySchema),
+  confirmCashPickupRedeem,
 );
 
 export default router;

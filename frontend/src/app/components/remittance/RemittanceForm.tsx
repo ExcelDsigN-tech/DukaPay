@@ -30,6 +30,8 @@ export function RemittanceForm({ onSuccess }: RemittanceFormProps) {
   const [recipientAddress, setRecipientAddress] = useState("");
   const [amount, setAmount] = useState("");
   const [token, setToken] = useState("USDC");
+  const [deliveryMethod, setDeliveryMethod] = useState<"wallet" | "cash_pickup">("wallet");
+  const [recipientRegion, setRecipientRegion] = useState("");
   const [memo, setMemo] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -61,6 +63,10 @@ export function RemittanceForm({ onSuccess }: RemittanceFormProps) {
 
     if (memo && memo.length > 28) {
       newErrors.memo = t("errors.memoTooLong");
+    }
+
+    if (deliveryMethod === "cash_pickup" && !recipientRegion.trim()) {
+      newErrors.recipientRegion = t("errors.regionRequired");
     }
 
     setErrors(newErrors);
@@ -123,6 +129,8 @@ export function RemittanceForm({ onSuccess }: RemittanceFormProps) {
         fromCurrency: token,
         toCurrency: token,
         recipientAddress,
+        deliveryMethod,
+        ...(deliveryMethod === "cash_pickup" ? { recipientRegion: recipientRegion.trim() } : {}),
         memo: memo || undefined,
       });
 
@@ -133,6 +141,8 @@ export function RemittanceForm({ onSuccess }: RemittanceFormProps) {
       // Reset form
       setRecipientAddress("");
       setAmount("");
+      setRecipientRegion("");
+      setDeliveryMethod("wallet");
       setMemo("");
       setErrors({});
 
@@ -167,6 +177,48 @@ export function RemittanceForm({ onSuccess }: RemittanceFormProps) {
               error={errors.recipientAddress || undefined}
               helperText={t("recipient.helper")}
             />
+
+            {/* Delivery Method Selection */}
+            <div className="space-y-2">
+              <label
+                htmlFor="deliveryMethod"
+                className="block text-sm font-semibold text-zinc-900 dark:text-zinc-50"
+              >
+                {t("deliveryMethod.label")} <span className="text-red-600">*</span>
+              </label>
+              <select
+                id="deliveryMethod"
+                value={deliveryMethod}
+                onChange={(e) => setDeliveryMethod(e.target.value as "wallet" | "cash_pickup")}
+                disabled={mutation.isPending}
+                className="w-full px-3 py-2 border border-zinc-300 rounded-lg bg-white dark:bg-zinc-900 dark:border-zinc-700 text-zinc-900 dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-indigo-600 dark:focus:ring-indigo-400"
+              >
+                <option value="wallet">{t("deliveryMethod.wallet")}</option>
+                <option value="cash_pickup">{t("deliveryMethod.cashPickup")}</option>
+              </select>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                {t("deliveryMethod.helper")}
+              </p>
+            </div>
+
+            {deliveryMethod === "cash_pickup" && (
+              <Input
+                id="recipientRegion"
+                label={t("recipientRegion.label")}
+                placeholder={t("recipientRegion.placeholder")}
+                value={recipientRegion}
+                onChange={(e) => {
+                  setRecipientRegion(e.target.value);
+                  if (errors.recipientRegion) {
+                    setErrors({ ...errors, recipientRegion: "" });
+                  }
+                }}
+                disabled={mutation.isPending}
+                required
+                error={errors.recipientRegion || undefined}
+                helperText={t("recipientRegion.helper")}
+              />
+            )}
 
             {/* Token Selection */}
             <div className="space-y-2">

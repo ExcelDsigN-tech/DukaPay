@@ -1,5 +1,5 @@
 import { fromStroops, toStroops } from '../money/decimal.js';
-import type { Remittance, RemittanceStatus } from './remittanceService.js';
+import type { DeliveryMethod, Remittance, RemittanceStatus } from './remittanceService.js';
 
 /** Columns of a `remittances` row as returned by `SELECT *`. */
 interface RemittanceRow {
@@ -10,6 +10,9 @@ interface RemittanceRow {
   from_currency: string;
   to_currency: string;
   memo: string;
+  delivery_method?: DeliveryMethod;
+  agent_address?: string | null;
+  recipient_region?: string | null;
   status: RemittanceStatus;
   transaction_hash: string;
   xdr: string;
@@ -33,6 +36,9 @@ export function toRemittance(r: RemittanceRow): Remittance {
     fromCurrency: r.from_currency,
     toCurrency: r.to_currency,
     memo: r.memo,
+    deliveryMethod: r.delivery_method ?? 'wallet',
+    agentAddress: r.agent_address ?? null,
+    recipientRegion: r.recipient_region ?? null,
     status: r.status,
     transactionHash: r.transaction_hash,
     xdr: r.xdr,

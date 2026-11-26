@@ -19,7 +19,7 @@ import {
   selectIsWalletConnected,
   selectWalletAddress,
 } from "../../stores/useWalletStore";
-import { useRemittancesPage, type Remittance } from "../../hooks/useApi";
+import { useMyCashPickupClaims, useRemittancesPage, type Remittance } from "../../hooks/useApi";
 import { Card, CardHeader, CardTitle, CardContent } from "../../components/ui/Card";
 import { ErrorBoundary } from "../../components/global_ui/ErrorBoundary";
 import { Spinner } from "../../components/global_ui/Spinner";
@@ -100,6 +100,8 @@ export default function RemittancesPage() {
     },
     { enabled: isConnected },
   );
+
+  const { data: cashPickupClaims = [] } = useMyCashPickupClaims({ enabled: isConnected });
 
   const remittances = useMemo(() => remittancesPage?.items ?? [], [remittancesPage?.items]);
   const totalPages = Math.max(
@@ -208,6 +210,48 @@ export default function RemittancesPage() {
           ))}
         </section>
       </ErrorBoundary>
+
+      {cashPickupClaims.length > 0 && (
+        <section
+          aria-label="Cash Pickup Claims"
+          className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-950"
+        >
+          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+            Cash Pickup Claims
+          </h2>
+          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+            Present your one-time code to the assigned agent to collect cash.
+          </p>
+          <div className="mt-4 space-y-3">
+            {cashPickupClaims.map((claim) => (
+              <div
+                key={claim.id}
+                className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800"
+              >
+                <div>
+                  <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                    Credited Balance: {formatCurrency(claim.amount, locale)}
+                  </p>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                    Agent: {claim.agentAddress.slice(0, 8)}…{claim.agentAddress.slice(-6)} · Status:{" "}
+                    {claim.status}
+                  </p>
+                </div>
+                {claim.status === "credited" && claim.redeemCode && (
+                  <div className="rounded-lg bg-indigo-50 px-3 py-2 text-right dark:bg-indigo-950/40">
+                    <p className="text-[11px] uppercase tracking-wide text-indigo-600 dark:text-indigo-400">
+                      One-time code
+                    </p>
+                    <p className="font-mono text-base font-bold text-indigo-900 dark:text-indigo-200">
+                      {claim.redeemCode}
+                    </p>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       <Card>
         <CardHeader>

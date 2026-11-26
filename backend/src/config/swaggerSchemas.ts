@@ -504,6 +504,9 @@ export const swaggerSchemas = {
       fromCurrency: { type: 'string', example: 'USDC' },
       toCurrency: { type: 'string', example: 'EURC' },
       memo: { type: 'string', nullable: true },
+      deliveryMethod: { type: 'string', enum: ['wallet', 'cash_pickup'] },
+      agentAddress: { type: 'string', nullable: true },
+      recipientRegion: { type: 'string', nullable: true },
       status: {
         type: 'string',
         enum: ['pending', 'processing', 'completed', 'failed'],

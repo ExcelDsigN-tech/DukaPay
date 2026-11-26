@@ -3,6 +3,7 @@ import {
   createRemittance,
   getRemittances,
   getRemittance,
+  getMyCashPickupClaims,
   submitRemittanceTransaction,
 } from '../controllers/remittanceController.js';
 import { requireJwtAuth, requireScopes } from '../middleware/jwtAuth.js';
@@ -161,6 +162,13 @@ router.get(
   requireScopes('read:remittances'),
   validate(getRemittancesSchema),
   getRemittances,
+);
+
+router.get(
+  '/claims/mine',
+  requireJwtAuth,
+  requireScopes('read:remittances'),
+  getMyCashPickupClaims,
 );
 
 /**
