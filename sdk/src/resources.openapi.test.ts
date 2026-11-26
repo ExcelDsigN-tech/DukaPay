@@ -21,6 +21,7 @@ import {
   LoansResource,
   NotificationsResource,
   PoolResource,
+  PrivacyResource,
   ScoresResource,
   RemittanceResource,
 } from './resources.js';
@@ -49,6 +50,10 @@ function recordingClient() {
     put: record('PUT'),
     patch: record('PATCH'),
     delete: record('DELETE'),
+    openStream: (path: string): Promise<Response> => {
+      calls.push({ method: 'GET', path });
+      return Promise.resolve(new Response(null, { status: 200 }));
+    },
   } as unknown as HttpClient;
 
   return { http, calls };
@@ -183,10 +188,19 @@ describe('SDK paths against the backend OpenAPI spec', () => {
     });
     await notifications.markRead([1, 2]);
     await notifications.markAllRead();
+    await notifications.stream(() => {});
+
+    const privacy = new PrivacyResource(http);
+    const reason = 'I would like a copy of my data';
+    await privacy.requestAccess({ publicKey: ADDRESS, reason });
+    await privacy.requestDeletion({ publicKey: ADDRESS, reason, confirmDeletion: true });
+    await privacy.anonymize({ publicKey: ADDRESS, reason });
+    await privacy.getRequest('dsar-1');
+    await privacy.export(ADDRESS);
 
     // Sanity check on the fixture itself: a renamed SDK method would otherwise
     // silently stop being exercised.
-    expect(calls.length).toBeGreaterThanOrEqual(48);
+    expect(calls.length).toBeGreaterThanOrEqual(54);
 
     const mismatches = calls
       .map((call) => {

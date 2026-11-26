@@ -606,3 +606,59 @@ export interface NotificationSuccessResponse {
   success: boolean;
 }
 
+/** First frame on `GET /notifications/stream`: the user's unread notifications. */
+export interface NotificationStreamInit {
+  type: 'init';
+  notifications: Notification[];
+}
+
+/** One parsed Server-Sent Event from `client.notifications.stream()`. */
+export interface NotificationEvent {
+  id?: string;
+  event?: string;
+  data: Notification | NotificationStreamInit;
+}
+
+// ── Privacy / DSAR ────────────────────────────────────────────────────────────
+
+export type DsarType = 'access' | 'deletion' | 'anonymization';
+export type DsarStatus = 'pending' | 'processing' | 'completed' | 'rejected';
+
+/** DSAR record from `backend/src/services/privacyService.ts`. */
+export interface DsarRequest {
+  id: string;
+  publicKey: Address;
+  type: DsarType;
+  status: DsarStatus;
+  reason: string;
+  createdAt: string;
+  completedAt?: string;
+}
+
+/** Response of `POST /privacy/dsar/access`, `/privacy/dsar/delete` and `/privacy/anonymize`. */
+export interface DsarCreatedResponse {
+  success: boolean;
+  message: string;
+  dsar: Pick<DsarRequest, 'id' | 'type' | 'status' | 'createdAt'>;
+}
+
+/** Response of `GET /privacy/dsar/{dsarId}`. */
+export interface DsarStatusResponse {
+  success: boolean;
+  dsar: DsarRequest;
+}
+
+/** Response of `GET /privacy/export/{publicKey}`. */
+export interface DataExportResponse {
+  success: boolean;
+  exportedAt: string;
+  data: {
+    profile: Record<string, unknown> | null;
+    scores: Record<string, unknown>[];
+    loanEvents: Record<string, unknown>[];
+    remittances: Record<string, unknown>[];
+    auditLogs: Record<string, unknown>[];
+    notificationEvents: Record<string, unknown>[];
+  };
+}
+

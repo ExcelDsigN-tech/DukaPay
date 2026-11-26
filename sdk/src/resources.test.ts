@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { DukaPayClient } from './client.js';
-import type { HttpClient } from './http.js';
+import { HttpClient } from './http.js';
 import type { RemittanceList } from './types.js';
 import {
   AgentsResource,
@@ -8,6 +8,7 @@ import {
   LoansResource,
   NotificationsResource,
   PoolResource,
+  PrivacyResource,
   ScoresResource,
   RemittanceResource,
 } from './resources.js';
@@ -935,5 +936,190 @@ describe('NotificationsResource', () => {
     const client = new DukaPayClient({ baseUrl: 'https://api.example.com' });
 
     expect(client.notifications).toBeInstanceOf(NotificationsResource);
+  });
+});
+
+// ── PrivacyResource (#935) ────────────────────────────────────────────────────
+
+function streamHttp(mockFetch: ReturnType<typeof vi.fn>): HttpClient {
+  return new HttpClient({ baseUrl: 'https://api.example.com', fetch: mockFetch });
+}
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+describe('PrivacyResource', () => {
+  const REASON = 'I would like a copy of my data';
+
+  it('requestAccess rejects a non-G publicKey before sending a request', async () => {
+    const mockFetch = vi.fn();
+    const privacy = new PrivacyResource(streamHttp(mockFetch));
+
+    expect(() =>
+      privacy.requestAccess({ publicKey: 'C' + 'A'.repeat(55), reason: REASON }),
+    ).toThrow(ValidationError);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('export rejects an invalid publicKey before sending a request', () => {
+    const mockFetch = vi.fn();
+    const privacy = new PrivacyResource(streamHttp(mockFetch));
+
+    expect(() => privacy.export('not-a-key')).toThrow(ValidationError);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('posts access, deletion and anonymization requests to their endpoints', async () => {
+    const post = vi.fn().mockResolvedValue({ success: true });
+    const privacy = new PrivacyResource({ post } as unknown as HttpClient);
+
+    await privacy.requestAccess({ publicKey: VALID_ADDRESS, reason: REASON });
+    await privacy.requestDeletion({ publicKey: VALID_ADDRESS, reason: REASON, confirmDeletion: true });
+    await privacy.anonymize({ publicKey: VALID_ADDRESS, reason: REASON });
+
+    expect(post).toHaveBeenNthCalledWith(1, '/privacy/dsar/access', {
+      publicKey: VALID_ADDRESS,
+      reason: REASON,
+    });
+    expect(post).toHaveBeenNthCalledWith(2, '/privacy/dsar/delete', {
+      publicKey: VALID_ADDRESS,
+      reason: REASON,
+      confirmDeletion: true,
+    });
+    expect(post).toHaveBeenNthCalledWith(3, '/privacy/anonymize', {
+      publicKey: VALID_ADDRESS,
+      reason: REASON,
+    });
+  });
+
+  it('gets a DSAR by id and exports by publicKey', async () => {
+    const get = vi.fn().mockResolvedValue({ success: true });
+    const privacy = new PrivacyResource({ get } as unknown as HttpClient);
+
+    await privacy.getRequest('dsar-1');
+    await privacy.export(VALID_ADDRESS);
+
+    expect(get).toHaveBeenNthCalledWith(1, '/privacy/dsar/dsar-1');
+    expect(get).toHaveBeenNthCalledWith(2, `/privacy/export/${VALID_ADDRESS}`);
+  });
+
+  it('getRequest rejects an empty dsarId', () => {
+    const get = vi.fn();
+    const privacy = new PrivacyResource({ get } as unknown as HttpClient);
+
+    expect(() => privacy.getRequest(' ')).toThrow(ValidationError);
+    expect(get).not.toHaveBeenCalled();
+  });
+});
+
+// ── NotificationsResource.stream (#934) ───────────────────────────────────────
+
+describe('NotificationsResource.stream', () => {
+  const notification = {
+    id: 1,
+    userId: VALID_ADDRESS,
+    type: 'loan_approved',
+    title: 'Loan approved',
+    message: 'Your loan was approved',
+    read: false,
+    status: 'unread',
+    createdAt: '2026-11-25T00:00:00Z',
+  };
+
+  function sseResponse(chunks: string[], keepOpen = false): Response {
+    const encoder = new TextEncoder();
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
+        if (!keepOpen) controller.close();
+      },
+    });
+    return new Response(body, { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+  }
+
+  it('sends the bearer token and parses id, event and data', async () => {
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValue(
+        sseResponse([`id: evt1\nevent: notification\ndata: ${JSON.stringify(notification)}\n\n`]),
+      );
+    const http = new HttpClient({ baseUrl: 'https://api.example.com', fetch: mockFetch, token: 'tok' });
+    const received: unknown[] = [];
+
+    await new NotificationsResource(http).stream((evt) => received.push(evt));
+
+    const [url, init] = mockFetch.mock.calls[0] as [URL, RequestInit];
+    expect(url.pathname).toBe('/notifications/stream');
+    expect((init.headers as Record<string, string>).authorization).toBe('Bearer tok');
+    expect(received).toEqual([{ id: 'evt1', event: 'notification', data: notification }]);
+  });
+
+  it('joins multi-line data fields and handles frames split across chunks', async () => {
+    const json = JSON.stringify({ type: 'init', notifications: [notification] }, null, 2);
+    const frame = json
+      .split('\n')
+      .map((line) => `data: ${line}`)
+      .join('\n');
+    const half = Math.floor(frame.length / 2);
+    const mockFetch = vi.fn().mockResolvedValue(sseResponse([frame.slice(0, half), frame.slice(half) + '\n\n']));
+    const received: Array<{ data: unknown }> = [];
+
+    await new NotificationsResource(streamHttp(mockFetch)).stream((evt) => received.push(evt));
+
+    expect(received).toHaveLength(1);
+    expect(received[0].data).toEqual({ type: 'init', notifications: [notification] });
+  });
+
+  it('skips heartbeat and comment frames', async () => {
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValue(sseResponse([`: heartbeat\n\n`, `data: ${JSON.stringify(notification)}\n\n`]));
+    const received: unknown[] = [];
+
+    await new NotificationsResource(streamHttp(mockFetch)).stream((evt) => received.push(evt));
+
+    expect(received).toHaveLength(1);
+  });
+
+  it('stops cleanly on AbortSignal without throwing', async () => {
+    const ctrl = new AbortController();
+    const mockFetch = vi.fn().mockResolvedValue(sseResponse([': heartbeat\n\n'], true));
+    const received: unknown[] = [];
+
+    const done = new NotificationsResource(streamHttp(mockFetch)).stream((evt) => received.push(evt), {
+      signal: ctrl.signal,
+    });
+    ctrl.abort();
+
+    await expect(done).resolves.toBeUndefined();
+    expect(received).toHaveLength(0);
+  });
+
+  it('throws a DukaPayError for a non-200 response', async () => {
+    const mockFetch = vi.fn().mockResolvedValue(jsonResponse({ error: 'nope' }, 403));
+
+    await expect(new NotificationsResource(streamHttp(mockFetch)).stream(() => {})).rejects.toMatchObject({
+      status: 403,
+    });
+  });
+
+  it('refreshes the session once on a 401 and retries', async () => {
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ error: 'expired' }, 401))
+      .mockResolvedValueOnce(sseResponse([`data: ${JSON.stringify(notification)}\n\n`]));
+    const onUnauthorized = vi.fn().mockResolvedValue({ token: 'new' });
+    const http = new HttpClient({ baseUrl: 'https://api.example.com', fetch: mockFetch, onUnauthorized });
+    const received: unknown[] = [];
+
+    await new NotificationsResource(http).stream((evt) => received.push(evt));
+
+    expect(onUnauthorized).toHaveBeenCalledTimes(1);
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(received).toHaveLength(1);
   });
 });

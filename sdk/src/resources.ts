@@ -15,7 +15,11 @@ import type {
   Loan,
   LoanConfig,
   LoanEvents,
+  DataExportResponse,
+  DsarCreatedResponse,
+  DsarStatusResponse,
   GetNotificationsParams,
+  NotificationEvent,
   NotificationPreferences,
   NotificationSuccessResponse,
   NotificationsResponse,
@@ -676,6 +680,128 @@ export class NotificationsResource {
 
   markAllRead(): Promise<NotificationSuccessResponse> {
     return this.http.post('/notifications/mark-all-read');
+  }
+
+  /**
+   * Streams notifications from `GET /notifications/stream` (Server-Sent Events).
+   *
+   * Calls `onEvent` for each event. Parses `event`, `id` and multi-line `data`
+   * fields; comment and heartbeat frames (lines starting with `:`) are skipped.
+   * Resolves when the server closes the stream, or cleanly (without throwing)
+   * when `signal` is aborted. Throws a `DukaPayError` for a non-2xx response.
+   *
+   * ```ts
+   * const ctrl = new AbortController();
+   * void client.notifications.stream((evt) => console.log(evt.data), { signal: ctrl.signal });
+   * ctrl.abort(); // stop
+   * ```
+   */
+  async stream(
+    onEvent: (event: NotificationEvent) => void,
+    options: { signal?: AbortSignal } = {},
+  ): Promise<void> {
+    const { signal } = options;
+    let res: Response;
+    try {
+      res = await this.http.openStream('/notifications/stream', signal);
+    } catch (err) {
+      if (signal?.aborted) return;
+      throw err;
+    }
+    if (!res.body) return;
+
+    const reader = res.body.getReader();
+    // Unblock a pending read() when the caller aborts.
+    const onAbort = () => void reader.cancel().catch(() => undefined);
+    signal?.addEventListener('abort', onAbort, { once: true });
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let id: string | undefined;
+    let event: string | undefined;
+    let dataLines: string[] = [];
+
+    const dispatch = () => {
+      if (dataLines.length > 0 && !signal?.aborted) {
+        try {
+          const data = JSON.parse(dataLines.join('\n')) as NotificationEvent['data'];
+          onEvent({ id, event, data });
+        } catch {
+          // Not JSON: skip the frame.
+        }
+      }
+      event = undefined;
+      dataLines = [];
+    };
+
+    try {
+      while (!signal?.aborted) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+
+        for (const raw of lines) {
+          const line = raw.endsWith('\r') ? raw.slice(0, -1) : raw;
+          if (line === '') {
+            dispatch();
+            continue;
+          }
+          if (line.startsWith(':')) continue; // comment / heartbeat
+
+          const colon = line.indexOf(':');
+          const field = colon === -1 ? line : line.slice(0, colon);
+          const val = colon === -1 ? '' : line.slice(colon + 1).replace(/^ /, '');
+          if (field === 'data') dataLines.push(val);
+          else if (field === 'event') event = val;
+          else if (field === 'id') id = val;
+        }
+      }
+    } catch (err) {
+      if (signal?.aborted) return;
+      throw err;
+    } finally {
+      signal?.removeEventListener('abort', onAbort);
+      await reader.cancel().catch(() => undefined);
+    }
+  }
+}
+
+export class PrivacyResource {
+  constructor(private http: HttpClient) {}
+
+  /** Requests a copy of the wallet's data (DSAR access). `reason`: 10-1000 characters. */
+  requestAccess(params: { publicKey: string; reason: string }): Promise<DsarCreatedResponse> {
+    validateStellarAddress(params.publicKey, 'publicKey');
+    return this.http.post('/privacy/dsar/access', params);
+  }
+
+  /** Deletes the wallet's PII and anonymizes its financial records. */
+  requestDeletion(params: {
+    publicKey: string;
+    reason: string;
+    confirmDeletion: true;
+  }): Promise<DsarCreatedResponse> {
+    validateStellarAddress(params.publicKey, 'publicKey');
+    return this.http.post('/privacy/dsar/delete', params);
+  }
+
+  /** Anonymizes the wallet's data for analytics. */
+  anonymize(params: { publicKey: string; reason: string }): Promise<DsarCreatedResponse> {
+    validateStellarAddress(params.publicKey, 'publicKey');
+    return this.http.post('/privacy/anonymize', params);
+  }
+
+  getRequest(dsarId: string): Promise<DsarStatusResponse> {
+    if (typeof dsarId !== 'string' || dsarId.trim() === '') {
+      throw new ValidationError('Invalid dsarId: must be a non-empty string');
+    }
+    return this.http.get(`/privacy/dsar/${encodeURIComponent(dsarId)}`);
+  }
+
+  export(publicKey: string): Promise<DataExportResponse> {
+    validateStellarAddress(publicKey, 'publicKey');
+    return this.http.get(`/privacy/export/${publicKey}`);
   }
 }
 

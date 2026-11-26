@@ -124,6 +124,43 @@ await client.notifications.markRead(data.notifications.map((n) => n.id));
 await client.notifications.markAllRead();
 ```
 
+`stream()` reads `GET /notifications/stream` (Server-Sent Events) with the client's
+fetch, bearer token and session refresh. The first event carries the unread list
+(`{ type: 'init', notifications }`); each later event is one `Notification`.
+Heartbeat frames are skipped. Aborting the signal ends the stream without an error.
+
+```ts
+const ctrl = new AbortController();
+void client.notifications.stream(
+  (evt) => {
+    if ('notifications' in evt.data) render(evt.data.notifications);
+    else showToast(evt.data.title);
+  },
+  { signal: ctrl.signal },
+);
+
+// Later, e.g. on unmount:
+ctrl.abort();
+```
+
+## Privacy (`client.privacy`)
+
+Data subject requests for the signed-in wallet. Each method checks that
+`publicKey` is a valid Stellar address before sending; `reason` must be 10 to
+1000 characters (checked by the API).
+
+```ts
+const reason = 'I would like a copy of my data';
+const { dsar } = await client.privacy.requestAccess({ publicKey, reason });
+const status = await client.privacy.getRequest(dsar.id);
+
+const exported = await client.privacy.export(publicKey);
+
+// Irreversible: deletes PII and anonymizes financial records.
+await client.privacy.requestDeletion({ publicKey, reason, confirmDeletion: true });
+await client.privacy.anonymize({ publicKey, reason });
+```
+
 ## React
 
 ```tsx
