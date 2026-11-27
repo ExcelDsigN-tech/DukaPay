@@ -2,8 +2,11 @@ import { StatusIndicator } from "./StatusIndicator";
 
 export type LoanStatus = "active" | "pending" | "repaid" | "defaulted" | "liquidated";
 
+// "overdue" is a display-only state: past the deadline while still active on chain.
+type BadgeStatus = LoanStatus | "overdue";
+
 const STATUS_CONFIG: Record<
-  LoanStatus,
+  BadgeStatus,
   { label: string; tone: "success" | "info" | "danger" | "warning" }
 > = {
   active: { label: "Active", tone: "success" },
@@ -11,6 +14,7 @@ const STATUS_CONFIG: Record<
   defaulted: { label: "Defaulted", tone: "danger" },
   pending: { label: "Pending", tone: "warning" },
   liquidated: { label: "Liquidated", tone: "danger" },
+  overdue: { label: "Overdue", tone: "warning" },
 };
 
 interface LoanStatusBadgeProps {
@@ -19,7 +23,7 @@ interface LoanStatusBadgeProps {
 }
 
 export function LoanStatusBadge({ status, className = "" }: LoanStatusBadgeProps) {
-  const config = STATUS_CONFIG[status as LoanStatus];
+  const config = STATUS_CONFIG[status as BadgeStatus];
 
   if (!config) {
     return (

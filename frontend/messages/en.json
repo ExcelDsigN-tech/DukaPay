@@ -117,16 +117,14 @@
   },
   "Loans": {
     "title": "Loans",
-    "description": "Review active facilities, due dates, and repayment windows from one place.",
-    "borrowerPortal": "Borrower Portal",
+    "description": "Your loans, what you owe and when it is due",
     "outstanding": "Outstanding",
-    "dueThisWeek": "Due This Week",
-    "portfolioHealth": "Portfolio Health",
-    "viewDetails": "View details",
+    "dueThisWeek": "Due this week",
+    "portfolioHealth": "Portfolio health",
     "health": {
       "strong": "Strong",
       "watch": "Watch",
-      "atRisk": "At Risk"
+      "atRisk": "At risk"
     },
     "tabs": {
       "all": "All",
@@ -136,23 +134,24 @@
     },
     "empty": {
       "title": "No loans found",
-      "description": "You do not have loans in this category yet.",
+      "description": "You have no loans in this category yet",
       "action": "Request a loan"
     },
     "pagination": {
-      "prev": "Prev",
+      "prev": "Previous",
       "next": "Next",
       "pageOf": "Page {current} of {total}"
     },
     "loanNumber": "Loan #{id}",
     "due": "Due {date}",
+    "closed": "Closed",
     "status": {
       "active": "Active",
       "pending": "Pending"
     },
     "loanCount": "{count, plural, one {# loan} other {# loans}}",
     "summary": "Showing {count} loans on page {page}",
-    "loadError": "Failed to load loans. Please reconnect your wallet and try again."
+    "loadError": "Could not load loans. Reconnect your wallet and try again"
   },
   "Kingdom": {
     "title": "Kingdom Dashboard",
