@@ -38,7 +38,7 @@ const gaugeDash = (score: number) =>
 
 const section = "mx-auto max-w-[1440px] px-[clamp(16px,5vw,96px)] py-[clamp(64px,9vw,128px)]";
 const h2 =
-  "m-0 font-display text-[clamp(30px,3.4vw,48px)] font-bold leading-[1.1] tracking-[-0.03em] text-balance text-fg";
+  "m-0 font-display text-[clamp(30px,3.4vw,48px)] font-semibold leading-[1.1] tracking-[-0.03em] text-balance text-fg";
 const h3 = "m-0 font-display text-[22px] font-semibold leading-tight tracking-[-0.02em] text-fg";
 const lead = "m-0 max-w-[62ch] text-lg text-fg-muted";
 const note = "text-[13px] text-fg-muted";
@@ -116,7 +116,7 @@ export function LandingSections({ onConnect }: LandingSectionsProps) {
                   <span className="text-sm font-semibold text-ok">{t("features.loanStatus")}</span>
                 </div>
                 <div className="flex items-baseline gap-2">
-                  <span className="font-display text-[44px] font-bold leading-none tracking-[-0.03em]">
+                  <span className="font-display text-[44px] font-semibold leading-none tracking-[-0.03em]">
                     $500.00
                   </span>
                   <span className={note}>{t("features.principal")}</span>
@@ -209,7 +209,7 @@ export function LandingSections({ onConnect }: LandingSectionsProps) {
               <span aria-hidden="true" className="text-line-strong">
                 →
               </span>
-              <span className="font-bold text-gold">{t("kingdom.tierCurrent")}</span>
+              <span className="font-semibold text-gold">{t("kingdom.tierCurrent")}</span>
               <span aria-hidden="true" className="text-line-strong">
                 →
               </span>
@@ -254,7 +254,7 @@ export function LandingSections({ onConnect }: LandingSectionsProps) {
                   <div className="absolute inset-0 flex flex-col items-center justify-center">
                     <span
                       data-gauge-num
-                      className="font-display text-[38px] leading-none font-bold tracking-[-0.04em] tabular-nums"
+                      className="font-display text-[38px] leading-none font-semibold tracking-[-0.04em] tabular-nums"
                     >
                       {SCORE_B}
                     </span>
@@ -264,7 +264,7 @@ export function LandingSections({ onConnect }: LandingSectionsProps) {
                 <span className="text-sm text-fg-muted" data-score-part>
                   {t("kingdom.creditScore")}
                 </span>
-                <span className="font-bold text-gold" data-score-part>
+                <span className="font-semibold text-gold" data-score-part>
                   {t("kingdom.rank")}
                 </span>
                 <span

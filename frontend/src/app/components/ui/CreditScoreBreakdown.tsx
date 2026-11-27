@@ -81,34 +81,30 @@ export function CreditScoreBreakdown({
       <CardContent className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950">
-            <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-              Total loans
-            </p>
-            <p className="mt-2 text-2xl font-bold text-zinc-900 dark:text-zinc-50">
+            <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">Total loans</p>
+            <p className="mt-2 text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
               {breakdown.totalLoans}
             </p>
           </div>
           <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950">
-            <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+            <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
               On-time repayments
             </p>
-            <p className="mt-2 text-2xl font-bold text-zinc-900 dark:text-zinc-50">
+            <p className="mt-2 text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
               {breakdown.repaidOnTime}
             </p>
           </div>
           <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950">
-            <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+            <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
               Late repayments
             </p>
-            <p className="mt-2 text-2xl font-bold text-zinc-900 dark:text-zinc-50">
+            <p className="mt-2 text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
               {breakdown.repaidLate}
             </p>
           </div>
           <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950">
-            <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-              Defaults
-            </p>
-            <p className="mt-2 text-2xl font-bold text-zinc-900 dark:text-zinc-50">
+            <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">Defaults</p>
+            <p className="mt-2 text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
               {breakdown.defaulted}
             </p>
           </div>
@@ -116,18 +112,16 @@ export function CreditScoreBreakdown({
 
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950">
-            <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-              Total repaid
-            </p>
-            <p className="mt-2 text-lg font-bold text-zinc-900 dark:text-zinc-50">
+            <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">Total repaid</p>
+            <p className="mt-2 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
               {formatCurrency(breakdown.totalRepaid, locale)}
             </p>
           </div>
           <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950">
-            <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+            <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
               Avg repayment time
             </p>
-            <p className="mt-2 text-lg font-bold text-zinc-900 dark:text-zinc-50">
+            <p className="mt-2 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
               {breakdown.averageRepaymentTime}
             </p>
           </div>
@@ -135,18 +129,14 @@ export function CreditScoreBreakdown({
 
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950">
-            <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-              Current streak
-            </p>
-            <p className="mt-2 text-lg font-bold text-zinc-900 dark:text-zinc-50">
+            <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">Current streak</p>
+            <p className="mt-2 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
               {breakdown.currentStreak} payments
             </p>
           </div>
           <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950">
-            <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-              Longest streak
-            </p>
-            <p className="mt-2 text-lg font-bold text-zinc-900 dark:text-zinc-50">
+            <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">Longest streak</p>
+            <p className="mt-2 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
               {breakdown.longestStreak} payments
             </p>
           </div>

@@ -158,7 +158,7 @@ export function Sidebar({ onClose, className }: SidebarProps) {
           <div
             aria-hidden="true"
             className={cn(
-              "flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] font-display text-sm font-bold",
+              "flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] font-display text-sm font-semibold",
               isConnected ? "bg-primary text-on-primary" : "bg-line-strong text-fg",
             )}
           >

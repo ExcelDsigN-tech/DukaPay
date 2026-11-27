@@ -34,7 +34,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "../ui/Card";
 import { Button } from "../ui/Button";
 import { AnalyticsSkeleton } from "../skeletons/AnalyticsSkeleton";
 import { SkeletonChart } from "../ui/Skeleton";
-import { RefreshCw, CheckCircle2, TrendingUp, DollarSign, Activity } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 
 interface FinancialPerformanceDashboardProps {
   userId: string;
@@ -148,27 +148,12 @@ function getScoreImprovementActions(score: number): string[] {
 
 // ─── Stat card helper ──────────────────────────────────────────────────────────
 
-function StatCard({
-  title,
-  value,
-  sub,
-  colorClass,
-  icon: Icon,
-}: {
-  title: string;
-  value: string | number;
-  sub?: string;
-  colorClass: string;
-  icon?: React.ComponentType<{ className?: string }>;
-}) {
+function StatCard({ title, value, sub }: { title: string; value: string | number; sub?: string }) {
   return (
-    <div className={`rounded-xl p-4 ${colorClass}`}>
-      <div className="flex items-center gap-2 mb-1">
-        {Icon && <Icon className="h-4 w-4 opacity-70" />}
-        <p className="text-xs font-medium opacity-80">{title}</p>
-      </div>
-      <p className="text-2xl font-bold">{value}</p>
-      {sub && <p className="text-xs opacity-60 mt-0.5">{sub}</p>}
+    <div className="rounded-xl border border-line bg-surface p-4">
+      <p className="text-xs font-medium text-fg-muted">{title}</p>
+      <p className="mt-1 text-2xl font-medium tabular-nums text-fg">{value}</p>
+      {sub && <p className="mt-0.5 text-xs text-fg-muted">{sub}</p>}
     </div>
   );
 }
@@ -292,7 +277,7 @@ export function FinancialPerformanceDashboard({
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-zinc-100">
+          <h2 className="text-2xl font-semibold text-gray-900 dark:text-zinc-100">
             Financial Performance
           </h2>
           <p className="text-sm text-gray-600 dark:text-zinc-400 mt-1">
@@ -320,8 +305,8 @@ export function FinancialPerformanceDashboard({
       {useMockData && (
         <Card className="bg-blue-50 border-blue-200 dark:bg-blue-950/30 dark:border-blue-900 p-4">
           <p className="text-sm text-blue-900 dark:text-blue-300">
-            📊 <strong>Demo Mode:</strong> Displaying sample data for visualization. Connect to
-            backend API to see real historical data.
+            <strong>Demo mode:</strong> Displaying sample data for visualization. Connect to backend
+            API to see real historical data.
           </p>
         </Card>
       )}
@@ -331,31 +316,15 @@ export function FinancialPerformanceDashboard({
         <div className="space-y-6">
           {/* Loan history stats */}
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <StatCard
-              title="Total Loans"
-              value={displayLoanStats.total}
-              colorClass="bg-indigo-50 text-indigo-900 dark:bg-indigo-950/30 dark:text-indigo-200"
-              icon={Activity}
-            />
-            <StatCard
-              title="Active"
-              value={displayLoanStats.active}
-              colorClass="bg-blue-50 text-blue-900 dark:bg-blue-950/30 dark:text-blue-200"
-              icon={TrendingUp}
-            />
-            <StatCard
-              title="Repaid"
-              value={displayLoanStats.repaid}
-              colorClass="bg-green-50 text-green-900 dark:bg-green-950/30 dark:text-green-200"
-              icon={CheckCircle2}
-            />
+            <StatCard title="Total Loans" value={displayLoanStats.total} />
+            <StatCard title="Active" value={displayLoanStats.active} />
+            <StatCard title="Repaid" value={displayLoanStats.repaid} />
             <StatCard
               title="On-time Rate"
               value={`${displayLoanStats.onTimeRate}%`}
               sub={`${displayLoanStats.repaid} of ${
                 displayLoanStats.repaid + displayLoanStats.defaulted
               } resolved`}
-              colorClass="bg-purple-50 text-purple-900 dark:bg-purple-950/30 dark:text-purple-200"
             />
           </div>
 
@@ -388,7 +357,7 @@ export function FinancialPerformanceDashboard({
                 {improvementActions.map((action, i) => (
                   <li key={i} className="flex items-start gap-3 text-sm">
                     <span className="h-5 w-5 rounded-full bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">
+                      <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">
                         {i + 1}
                       </span>
                     </span>
@@ -406,12 +375,7 @@ export function FinancialPerformanceDashboard({
         <div className="space-y-6">
           {/* Depositor stats */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <StatCard
-              title="Total Deposited"
-              value={fmt(displayDepositorStats.depositAmount)}
-              colorClass="bg-green-50 text-green-900 dark:bg-green-950/30 dark:text-green-200"
-              icon={DollarSign}
-            />
+            <StatCard title="Total Deposited" value={fmt(displayDepositorStats.depositAmount)} />
             <StatCard
               title="Current Value"
               value={fmt(displayDepositorStats.currentValue)}
@@ -424,15 +388,11 @@ export function FinancialPerformanceDashboard({
                     ).toFixed(2)}% growth`
                   : undefined
               }
-              colorClass="bg-blue-50 text-blue-900 dark:bg-blue-950/30 dark:text-blue-200"
-              icon={TrendingUp}
             />
             <StatCard
               title="Yield Earned"
               value={fmt(displayDepositorStats.yieldEarned)}
               sub={`${displayDepositorStats.apy.toFixed(2)}% APY`}
-              colorClass="bg-amber-50 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200"
-              icon={Activity}
             />
           </div>
 
@@ -442,13 +402,11 @@ export function FinancialPerformanceDashboard({
               title="Pool Utilisation"
               value={`${displayDepositorStats.utilizationRate.toFixed(1)}%`}
               sub="Percentage of pool currently lent out"
-              colorClass="bg-indigo-50 text-indigo-900 dark:bg-indigo-950/30 dark:text-indigo-200"
             />
             <StatCard
               title="Current APY"
               value={`${displayDepositorStats.apy.toFixed(2)}%`}
               sub="Annual percentage yield on your deposits"
-              colorClass="bg-purple-50 text-purple-900 dark:bg-purple-950/30 dark:text-purple-200"
             />
           </div>
 
@@ -478,36 +436,30 @@ export function FinancialPerformanceDashboard({
       {/* ── Insights section (unchanged) ── */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {showCreditScore && (
-          <Card className="p-6 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950/30 dark:to-blue-900/20">
-            <h3 className="text-sm font-medium text-blue-900 dark:text-blue-300 mb-2">
-              Credit Score Insight
-            </h3>
-            <p className="text-xs text-blue-700 dark:text-blue-400">
+          <Card className="p-6">
+            <h3 className="mb-2 text-sm font-medium text-fg">Credit Score Insight</h3>
+            <p className="text-xs text-fg-muted">
               {displayCreditScoreData.length > 0 &&
               displayCreditScoreData[displayCreditScoreData.length - 1].score >= 750
-                ? "Excellent! Your score qualifies you for premium loan rates."
+                ? "Your score qualifies you for the best loan rates."
                 : "Keep making on-time payments to improve your score."}
             </p>
           </Card>
         )}
 
         {showYield && (
-          <Card className="p-6 bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950/30 dark:to-green-900/20">
-            <h3 className="text-sm font-medium text-green-900 dark:text-green-300 mb-2">
-              Yield Performance
-            </h3>
-            <p className="text-xs text-green-700 dark:text-green-400">
+          <Card className="p-6">
+            <h3 className="mb-2 text-sm font-medium text-fg">Yield Performance</h3>
+            <p className="text-xs text-fg-muted">
               Your portfolio is generating consistent returns. Consider diversifying for optimal
               yield.
             </p>
           </Card>
         )}
 
-        <Card className="p-6 bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950/30 dark:to-purple-900/20">
-          <h3 className="text-sm font-medium text-purple-900 dark:text-purple-300 mb-2">
-            Next Steps
-          </h3>
-          <p className="text-xs text-purple-700 dark:text-purple-400">
+        <Card className="p-6">
+          <h3 className="mb-2 text-sm font-medium text-fg">Next Steps</h3>
+          <p className="text-xs text-fg-muted">
             {userType === "borrower"
               ? "Apply for a new loan to leverage your improved credit score."
               : "Increase your lending pool to maximize earnings potential."}

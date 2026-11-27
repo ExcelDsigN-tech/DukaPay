@@ -67,7 +67,7 @@ const ConfirmTransactionDialog: React.FC<ConfirmTransactionDialogProps> = ({
         {/* Transaction summary */}
         {summary.length > 0 && (
           <div className="rounded-lg border border-white/10 bg-white/5 p-4">
-            <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <h3 className="mb-3 text-xs font-semibold text-muted-foreground">
               Transaction Details
             </h3>
             <dl className="space-y-2">

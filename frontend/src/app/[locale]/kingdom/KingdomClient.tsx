@@ -12,14 +12,12 @@ import {
 import dynamic from "next/dynamic";
 import { Suspense } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { useGamificationStore } from "../../stores/useGamificationStore";
 import {
   selectWalletAddress,
   selectIsWalletConnected,
   useWalletStore,
 } from "../../stores/useWalletStore";
 import { useRemittanceNft } from "../../hooks/useApi";
-import { Card } from "../../components/ui/Card";
 import { SkeletonCard } from "../../components/ui/Skeleton";
 import { AchievementsSkeleton } from "../../components/skeletons/AchievementsSkeleton";
 import { KingdomProgressSkeleton } from "../../components/skeletons/KingdomProgressSkeleton";
@@ -48,8 +46,6 @@ const GamificationSettings = dynamic(
 export default function KingdomClient() {
   const t = useTranslations("Kingdom");
   const locale = useLocale();
-  const level = useGamificationStore((state) => state.level);
-  const kingdomTitle = useGamificationStore((state) => state.kingdomTitle);
   const address = useWalletStore(selectWalletAddress);
   const isConnected = useWalletStore(selectIsWalletConnected);
   const {
@@ -62,27 +58,11 @@ export default function KingdomClient() {
     <div className="min-h-screen p-8 lg:p-12 max-w-7xl mx-auto space-y-8">
       <header>
         <div className="flex items-center gap-3 mb-2">
-          <Crown className="h-8 w-8 text-purple-600 dark:text-purple-400" />
-          <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">{t("title")}</h1>
+          <Crown className="h-6 w-6 text-gold" strokeWidth={1.5} aria-hidden="true" />
+          <h1 className="text-3xl font-semibold text-zinc-900 dark:text-zinc-50">{t("title")}</h1>
         </div>
         <p className="text-zinc-500 dark:text-zinc-400">{t("description")}</p>
       </header>
-
-      <Card className="bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-950/30 dark:to-blue-950/30 border-purple-200 dark:border-purple-800">
-        <div className="p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-2xl font-bold text-purple-900 dark:text-purple-100">
-                {t("welcome", { kingdomTitle })}
-              </h2>
-              <p className="text-purple-700 dark:text-purple-300 mt-1">{t("level", { level })}</p>
-            </div>
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-purple-600 to-blue-600 shadow-lg">
-              <Crown size={32} className="text-white" />
-            </div>
-          </div>
-        </div>
-      </Card>
 
       <Suspense fallback={<KingdomProgressSkeleton />}>
         <KingdomProgressWidget />
@@ -91,10 +71,8 @@ export default function KingdomClient() {
       <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm shadow-zinc-200/40 dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-none">
         <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-indigo-600 dark:text-indigo-400">
-              {t("nft.eyebrow")}
-            </p>
-            <h2 className="mt-1 text-2xl font-bold text-zinc-900 dark:text-zinc-50">
+            <p className="text-sm font-medium text-fg-muted">{t("nft.eyebrow")}</p>
+            <h2 className="mt-1 text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
               {t("nft.title")}
             </h2>
             <p className="mt-2 max-w-2xl text-sm text-zinc-500 dark:text-zinc-400">
@@ -146,7 +124,9 @@ export default function KingdomClient() {
           <div className="grid gap-4 lg:grid-cols-[1fr_1.2fr]">
             <div className="rounded-xl border border-zinc-200 p-5 dark:border-zinc-800">
               <p className="text-sm text-zinc-500 dark:text-zinc-400">{t("nft.score")}</p>
-              <p className="mt-2 text-5xl font-bold text-zinc-900 dark:text-zinc-50">{nft.score}</p>
+              <p className="mt-2 text-5xl font-semibold text-zinc-900 dark:text-zinc-50">
+                {nft.score}
+              </p>
               <p className="mt-3 text-sm text-zinc-500 dark:text-zinc-400">
                 {t("nft.historyHash")}
               </p>

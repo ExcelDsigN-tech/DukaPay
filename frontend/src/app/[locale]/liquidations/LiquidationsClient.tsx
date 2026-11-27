@@ -57,7 +57,7 @@ function LiquidationsTable({
     <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-zinc-200 text-sm dark:divide-zinc-800">
-          <thead className="bg-zinc-50 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">
+          <thead className="bg-zinc-50 text-left text-xs font-semibold text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">
             <tr>
               <th className="px-4 py-3">{t("table.loan")}</th>
               <th className="px-4 py-3">{t("table.borrower")}</th>
@@ -155,10 +155,10 @@ export default function LiquidationsClient() {
     <section className="space-y-6">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-red-600">
-            {t("eyebrow")}
-          </p>
-          <h1 className="mt-2 text-3xl font-bold text-zinc-900 dark:text-zinc-50">{t("title")}</h1>
+          <p className="text-sm font-semibold tracking-[0.2em] text-red-600">{t("eyebrow")}</p>
+          <h1 className="mt-2 text-3xl font-semibold text-zinc-900 dark:text-zinc-50">
+            {t("title")}
+          </h1>
           <p className="mt-2 max-w-2xl text-sm text-zinc-500 dark:text-zinc-400">
             {t("description")}
           </p>

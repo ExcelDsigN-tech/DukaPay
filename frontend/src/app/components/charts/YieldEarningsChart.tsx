@@ -113,13 +113,13 @@ export function YieldEarningsChart({ data, className }: YieldEarningsChartProps)
                       <div className="mt-2 space-y-1">
                         <p className="text-sm text-gray-600 dark:text-zinc-400">
                           Earnings:{" "}
-                          <span className="font-bold text-green-600 dark:text-green-400">
+                          <span className="font-semibold text-green-600 dark:text-green-400">
                             ${item.earnings.toFixed(2)}
                           </span>
                         </p>
                         <p className="text-sm text-gray-600 dark:text-zinc-400">
                           APY:{" "}
-                          <span className="font-bold text-blue-600 dark:text-blue-400">
+                          <span className="font-semibold text-blue-600 dark:text-blue-400">
                             {item.apy.toFixed(2)}%
                           </span>
                         </p>
@@ -172,7 +172,7 @@ export function YieldEarningsChart({ data, className }: YieldEarningsChartProps)
                 Total Earnings
               </p>
             </div>
-            <p className="text-2xl font-bold text-green-600 dark:text-green-400">
+            <p className="text-2xl font-semibold text-green-600 dark:text-green-400">
               {fmtCurrency(totalEarnings)}
             </p>
           </div>
@@ -182,7 +182,7 @@ export function YieldEarningsChart({ data, className }: YieldEarningsChartProps)
               <DollarSign className="h-4 w-4 text-blue-600 dark:text-blue-400" />
               <p className="text-xs font-medium text-blue-900 dark:text-blue-300">Average APY</p>
             </div>
-            <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{avgAPY}%</p>
+            <p className="text-2xl font-semibold text-blue-600 dark:text-blue-400">{avgAPY}%</p>
           </div>
 
           <div className="rounded-lg bg-purple-50 p-4 dark:bg-purple-950/30">
@@ -192,7 +192,9 @@ export function YieldEarningsChart({ data, className }: YieldEarningsChartProps)
                 Data Points
               </p>
             </div>
-            <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">{data.length}</p>
+            <p className="text-2xl font-semibold text-purple-600 dark:text-purple-400">
+              {data.length}
+            </p>
           </div>
         </div>
       </CardContent>

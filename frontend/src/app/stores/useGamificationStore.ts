@@ -21,7 +21,6 @@ export interface Achievement {
   id: string;
   title: string;
   description: string;
-  icon: string;
   unlockedAt?: string;
   progress?: number;
   maxProgress?: number;
@@ -138,7 +137,6 @@ const INITIAL_ACHIEVEMENTS: Achievement[] = [
     id: "first_loan",
     title: "First Steps",
     description: "Request your first loan",
-    icon: "🎯",
     progress: 0,
     maxProgress: 1,
   },
@@ -146,7 +144,6 @@ const INITIAL_ACHIEVEMENTS: Achievement[] = [
     id: "first_repayment",
     title: "Trustworthy",
     description: "Make your first loan repayment",
-    icon: "💰",
     progress: 0,
     maxProgress: 1,
   },
@@ -154,7 +151,6 @@ const INITIAL_ACHIEVEMENTS: Achievement[] = [
     id: "perfect_score",
     title: "Credit Master",
     description: "Reach a credit score of 800+",
-    icon: "⭐",
     progress: 0,
     maxProgress: 800,
   },
@@ -162,7 +158,6 @@ const INITIAL_ACHIEVEMENTS: Achievement[] = [
     id: "five_loans",
     title: "Experienced Borrower",
     description: "Complete 5 loans successfully",
-    icon: "🏆",
     progress: 0,
     maxProgress: 5,
   },
@@ -170,7 +165,6 @@ const INITIAL_ACHIEVEMENTS: Achievement[] = [
     id: "early_bird",
     title: "Early Bird",
     description: "Repay a loan before the due date",
-    icon: "🐦",
     progress: 0,
     maxProgress: 1,
   },
@@ -178,7 +172,6 @@ const INITIAL_ACHIEVEMENTS: Achievement[] = [
     id: "streak_master",
     title: "Streak Master",
     description: "Maintain a 10-payment streak",
-    icon: "🔥",
     progress: 0,
     maxProgress: 10,
   },

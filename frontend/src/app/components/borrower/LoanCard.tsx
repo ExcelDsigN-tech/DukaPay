@@ -103,7 +103,7 @@ export function LoanCard({ loan, variant = "compact" }: LoanCardProps) {
         </div>
         <div className="text-right">
           <p className="text-sm text-gray-600">Total Owed</p>
-          <p className="text-2xl font-bold text-gray-900">
+          <p className="text-2xl font-semibold text-gray-900">
             {formatCurrency(loan.totalOwed ?? loan.principal)}
           </p>
         </div>

@@ -130,7 +130,7 @@ export default function RequestLoanPage() {
         <Card>
           <CardContent className="space-y-4 p-8 text-center">
             <CheckCircle2 className="mx-auto h-12 w-12 text-green-500" />
-            <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
+            <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
               Loan Request Submitted
             </h1>
             <p className="break-all text-zinc-600 dark:text-zinc-400">
@@ -154,10 +154,8 @@ export default function RequestLoanPage() {
   return (
     <div className="mx-auto max-w-4xl space-y-8 p-8">
       <header className="space-y-2">
-        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-indigo-600">
-          Borrower Portal
-        </p>
-        <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">Request Loan</h1>
+        <p className="text-sm font-semibold tracking-[0.2em] text-indigo-600">Borrower Portal</p>
+        <h1 className="text-3xl font-semibold text-zinc-900 dark:text-zinc-50">Request Loan</h1>
         <p className="text-sm text-zinc-500 dark:text-zinc-400">
           Complete each step to configure your loan, preview repayment terms, confirm collateral,
           and sign your Soroban transaction.

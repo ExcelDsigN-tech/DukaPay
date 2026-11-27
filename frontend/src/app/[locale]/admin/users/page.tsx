@@ -73,19 +73,19 @@ export default function AdminUsersPage() {
           <table className="min-w-full divide-y divide-zinc-200 dark:divide-zinc-800">
             <thead>
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-zinc-500">
+                <th className="px-4 py-3 text-left text-xs font-medium text-zinc-500">
                   {t("user")}
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-zinc-500">
+                <th className="px-4 py-3 text-left text-xs font-medium text-zinc-500">
                   {t("role")}
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-zinc-500">
+                <th className="px-4 py-3 text-left text-xs font-medium text-zinc-500">
                   {t("status")}
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-zinc-500">
+                <th className="px-4 py-3 text-left text-xs font-medium text-zinc-500">
                   {t("kyc")}
                 </th>
-                <th className="px-4 py-3 text-right text-xs font-medium uppercase text-zinc-500">
+                <th className="px-4 py-3 text-right text-xs font-medium text-zinc-500">
                   {t("actions")}
                 </th>
               </tr>

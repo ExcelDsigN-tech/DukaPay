@@ -53,9 +53,7 @@ export default function AgentDashboardPage() {
         <>
           <section className="grid gap-4 md:grid-cols-3">
             <div className="rounded-2xl border border-zinc-200 p-5 dark:border-zinc-800">
-              <p className="text-xs uppercase tracking-wide text-zinc-500">
-                {t("floatUtilization")}
-              </p>
+              <p className="text-xs text-zinc-500">{t("floatUtilization")}</p>
               <p className="mt-2 text-3xl font-semibold text-zinc-950 dark:text-zinc-50">
                 {formatPercent(data.floatUtilization.utilizationPct)}
               </p>
@@ -65,7 +63,7 @@ export default function AgentDashboardPage() {
               </p>
             </div>
             <div className="rounded-2xl border border-zinc-200 p-5 dark:border-zinc-800">
-              <p className="text-xs uppercase tracking-wide text-zinc-500">{t("totalEarnings")}</p>
+              <p className="text-xs text-zinc-500">{t("totalEarnings")}</p>
               <p className="mt-2 text-3xl font-semibold text-zinc-950 dark:text-zinc-50">
                 {formatCurrency(data.earnings.total, locale)}
               </p>
@@ -82,9 +80,7 @@ export default function AgentDashboardPage() {
               </div>
             </div>
             <div className="rounded-2xl border border-zinc-200 p-5 dark:border-zinc-800">
-              <p className="text-xs uppercase tracking-wide text-zinc-500">
-                {t("collateralRatio")}
-              </p>
+              <p className="text-xs text-zinc-500">{t("collateralRatio")}</p>
               <p className="mt-2 text-3xl font-semibold text-zinc-950 dark:text-zinc-50">
                 {formatPercent(data.collateralRatio.ratio * 100)}
               </p>
@@ -97,27 +93,25 @@ export default function AgentDashboardPage() {
 
           <section className="grid gap-4 md:grid-cols-4">
             <div className="rounded-2xl border border-zinc-200 p-5 dark:border-zinc-800">
-              <p className="text-xs uppercase tracking-wide text-zinc-500">
-                {t("vaultCollateral")}
-              </p>
+              <p className="text-xs text-zinc-500">{t("vaultCollateral")}</p>
               <p className="mt-2 text-xl font-semibold text-zinc-950 dark:text-zinc-50">
                 {formatCurrency(data.vault.collateral, locale)}
               </p>
             </div>
             <div className="rounded-2xl border border-zinc-200 p-5 dark:border-zinc-800">
-              <p className="text-xs uppercase tracking-wide text-zinc-500">{t("vaultFloat")}</p>
+              <p className="text-xs text-zinc-500">{t("vaultFloat")}</p>
               <p className="mt-2 text-xl font-semibold text-zinc-950 dark:text-zinc-50">
                 {formatCurrency(data.vault.float, locale)}
               </p>
             </div>
             <div className="rounded-2xl border border-zinc-200 p-5 dark:border-zinc-800">
-              <p className="text-xs uppercase tracking-wide text-zinc-500">{t("vaultMaxFloat")}</p>
+              <p className="text-xs text-zinc-500">{t("vaultMaxFloat")}</p>
               <p className="mt-2 text-xl font-semibold text-zinc-950 dark:text-zinc-50">
                 {formatCurrency(data.vault.maxFloat, locale)}
               </p>
             </div>
             <div className="rounded-2xl border border-zinc-200 p-5 dark:border-zinc-800">
-              <p className="text-xs uppercase tracking-wide text-zinc-500">{t("vaultHeadroom")}</p>
+              <p className="text-xs text-zinc-500">{t("vaultHeadroom")}</p>
               <p className="mt-2 text-xl font-semibold text-zinc-950 dark:text-zinc-50">
                 {formatCurrency(data.vault.headroom, locale)}
               </p>
@@ -126,19 +120,19 @@ export default function AgentDashboardPage() {
 
           <section className="grid gap-4 md:grid-cols-3">
             <div className="rounded-2xl border border-zinc-200 p-5 dark:border-zinc-800">
-              <p className="text-xs uppercase tracking-wide text-zinc-500">{t("totalLoans")}</p>
+              <p className="text-xs text-zinc-500">{t("totalLoans")}</p>
               <p className="mt-2 text-2xl font-semibold text-zinc-950 dark:text-zinc-50">
                 {data.borrowerPortfolio.totalLoans}
               </p>
             </div>
             <div className="rounded-2xl border border-zinc-200 p-5 dark:border-zinc-800">
-              <p className="text-xs uppercase tracking-wide text-zinc-500">{t("activeLoans")}</p>
+              <p className="text-xs text-zinc-500">{t("activeLoans")}</p>
               <p className="mt-2 text-2xl font-semibold text-green-600">
                 {data.borrowerPortfolio.activeLoans}
               </p>
             </div>
             <div className="rounded-2xl border border-zinc-200 p-5 dark:border-zinc-800">
-              <p className="text-xs uppercase tracking-wide text-zinc-500">{t("defaultedLoans")}</p>
+              <p className="text-xs text-zinc-500">{t("defaultedLoans")}</p>
               <p className="mt-2 text-2xl font-semibold text-red-600">
                 {data.borrowerPortfolio.defaultedLoans}
               </p>

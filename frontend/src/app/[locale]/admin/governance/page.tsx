@@ -53,13 +53,13 @@ export default function GovernancePage() {
         <>
           <section className="grid gap-4 md:grid-cols-2">
             <div className="rounded-2xl border border-zinc-200 p-5 dark:border-zinc-800">
-              <p className="text-xs uppercase tracking-wide text-zinc-500">{t("currentAdmin")}</p>
+              <p className="text-xs text-zinc-500">{t("currentAdmin")}</p>
               <p className="mt-2 font-mono text-sm text-zinc-950 dark:text-zinc-50">
                 {shortAddress(data?.currentAdmin)}
               </p>
             </div>
             <div className="rounded-2xl border border-zinc-200 p-5 dark:border-zinc-800">
-              <p className="text-xs uppercase tracking-wide text-zinc-500">{t("targetContract")}</p>
+              <p className="text-xs text-zinc-500">{t("targetContract")}</p>
               <p className="mt-2 font-mono text-sm text-zinc-950 dark:text-zinc-50">
                 {shortAddress(data?.targetContract)}
               </p>
@@ -90,15 +90,13 @@ export default function GovernancePage() {
 
               <div className="mt-6 grid gap-4 md:grid-cols-2">
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-zinc-500">
-                    {t("timeToExecutable")}
-                  </p>
+                  <p className="text-xs text-zinc-500">{t("timeToExecutable")}</p>
                   <p className="mt-1 text-sm text-zinc-950 dark:text-zinc-50">
                     {timeUntil(data.pendingProposal.executableAt)}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-zinc-500">{t("expiresAt")}</p>
+                  <p className="text-xs text-zinc-500">{t("expiresAt")}</p>
                   <p className="mt-1 text-sm text-zinc-950 dark:text-zinc-50">
                     {data.pendingProposal.expiresAt ?? "Not configured"}
                   </p>

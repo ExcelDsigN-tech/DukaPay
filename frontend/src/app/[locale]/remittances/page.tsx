@@ -65,7 +65,9 @@ function ConnectWalletPrompt() {
         <SendHorizontal className="h-12 w-12 text-indigo-600 dark:text-indigo-400" />
       </div>
       <div className="text-center">
-        <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">Remittance History</h1>
+        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
+          Remittance History
+        </h1>
         <p className="mt-2 max-w-md text-zinc-500 dark:text-zinc-400">
           Connect your wallet to view your cross-border transfer history.
         </p>
@@ -144,10 +146,8 @@ export default function RemittancesPage() {
     <div className="mx-auto min-h-screen max-w-7xl space-y-8 p-8 lg:p-12">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-widest text-indigo-600">
-            Transfers
-          </p>
-          <h1 className="mt-1 text-3xl font-bold text-zinc-900 dark:text-zinc-50">
+          <p className="text-sm font-semibold text-indigo-600">Transfers</p>
+          <h1 className="mt-1 text-3xl font-semibold text-zinc-900 dark:text-zinc-50">
             Remittance History
           </h1>
           <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
@@ -202,7 +202,7 @@ export default function RemittancesPage() {
                 <item.icon className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
               </div>
               <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">{item.label}</p>
-              <p className="mt-1 text-2xl font-bold text-zinc-900 dark:text-zinc-50">
+              <p className="mt-1 text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
                 {item.value}
               </p>
               <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">{item.sub}</p>
@@ -239,10 +239,10 @@ export default function RemittancesPage() {
                 </div>
                 {claim.status === "credited" && claim.redeemCode && (
                   <div className="rounded-lg bg-indigo-50 px-3 py-2 text-right dark:bg-indigo-950/40">
-                    <p className="text-[11px] uppercase tracking-wide text-indigo-600 dark:text-indigo-400">
+                    <p className="text-[11px] text-indigo-600 dark:text-indigo-400">
                       One-time code
                     </p>
-                    <p className="font-mono text-base font-bold text-indigo-900 dark:text-indigo-200">
+                    <p className="font-mono text-base font-semibold text-indigo-900 dark:text-indigo-200">
                       {claim.redeemCode}
                     </p>
                   </div>
@@ -407,19 +407,19 @@ export default function RemittancesPage() {
           ) : (
             <div className="rounded-xl border border-zinc-200 bg-white overflow-hidden dark:border-zinc-800 dark:bg-zinc-950">
               <div className="grid grid-cols-12 gap-4 border-b border-zinc-100 bg-zinc-50 px-6 py-3 dark:border-zinc-800 dark:bg-zinc-900/50">
-                <span className="col-span-4 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                <span className="col-span-4 text-xs font-semibold text-zinc-500 dark:text-zinc-400">
                   Recipient
                 </span>
-                <span className="col-span-2 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                <span className="col-span-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400">
                   Amount
                 </span>
-                <span className="col-span-2 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                <span className="col-span-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400">
                   Currency
                 </span>
-                <span className="col-span-2 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                <span className="col-span-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400">
                   Date
                 </span>
-                <span className="col-span-2 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                <span className="col-span-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400">
                   Status
                 </span>
               </div>

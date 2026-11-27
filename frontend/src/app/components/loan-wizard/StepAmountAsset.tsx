@@ -109,7 +109,7 @@ export function StepAmountAsset({ data, onChange, onNext, error, onError }: Step
                     className="flex items-center gap-3 rounded-lg border border-indigo-500 bg-indigo-50 px-4 py-3 text-left transition dark:bg-indigo-500/10"
                     aria-pressed={data.asset === asset.value}
                   >
-                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-600 text-xs font-bold text-white">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-600 text-xs font-semibold text-white">
                       {asset.value[0]}
                     </span>
                     <div>
@@ -190,7 +190,7 @@ export function StepAmountAsset({ data, onChange, onNext, error, onError }: Step
               </div>
             )}
 
-            <p className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-2">
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-2">
               <span className="text-red-600">*</span> Required field
             </p>
 
@@ -209,7 +209,7 @@ export function StepAmountAsset({ data, onChange, onNext, error, onError }: Step
             <div className="rounded-lg bg-zinc-50 p-4 dark:bg-zinc-900">
               <p className="text-zinc-500 dark:text-zinc-400">Credit Score</p>
               <div className="mt-1 flex items-baseline gap-2">
-                <span className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
+                <span className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
                   {data.creditScore}
                 </span>
                 <span className="text-sm font-medium text-indigo-600 dark:text-indigo-400">

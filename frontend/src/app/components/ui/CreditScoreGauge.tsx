@@ -157,7 +157,7 @@ export function CreditScoreGauge({
             />
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center pt-4">
-            <span className="text-4xl font-bold text-zinc-400">--</span>
+            <span className="text-4xl font-semibold text-zinc-400">--</span>
           </div>
         </div>
         <span className="text-sm font-semibold text-zinc-500">No Score Yet</span>
@@ -223,7 +223,7 @@ export function CreditScoreGauge({
 
         {/* Center score display */}
         <div className="absolute inset-0 flex flex-col items-center justify-center pt-4">
-          <span className={`text-4xl font-bold ${band.color}`}>{numericScore}</span>
+          <span className={`text-4xl font-semibold ${band.color}`}>{numericScore}</span>
         </div>
       </div>
 

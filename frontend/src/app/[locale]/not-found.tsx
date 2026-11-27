@@ -9,7 +9,7 @@ export default function NotFound() {
       <div className="text-center space-y-6 max-w-md mx-auto">
         {/* Large 404 Text/Icon */}
         <h1
-          className="text-9xl font-bold text-gray-200 dark:text-gray-800 select-none"
+          className="text-9xl font-semibold text-gray-200 dark:text-gray-800 select-none"
           aria-hidden="true"
         >
           404
@@ -31,7 +31,7 @@ export default function NotFound() {
         <div className="pt-8">
           <Link
             href="/"
-            className="inline-flex items-center justify-center rounded-lg bg-foreground text-background px-8 py-3 text-sm font-medium transition-transform hover:scale-105 hover:bg-opacity-90 focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 dark:focus:ring-offset-background"
+            className="inline-flex items-center justify-center rounded-lg bg-foreground text-background px-8 py-3 text-sm font-medium transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 dark:focus:ring-offset-background"
             aria-label="Return to the home page"
           >
             Return Home

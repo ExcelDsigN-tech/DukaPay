@@ -1,7 +1,6 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 
 interface XPGainAnimationProps {
@@ -40,20 +39,14 @@ export function XPGainAnimation({
     <AnimatePresence>
       {isVisible && (
         <motion.div
-          initial={{ opacity: 0, scale: 0.5, y: 20 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.8, y: -20 }}
-          transition={{ duration: 0.4, ease: "easeOut" }}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -8 }}
+          transition={{ duration: 0.2, ease: "easeOut" }}
           className={`fixed left-1/2 ${positionClasses[position]} z-50 -translate-x-1/2`}
         >
-          <div className="flex items-center gap-2 rounded-full bg-gradient-to-r from-purple-600 to-blue-600 px-6 py-3 shadow-lg">
-            <motion.div
-              animate={{ rotate: [0, 360] }}
-              transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-            >
-              <Sparkles size={20} className="text-yellow-300" />
-            </motion.div>
-            <span className="text-lg font-bold text-white">+{amount} XP</span>
+          <div className="rounded-xl border border-line bg-surface px-4 py-2 shadow-sm">
+            <span className="font-mono text-sm font-medium tabular-nums text-fg">+{amount} XP</span>
           </div>
         </motion.div>
       )}

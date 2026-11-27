@@ -65,7 +65,7 @@ test.describe("Send Remittance Flow", () => {
     await page.goto("/en/send-remittance");
 
     await expect(
-      page.locator("text=Please connect your Stellar wallet to send remittances"),
+      page.locator("text=Connect your Stellar wallet to send remittances"),
     ).toBeVisible();
   });
 

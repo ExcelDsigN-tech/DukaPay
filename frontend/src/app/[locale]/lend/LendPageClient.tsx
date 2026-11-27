@@ -155,7 +155,7 @@ export function LendPageClient() {
   if (!address) {
     return (
       <section className="rounded-3xl border border-zinc-200 bg-white p-8 dark:border-zinc-800 dark:bg-zinc-950">
-        <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
+        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
           {t("disconnected.title")}
         </h1>
         <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
@@ -181,10 +181,10 @@ export function LendPageClient() {
     <div className="space-y-6">
       <header className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-indigo-600">
-            {t("eyebrow")}
-          </p>
-          <h1 className="mt-2 text-3xl font-bold text-zinc-900 dark:text-zinc-50">{t("title")}</h1>
+          <p className="text-sm font-semibold tracking-[0.2em] text-indigo-600">{t("eyebrow")}</p>
+          <h1 className="mt-2 text-3xl font-semibold text-zinc-900 dark:text-zinc-50">
+            {t("title")}
+          </h1>
           <p className="mt-2 max-w-2xl text-sm text-zinc-500 dark:text-zinc-400">
             {t("description")}
           </p>

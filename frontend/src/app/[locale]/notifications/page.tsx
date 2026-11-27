@@ -163,10 +163,12 @@ export default function NotificationsPage() {
     <div className="mx-auto min-h-screen max-w-6xl space-y-6 p-8 lg:p-12">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-indigo-600 dark:text-indigo-400">
+          <p className="text-sm font-semibold tracking-[0.2em] text-indigo-600 dark:text-indigo-400">
             {t("eyebrow")}
           </p>
-          <h1 className="mt-1 text-3xl font-bold text-zinc-900 dark:text-zinc-50">{t("title")}</h1>
+          <h1 className="mt-1 text-3xl font-semibold text-zinc-900 dark:text-zinc-50">
+            {t("title")}
+          </h1>
           <p className="mt-2 max-w-2xl text-sm text-zinc-500 dark:text-zinc-400">
             {t("description")}
           </p>
