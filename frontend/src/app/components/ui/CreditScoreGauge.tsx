@@ -24,7 +24,7 @@ const BANDS: ScoreBand[] = [
   { label: "Poor", color: "text-red-500", arcColor: "#ef4444", range: [300, 579] },
   { label: "Fair", color: "text-yellow-500", arcColor: "#eab308", range: [580, 669] },
   { label: "Good", color: "text-blue-500", arcColor: "#3b82f6", range: [670, 739] },
-  { label: "Very Good", color: "text-blue-400", arcColor: "#60a5fa", range: [740, 799] },
+  { label: "Very good", color: "text-blue-400", arcColor: "#60a5fa", range: [740, 799] },
   { label: "Excellent", color: "text-green-500", arcColor: "#22c55e", range: [800, 850] },
 ];
 
@@ -98,7 +98,7 @@ export function CreditScoreGauge({
             <RefreshCw className="h-8 w-8 animate-spin text-zinc-400" />
           </div>
         </div>
-        <span className="text-sm font-semibold text-zinc-400">Loading score...</span>
+        <span className="text-sm font-medium text-fg-muted">Loading score</span>
       </div>
     );
   }
@@ -125,7 +125,7 @@ export function CreditScoreGauge({
         <span className="text-sm font-semibold text-red-600 dark:text-red-400">
           Failed to load score
         </span>
-        <p className="max-w-xs text-center text-xs text-zinc-500 dark:text-zinc-400">
+        <p className="max-w-xs text-center text-xs text-fg-muted">
           {error.message || "Unable to fetch your credit score"}
         </p>
         {onRetry && (
@@ -157,11 +157,11 @@ export function CreditScoreGauge({
             />
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center pt-4">
-            <span className="text-4xl font-semibold text-zinc-400">--</span>
+            <span className="font-display text-4xl font-medium text-fg-muted">--</span>
           </div>
         </div>
-        <span className="text-sm font-semibold text-zinc-500">No Score Yet</span>
-        <p className="max-w-xs text-center text-xs text-zinc-500 dark:text-zinc-400">
+        <span className="text-sm font-medium text-fg-muted">No score yet</span>
+        <p className="max-w-xs text-center text-xs text-fg-muted">
           Complete your first remittance or loan repayment to establish your credit score.
         </p>
       </div>
@@ -223,18 +223,20 @@ export function CreditScoreGauge({
 
         {/* Center score display */}
         <div className="absolute inset-0 flex flex-col items-center justify-center pt-4">
-          <span className={`text-4xl font-semibold ${band.color}`}>{numericScore}</span>
+          <span className="font-display text-4xl font-medium tabular-nums text-fg">
+            {numericScore}
+          </span>
         </div>
       </div>
 
       {/* Band label */}
-      <span className={`text-sm font-semibold ${band.color}`}>{band.label}</span>
+      <span className={`text-sm font-medium ${band.color}`}>{band.label}</span>
 
       {/* Trend indicator */}
       {delta !== null && delta !== 0 && (
         <div
           className={`flex items-center gap-1 text-xs font-medium ${
-            delta > 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"
+            delta > 0 ? "text-ok" : "text-danger"
           }`}
         >
           {delta > 0 ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
@@ -246,7 +248,7 @@ export function CreditScoreGauge({
       )}
 
       {/* Tooltip / explanation */}
-      <p className="max-w-xs text-center text-xs text-zinc-500 dark:text-zinc-400">
+      <p className="max-w-xs text-center text-xs text-fg-muted">
         Your credit score ranges from {min} to {max}. Maintain on-time repayments and low
         utilization to improve your score.
       </p>

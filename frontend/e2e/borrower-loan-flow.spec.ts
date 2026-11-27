@@ -181,7 +181,7 @@ test.describe("Borrower Loan Request Flow", () => {
 
   test("Step 3: Navigate to loan request form and submit", async ({ page }: { page: Page }) => {
     await page.goto("/en");
-    await page.getByRole("button", { name: /Apply for Loan/i }).click();
+    await page.getByRole("button", { name: /Apply for a loan/i }).click();
     await expect(page).toHaveURL(/\/en\/request-loan$/);
 
     const body = await requestLoan(page);

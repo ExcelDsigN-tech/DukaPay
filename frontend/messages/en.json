@@ -1,44 +1,37 @@
 {
   "HomePage": {
-    "title": "Welcome, {address}",
-    "description": "Agent banking on Stellar: shops cash in and out against on-chain solvency, backing remittances and micro-loans across the network.",
+    "title": "Home",
     "getStarted": "Get Started",
     "learnMore": "Learn More",
     "stats": {
       "walletBalance": "Wallet balance (USDC)",
-      "activeLoans": "Active Loans",
-      "totalRemitted": "Total Remitted",
+      "activeLoans": "Active loans",
+      "totalRemitted": "Total remitted",
       "totalOwed": "Total owed",
-      "label": "Portfolio Statistics",
+      "label": "Portfolio statistics",
       "pending": "{count} pending",
-      "transfers": "{count} transfers",
-      "change": "Change: {change}"
+      "transfers": "{count} transfers"
     },
     "activity": {
-      "title": "Recent Activity",
-      "viewAll": "View All",
+      "title": "Recent activity",
+      "viewAll": "View all",
       "emptyTitle": "No activity yet",
       "empty": "No recent activity yet. Your transactions will appear here.",
       "viewAllLabel": "View all recent activity",
-      "loanActive": "Loan Active",
-      "loanRepaid": "Loan Repaid",
-      "loanRequest": "Loan Request",
+      "loanActive": "Loan active",
+      "loanRepaid": "Loan repaid",
+      "loanRequest": "Loan request",
       "remittance": "Remittance",
-      "loanDesc": "Loan #{id}, {amount}",
-      "remittanceDesc": "To {recipient}"
+      "loanDesc": "Loan #{id}",
+      "remittanceDesc": "To {recipient}",
+      "pending": "Pending"
     },
     "quickActions": {
-      "title": "Quick Actions",
-      "applyLoan": "Apply for Loan",
-      "applyLoanDesc": "Get instant liquidity",
-      "sendRemittance": "Send Remittance",
-      "sendRemittanceDesc": "Transfer funds globally"
-    },
-    "outreach": {
-      "title": "Community Outreach",
-      "description": "New borrowers in Ghana are looking for micro-loans for agricultural tools. Lending to them grows the network",
-      "explore": "Explore Opportunities",
-      "exploreLabel": "Explore micro-loan opportunities"
+      "title": "Quick actions",
+      "applyLoan": "Apply for a loan",
+      "applyLoanDesc": "Request a micro-loan",
+      "sendRemittance": "Send money",
+      "sendRemittanceDesc": "To a wallet or for cash pickup"
     },
     "disconnected": {
       "heading": "Dashboard",
@@ -55,8 +48,8 @@
       "details": "Amount due: {amount} · Due {date}"
     },
     "creditScore": {
-      "label": "Credit Score",
-      "tooltip": "Credit Score: An on-chain signal of repayment reliability. Higher scores can unlock better terms over time.",
+      "label": "Credit score",
+      "tooltip": "An on-chain signal of repayment reliability. Higher scores can unlock better terms over time",
       "tooltipLabel": "Credit score info",
       "empty": "Join the ecosystem to build your on-chain credit history."
     },
