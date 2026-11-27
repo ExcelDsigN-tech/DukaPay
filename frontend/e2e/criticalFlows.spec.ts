@@ -206,7 +206,7 @@ test("Account: Settings update → logout → redirect to login", async ({ page 
   await displayNameInput.fill("Alice New Name");
 
   await page.click('button:has-text("Save Profile")');
-  await expect(page.locator("text=Saved!")).toBeVisible();
+  await expect(page.locator('text="Saved"')).toBeVisible();
 
   // Logout flow: Sign Out (useLogout) ends the session and redirects.
   // Disconnect Wallet is covered by wallet-disconnect.spec.ts.

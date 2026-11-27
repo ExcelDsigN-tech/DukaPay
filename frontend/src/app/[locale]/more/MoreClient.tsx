@@ -63,10 +63,10 @@ export default function MoreClient() {
 
   return (
     <div className="mx-auto max-w-xl space-y-5">
-      <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">{t("title")}</h1>
+      <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{t("title")}</h1>
 
       <div className="flex items-center gap-3 rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 font-bold text-white">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 font-semibold text-white">
           {address ? address.charAt(0) : "?"}
         </div>
         <div className="min-w-0">

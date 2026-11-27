@@ -116,13 +116,13 @@ export default function AdminKycPage() {
           <table className="mt-2 min-w-full divide-y divide-zinc-200">
             <thead>
               <tr>
-                <th className="px-4 py-2 text-left text-xs font-medium uppercase text-zinc-500">
+                <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500">
                   {t("user")}
                 </th>
-                <th className="px-4 py-2 text-left text-xs font-medium uppercase text-zinc-500">
+                <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500">
                   {t("currentStatus")}
                 </th>
-                <th className="px-4 py-2 text-right text-xs font-medium uppercase text-zinc-500">
+                <th className="px-4 py-2 text-right text-xs font-medium text-zinc-500">
                   {t("actions")}
                 </th>
               </tr>

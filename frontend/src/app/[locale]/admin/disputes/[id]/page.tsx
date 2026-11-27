@@ -77,9 +77,7 @@ function LoanSummary({ dispute }: { dispute: AdminDispute }) {
       <dl className="mt-5 grid gap-4 sm:grid-cols-2">
         {rows.map(([label, value]) => (
           <div key={label} className="rounded-xl bg-zinc-50 p-4 dark:bg-zinc-900">
-            <dt className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
-              {label}
-            </dt>
+            <dt className="text-xs font-semibold text-zinc-500">{label}</dt>
             <dd className="mt-1 text-sm font-medium text-zinc-900 dark:text-zinc-100">{value}</dd>
           </div>
         ))}
@@ -165,7 +163,7 @@ export default function AdminDisputeDetailPage() {
       </Link>
 
       <header className="space-y-2">
-        <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
+        <h1 className="text-3xl font-semibold text-zinc-900 dark:text-zinc-50">
           {t("title", { id: dispute.id })}
         </h1>
         <p className="text-sm text-zinc-500 dark:text-zinc-400">

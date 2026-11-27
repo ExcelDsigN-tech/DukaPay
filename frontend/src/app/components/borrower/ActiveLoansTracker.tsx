@@ -53,12 +53,14 @@ export function ActiveLoansTracker({ borrowerAddress }: { borrowerAddress: strin
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="p-4 bg-gradient-to-br from-blue-50 to-blue-100">
           <p className="text-sm text-gray-600 mb-1">Active Loans</p>
-          <p className="text-3xl font-bold text-blue-600">{stats.totalActive}</p>
+          <p className="text-3xl font-semibold text-blue-600">{stats.totalActive}</p>
         </Card>
 
         <Card className="p-4 bg-gradient-to-br from-purple-50 to-purple-100">
           <p className="text-sm text-gray-600 mb-1">Total Owed</p>
-          <p className="text-2xl font-bold text-purple-600">{formatCurrency(stats.totalOwed)}</p>
+          <p className="text-2xl font-semibold text-purple-600">
+            {formatCurrency(stats.totalOwed)}
+          </p>
         </Card>
 
         <Card
@@ -70,7 +72,7 @@ export function ActiveLoansTracker({ borrowerAddress }: { borrowerAddress: strin
         >
           <p className="text-sm text-gray-600 mb-1">Overdue Payments</p>
           <p
-            className={`text-3xl font-bold ${
+            className={`text-3xl font-semibold ${
               stats.overdueCount > 0 ? "text-red-600" : "text-green-600"
             }`}
           >

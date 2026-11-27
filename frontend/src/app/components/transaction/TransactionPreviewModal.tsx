@@ -96,7 +96,7 @@ export function TransactionPreviewModal({
               >
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
+                    <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-xs font-semibold text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
                       {index + 1}
                     </span>
                     <span className="font-semibold text-gray-900 dark:text-zinc-100">
@@ -104,7 +104,7 @@ export function TransactionPreviewModal({
                     </span>
                   </div>
                   {operation.amount && (
-                    <span className="text-lg font-bold text-gray-900 dark:text-zinc-100">
+                    <span className="text-lg font-semibold text-gray-900 dark:text-zinc-100">
                       {operation.amount} {operation.token}
                     </span>
                   )}
@@ -150,7 +150,7 @@ export function TransactionPreviewModal({
                   </span>
                   <span
                     className={cn(
-                      "text-sm font-bold",
+                      "text-sm font-semibold",
                       change.isPositive
                         ? "text-green-600 dark:text-green-400"
                         : "text-red-600 dark:text-red-400",
@@ -175,7 +175,7 @@ export function TransactionPreviewModal({
                   Estimated Network Fee
                 </span>
               </div>
-              <span className="text-sm font-bold text-amber-900 dark:text-amber-300">
+              <span className="text-sm font-semibold text-amber-900 dark:text-amber-300">
                 {data.estimatedGasFee} XLM
               </span>
             </div>

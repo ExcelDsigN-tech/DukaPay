@@ -142,7 +142,9 @@ export default function ActivityPage() {
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-50 dark:bg-indigo-500/10 mb-6">
             <Clock className="h-8 w-8 text-indigo-600 dark:text-indigo-400" />
           </div>
-          <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-50">{t("notConnected")}</h2>
+          <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+            {t("notConnected")}
+          </h2>
           <p className="mt-2 text-zinc-500 dark:text-zinc-400">
             {t("connectWalletToViewActivity")}
           </p>
@@ -155,7 +157,7 @@ export default function ActivityPage() {
     <div className="space-y-8 min-h-screen p-8 lg:p-12 max-w-4xl mx-auto">
       <header className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50 flex items-center gap-2">
+          <h1 className="text-3xl font-semibold text-zinc-900 dark:text-zinc-50 flex items-center gap-2">
             <Clock className="h-8 w-8 text-indigo-600 dark:text-indigo-400" />
             {t("title")}
           </h1>
@@ -180,7 +182,7 @@ export default function ActivityPage() {
                 setFilterType(filter);
                 setCurrentPage(1);
               }}
-              className={`px-4 py-2 rounded-full font-medium transition-all ${
+              className={`px-4 py-2 rounded-full font-medium transition-colors ${
                 filterType === filter
                   ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/30"
                   : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
@@ -280,7 +282,7 @@ export default function ActivityPage() {
                     </div>
                   </div>
                   <div className="text-right flex-shrink-0 ml-4">
-                    <p className="text-sm font-bold text-zinc-900 dark:text-zinc-50">
+                    <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
                       {item.amount}
                     </p>
                     <p className="text-xs text-zinc-500 dark:text-zinc-400">
@@ -325,7 +327,7 @@ export default function ActivityPage() {
                     <button
                       key={pageNum}
                       onClick={() => setCurrentPage(pageNum)}
-                      className={`w-10 h-10 rounded-lg font-medium transition-all ${
+                      className={`w-10 h-10 rounded-lg font-medium transition-colors ${
                         currentPage === pageNum
                           ? "bg-indigo-600 text-white"
                           : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"

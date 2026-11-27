@@ -184,7 +184,7 @@ function ProfileSection() {
           helperText={t("profile.emailHelper")}
         />
 
-        <p className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-2">
+        <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-2">
           <span className="text-red-600">*</span> {t("common.requiredField")}
         </p>
 
@@ -226,7 +226,7 @@ function WalletSection() {
         {address ? (
           <>
             <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900">
-              <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-2">
+              <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-2">
                 {t("connectedAddress")}
               </p>
               <div className="flex items-center justify-between gap-2">
@@ -388,7 +388,7 @@ function NotificationsSection() {
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 pb-2">
+          <p className="text-xs font-semibold text-zinc-400 dark:text-zinc-500 pb-2">
             {t("notifications.delivery")}
           </p>
           <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
@@ -432,7 +432,7 @@ function NotificationsSection() {
         </div>
 
         <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 pb-2 pt-4">
+          <p className="text-xs font-semibold text-zinc-400 dark:text-zinc-500 pb-2 pt-4">
             {t("notifications.events")}
           </p>
           <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
@@ -644,10 +644,10 @@ export default function SettingsPage() {
     <div className="space-y-8 min-h-screen p-8 lg:p-12 max-w-5xl mx-auto">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-widest text-indigo-600">
-            {t("eyebrow")}
-          </p>
-          <h1 className="mt-1 text-3xl font-bold text-zinc-900 dark:text-zinc-50">{t("title")}</h1>
+          <p className="text-sm font-semibold text-indigo-600">{t("eyebrow")}</p>
+          <h1 className="mt-1 text-3xl font-semibold text-zinc-900 dark:text-zinc-50">
+            {t("title")}
+          </h1>
           <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{t("description")}</p>
         </div>
         <Button

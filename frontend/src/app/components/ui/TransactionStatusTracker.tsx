@@ -94,7 +94,7 @@ export function TransactionStatusTracker({
           {isPending && (
             <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
               <div
-                className="h-full bg-blue-600 transition-all duration-300"
+                className="h-full bg-blue-600 transition-[width] duration-300"
                 style={{ width: `${progress}%` }}
               />
             </div>

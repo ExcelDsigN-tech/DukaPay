@@ -171,7 +171,7 @@ function ConnectWalletPrompt() {
         <Wallet className="h-12 w-12 text-indigo-600 dark:text-indigo-400" />
       </div>
       <div className="text-center">
-        <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">{t("title")}</h1>
+        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{t("title")}</h1>
         <p className="mt-2 max-w-md text-zinc-500 dark:text-zinc-400">{t("connectPrompt")}</p>
       </div>
     </div>
@@ -235,7 +235,7 @@ function BalancesCard({ address, horizonUrl }: { address: string; horizonUrl: st
               <div key={i} className="flex items-center justify-between py-3">
                 <div className="flex items-center gap-3">
                   <div className="h-9 w-9 rounded-full bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center">
-                    <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">
+                    <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">
                       {assetLabel(b).slice(0, 3)}
                     </span>
                   </div>
@@ -250,7 +250,7 @@ function BalancesCard({ address, horizonUrl }: { address: string; horizonUrl: st
                     )}
                   </div>
                 </div>
-                <p className="text-sm font-bold text-zinc-900 dark:text-zinc-50">
+                <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
                   {formatBalance(b)}
                 </p>
               </div>
@@ -394,7 +394,7 @@ function TransactionHistoryCard({
                   <div className="text-right flex-shrink-0 flex items-center gap-2">
                     <div>
                       <p
-                        className={`text-sm font-bold ${
+                        className={`text-sm font-semibold ${
                           isInflow(p)
                             ? "text-green-600 dark:text-green-400"
                             : "text-zinc-900 dark:text-zinc-50"
@@ -475,10 +475,10 @@ export default function WalletPage() {
   return (
     <div className="space-y-8 min-h-screen p-8 lg:p-12 max-w-5xl mx-auto">
       <header>
-        <p className="text-sm font-semibold uppercase tracking-widest text-indigo-600">
-          {t("eyebrow")}
-        </p>
-        <h1 className="mt-1 text-3xl font-bold text-zinc-900 dark:text-zinc-50">{t("title")}</h1>
+        <p className="text-sm font-semibold text-indigo-600">{t("eyebrow")}</p>
+        <h1 className="mt-1 text-3xl font-semibold text-zinc-900 dark:text-zinc-50">
+          {t("title")}
+        </h1>
       </header>
 
       {/* Address card */}

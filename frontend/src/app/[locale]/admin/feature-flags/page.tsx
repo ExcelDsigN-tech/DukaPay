@@ -40,19 +40,19 @@ export default function AdminFeatureFlagsPage() {
           <table className="min-w-full divide-y divide-zinc-200 dark:divide-zinc-800">
             <thead>
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-zinc-500">
+                <th className="px-4 py-3 text-left text-xs font-medium text-zinc-500">
                   {t("flag")}
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-zinc-500">
+                <th className="px-4 py-3 text-left text-xs font-medium text-zinc-500">
                   {t("description")}
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-zinc-500">
+                <th className="px-4 py-3 text-left text-xs font-medium text-zinc-500">
                   {t("scope")}
                 </th>
-                <th className="px-4 py-3 text-center text-xs font-medium uppercase text-zinc-500">
+                <th className="px-4 py-3 text-center text-xs font-medium text-zinc-500">
                   {t("status")}
                 </th>
-                <th className="px-4 py-3 text-right text-xs font-medium uppercase text-zinc-500">
+                <th className="px-4 py-3 text-right text-xs font-medium text-zinc-500">
                   {t("actions")}
                 </th>
               </tr>

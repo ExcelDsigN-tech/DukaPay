@@ -52,7 +52,7 @@ export default function UIDemoPage() {
       <div className="mx-auto max-w-5xl space-y-12">
         <section className="space-y-2">
           <div className="flex items-center justify-between">
-            <h1 className="text-4xl font-extrabold tracking-tight text-gray-900 dark:text-zinc-50">
+            <h1 className="text-4xl font-semibold tracking-tight text-gray-900 dark:text-zinc-50">
               UI Component Library
             </h1>
             <ThemeToggle />
@@ -275,9 +275,7 @@ export default function UIDemoPage() {
           <Card>
             <CardContent className="space-y-6 pt-6">
               <div>
-                <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">
-                  StatusIndicator tones
-                </p>
+                <p className="mb-3 text-xs font-semibold text-zinc-500">StatusIndicator tones</p>
                 <div className="flex flex-wrap gap-3">
                   <StatusIndicator label="Success" tone="success" />
                   <StatusIndicator label="Danger" tone="danger" />
@@ -287,9 +285,7 @@ export default function UIDemoPage() {
                 </div>
               </div>
               <div>
-                <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">
-                  LoanStatusBadge statuses
-                </p>
+                <p className="mb-3 text-xs font-semibold text-zinc-500">LoanStatusBadge statuses</p>
                 <div className="flex flex-wrap gap-3">
                   <LoanStatusBadge status="active" />
                   <LoanStatusBadge status="pending" />

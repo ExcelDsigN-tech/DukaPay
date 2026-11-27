@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Crown, Sparkles, Gift } from "lucide-react";
+import { X, Crown, Gift, Check } from "lucide-react";
 import { useGamificationStore } from "@/app/stores/useGamificationStore";
 import { useSoundEffect } from "@/app/utils/soundManager";
 import { Button } from "../ui/Button";
@@ -57,126 +57,73 @@ export function LevelUpModal() {
           {/* Modal */}
           <motion.div
             ref={modalRef}
-            initial={animationsEnabled ? { scale: 0.5, opacity: 0, y: 50 } : { opacity: 0 }}
-            animate={animationsEnabled ? { scale: 1, opacity: 1, y: 0 } : { opacity: 1 }}
-            exit={animationsEnabled ? { scale: 0.8, opacity: 0, y: 20 } : { opacity: 0 }}
-            transition={{ type: "spring", duration: 0.5 }}
+            initial={animationsEnabled ? { opacity: 0, y: 8 } : { opacity: 0 }}
+            animate={animationsEnabled ? { opacity: 1, y: 0 } : { opacity: 1 }}
+            exit={animationsEnabled ? { opacity: 0, y: 4 } : { opacity: 0 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
             role="dialog"
             aria-modal="true"
             aria-labelledby="level-up-modal-title"
             tabIndex={-1}
-            className="relative w-full max-w-md overflow-hidden rounded-2xl bg-gradient-to-br from-purple-50 to-blue-50 shadow-2xl dark:from-purple-950/30 dark:to-blue-950/30 dark:border dark:border-purple-800"
+            className="relative w-full max-w-md overflow-hidden rounded-2xl border border-line bg-surface shadow-xl"
           >
-            {/* Animated background sparkles */}
-            {animationsEnabled && (
-              <>
-                <motion.div
-                  animate={{
-                    scale: [1, 1.2, 1],
-                    rotate: [0, 180, 360],
-                  }}
-                  transition={{
-                    duration: 3,
-                    repeat: Infinity,
-                    ease: "linear",
-                  }}
-                  className="absolute top-10 right-10 text-yellow-400 opacity-30"
-                >
-                  <Sparkles size={40} />
-                </motion.div>
-                <motion.div
-                  animate={{
-                    scale: [1, 1.3, 1],
-                    rotate: [360, 180, 0],
-                  }}
-                  transition={{
-                    duration: 4,
-                    repeat: Infinity,
-                    ease: "linear",
-                  }}
-                  className="absolute bottom-10 left-10 text-purple-400 opacity-20"
-                >
-                  <Sparkles size={30} />
-                </motion.div>
-              </>
-            )}
-
             {/* Close button */}
             <button
               ref={closeButtonRef}
               onClick={handleClose}
               aria-label="Close level up modal"
-              className="absolute top-4 right-4 z-10 rounded-full p-2 text-gray-600 hover:bg-white/50 dark:text-gray-400 dark:hover:bg-black/20"
+              className="absolute top-4 right-4 z-10 rounded-lg p-2 text-fg-muted transition-colors hover:bg-subtle hover:text-fg"
             >
               <X size={20} />
             </button>
 
             {/* Content */}
             <div className="relative p-8 text-center">
-              {/* Crown icon with animation */}
-              <motion.div
-                initial={animationsEnabled ? { scale: 0, rotate: -180 } : {}}
-                animate={animationsEnabled ? { scale: 1, rotate: 0 } : {}}
-                transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
-                className="mx-auto mb-4 flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 shadow-lg"
-              >
-                <Crown size={48} className="text-white" />
-              </motion.div>
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-subtle">
+                <Crown size={28} strokeWidth={1.5} className="text-gold" />
+              </div>
 
               {/* Level up text */}
               <motion.h2
                 id="level-up-modal-title"
-                initial={animationsEnabled ? { opacity: 0, y: 20 } : {}}
+                initial={animationsEnabled ? { opacity: 0, y: 4 } : {}}
                 animate={animationsEnabled ? { opacity: 1, y: 0 } : {}}
-                transition={{ delay: 0.3 }}
-                className="mb-2 text-3xl font-bold text-purple-900 dark:text-purple-100"
+                transition={{ delay: 0.05 }}
+                className="mb-2 font-display text-2xl font-medium text-fg"
               >
-                Level Up!
+                Level {pendingLevelUp.level}
               </motion.h2>
 
               <motion.p
-                initial={animationsEnabled ? { opacity: 0, y: 20 } : {}}
+                initial={animationsEnabled ? { opacity: 0, y: 4 } : {}}
                 animate={animationsEnabled ? { opacity: 1, y: 0 } : {}}
-                transition={{ delay: 0.4 }}
-                className="mb-6 text-lg text-purple-700 dark:text-purple-300"
+                transition={{ delay: 0.1 }}
+                className="mb-6 text-base text-fg-muted"
               >
-                You are now a{" "}
-                <span className="font-bold text-purple-900 dark:text-purple-100">
-                  {pendingLevelUp.title}
-                </span>
+                You are now a <span className="font-medium text-fg">{pendingLevelUp.title}</span>
               </motion.p>
-
-              {/* Level badge */}
-              <motion.div
-                initial={animationsEnabled ? { scale: 0 } : {}}
-                animate={animationsEnabled ? { scale: 1 } : {}}
-                transition={{ delay: 0.5, type: "spring" }}
-                className="mx-auto mb-6 inline-flex items-center gap-2 rounded-full bg-purple-600 px-6 py-3 text-white shadow-lg"
-              >
-                <span className="text-2xl font-bold">Level {pendingLevelUp.level}</span>
-              </motion.div>
 
               {/* Rewards */}
               <motion.div
-                initial={animationsEnabled ? { opacity: 0, y: 20 } : {}}
+                initial={animationsEnabled ? { opacity: 0, y: 4 } : {}}
                 animate={animationsEnabled ? { opacity: 1, y: 0 } : {}}
-                transition={{ delay: 0.6 }}
-                className="mb-6 rounded-xl bg-white/50 p-4 dark:bg-black/20"
+                transition={{ delay: 0.15 }}
+                className="mb-6 rounded-xl border border-line bg-subtle p-4"
               >
-                <div className="mb-3 flex items-center justify-center gap-2 text-purple-900 dark:text-purple-100">
-                  <Gift size={20} />
-                  <h3 className="font-semibold">Rewards Unlocked</h3>
+                <div className="mb-3 flex items-center justify-center gap-2 text-fg">
+                  <Gift size={16} strokeWidth={1.5} className="text-fg-muted" />
+                  <h3 className="text-sm font-medium">Rewards unlocked</h3>
                 </div>
-                <ul className="space-y-2 text-sm text-purple-700 dark:text-purple-300">
+                <ul className="space-y-2 text-sm text-fg-muted">
                   {pendingLevelUp.rewards.map((reward, index) => (
                     <motion.li
                       key={index}
-                      initial={animationsEnabled ? { opacity: 0, x: -20 } : {}}
-                      animate={animationsEnabled ? { opacity: 1, x: 0 } : {}}
-                      transition={{ delay: 0.7 + index * 0.1 }}
+                      initial={animationsEnabled ? { opacity: 0 } : {}}
+                      animate={animationsEnabled ? { opacity: 1 } : {}}
+                      transition={{ delay: 0.2 + index * 0.05 }}
                       className="flex items-center justify-center gap-2"
                     >
-                      <span className="text-green-600 dark:text-green-400">✓</span>
+                      <Check size={14} strokeWidth={1.5} className="text-ok" aria-hidden="true" />
                       {reward}
                     </motion.li>
                   ))}
@@ -185,15 +132,12 @@ export function LevelUpModal() {
 
               {/* Continue button */}
               <motion.div
-                initial={animationsEnabled ? { opacity: 0, y: 20 } : {}}
+                initial={animationsEnabled ? { opacity: 0, y: 4 } : {}}
                 animate={animationsEnabled ? { opacity: 1, y: 0 } : {}}
-                transition={{ delay: 0.9 }}
+                transition={{ delay: 0.2 }}
               >
-                <Button
-                  onClick={handleClose}
-                  className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
-                >
-                  Continue Your Journey
+                <Button onClick={handleClose} className="w-full">
+                  Continue
                 </Button>
               </motion.div>
             </div>

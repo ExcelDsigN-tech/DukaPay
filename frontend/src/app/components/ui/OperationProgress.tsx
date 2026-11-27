@@ -118,7 +118,7 @@ export function OperationProgress({ transaction, type = "generic" }: OperationPr
         >
           <div
             className={clsx(
-              "h-full transition-all duration-300 ease-out",
+              "h-full transition-[width] duration-300 ease-out",
               status === "signing" && "bg-amber-500",
               status === "submitted" && "bg-blue-500",
               status === "confirming" && "bg-indigo-500",

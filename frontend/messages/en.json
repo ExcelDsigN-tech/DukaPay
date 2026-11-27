@@ -36,7 +36,7 @@
     },
     "outreach": {
       "title": "Community Outreach",
-      "description": "New borrowers in Ghana are looking for micro-loans for agricultural tools. Help grow the ecosystem!",
+      "description": "New borrowers in Ghana are looking for micro-loans for agricultural tools. Lending to them grows the network",
       "explore": "Explore Opportunities",
       "exploreLabel": "Explore micro-loan opportunities"
     },
@@ -164,8 +164,6 @@
   "Kingdom": {
     "title": "Kingdom Dashboard",
     "description": "Track your progress, unlock achievements, and rise through the ranks",
-    "welcome": "Welcome, {kingdomTitle}!",
-    "level": "You are currently at Level {level}",
     "achievements": "Achievements",
     "unlockedCount": "{unlocked} / {total}",
     "progress": "Progress",
@@ -315,7 +313,7 @@
       "copied": "Copied to clipboard"
     },
     "common": {
-      "saved": "Saved!",
+      "saved": "Saved",
       "saving": "Saving...",
       "requiredField": "Required field"
     },
@@ -1002,8 +1000,8 @@
     "toast": {
       "validationTitle": "Validation Error",
       "validationDescription": "Please fix the errors in the form",
-      "successTitle": "Success!",
-      "successDescription": "Remittance sent successfully",
+      "successTitle": "Remittance sent",
+      "successDescription": "It now shows in your remittances",
       "errorTitle": "Error",
       "errorFallback": "Failed to send remittance"
     }
@@ -1012,8 +1010,8 @@
     "back": "Back",
     "title": "Send Remittance",
     "subtitle": "Transfer funds globally using the Stellar blockchain",
-    "connectWallet": "⚠️ Please connect your Stellar wallet to send remittances",
-    "success": "✓ Remittance sent successfully! Redirecting to remittances page...",
+    "connectWallet": "Connect your Stellar wallet to send remittances",
+    "success": "Remittance sent. Opening your remittances",
     "faq": {
       "title": "Frequently Asked Questions",
       "address": {
@@ -1030,7 +1028,7 @@
       },
       "creditScore": {
         "q": "Do remittances improve my credit score?",
-        "a": "Yes! Each successful remittance demonstrates financial activity and helps build your on-chain credit history, which can improve your credit score and loan eligibility."
+        "a": "Yes. Each successful remittance demonstrates financial activity and helps build your on-chain credit history, which can improve your credit score and loan eligibility."
       },
       "wrongAddress": {
         "q": "What if I enter the wrong address?",

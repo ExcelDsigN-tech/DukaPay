@@ -26,7 +26,7 @@ export function RepaymentProgress({ totalRepaid, totalOwed, status }: RepaymentP
 
       <div className="h-2 w-full rounded-full bg-zinc-200 dark:bg-zinc-800">
         <div
-          className="h-2 rounded-full bg-indigo-600 transition-all duration-500"
+          className="h-2 rounded-full bg-indigo-600 transition-[width] duration-500"
           style={{ width: `${progress}%` }}
         />
       </div>

@@ -38,7 +38,7 @@ export default function SendRemittancePage() {
             {t("back")}
           </button>
           <div className="mb-4">
-            <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">{t("title")}</h1>
+            <h1 className="text-3xl font-semibold text-zinc-900 dark:text-zinc-50">{t("title")}</h1>
             <p className="text-zinc-600 dark:text-zinc-400 mt-2">{t("subtitle")}</p>
           </div>
         </div>

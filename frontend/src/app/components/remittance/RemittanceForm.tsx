@@ -260,7 +260,7 @@ export function RemittanceForm({ onSuccess }: RemittanceFormProps) {
               className={errors.amount ? "border-red-600" : ""}
             />
 
-            <p className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-2">
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-2">
               <span className="text-red-600">*</span> {t("requiredField")}
             </p>
 
@@ -341,15 +341,15 @@ export function RemittanceForm({ onSuccess }: RemittanceFormProps) {
             </h3>
             <ul className="space-y-2 text-sm text-indigo-800 dark:text-indigo-400">
               <li className="flex gap-2">
-                <span className="font-bold">•</span>
+                <span className="font-semibold">•</span>
                 <span>{t("about.creditScore")}</span>
               </li>
               <li className="flex gap-2">
-                <span className="font-bold">•</span>
+                <span className="font-semibold">•</span>
                 <span>{t("about.secured")}</span>
               </li>
               <li className="flex gap-2">
-                <span className="font-bold">•</span>
+                <span className="font-semibold">•</span>
                 <span>{t("about.fast")}</span>
               </li>
             </ul>

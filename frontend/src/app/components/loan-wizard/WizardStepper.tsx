@@ -78,7 +78,7 @@ export function WizardStepper({ steps, currentStep, onStepSelect }: WizardSteppe
                   onClick={() => reachable && onStepSelect?.(step.id)}
                   onKeyDown={(event) => handleKeyDown(event, index)}
                   className={cn(
-                    "flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 text-sm font-semibold transition-all",
+                    "flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 text-sm font-semibold transition-colors",
                     "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600",
                     !reachable && "cursor-not-allowed",
                     isCompleted && "border-indigo-600 bg-indigo-600 text-white",
@@ -104,7 +104,7 @@ export function WizardStepper({ steps, currentStep, onStepSelect }: WizardSteppe
                   >
                     {step.label}
                   </p>
-                  <p className="text-[10px] text-zinc-400 dark:text-zinc-500 leading-tight max-w-[80px]">
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-tight max-w-[80px]">
                     {step.description}
                   </p>
                 </div>
@@ -114,7 +114,7 @@ export function WizardStepper({ steps, currentStep, onStepSelect }: WizardSteppe
               {!isLast && (
                 <div
                   className={cn(
-                    "mx-2 h-0.5 flex-1 transition-all",
+                    "mx-2 h-0.5 flex-1 transition-colors",
                     isCompleted ? "bg-indigo-600" : "bg-zinc-200 dark:bg-zinc-700",
                   )}
                 />

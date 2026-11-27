@@ -61,7 +61,7 @@ export function RiskTierChart({ data, className }: RiskTierChartProps) {
                       <p className="text-sm font-medium text-gray-900 dark:text-zinc-100">
                         {d.tier} Risk
                       </p>
-                      <p className="text-lg font-bold" style={{ color: d.color }}>
+                      <p className="text-lg font-semibold" style={{ color: d.color }}>
                         {d.count} loan{d.count !== 1 ? "s" : ""} ({pct}%)
                       </p>
                     </div>

@@ -34,7 +34,7 @@ function NotificationIcon({ type }: { type: NotificationType }) {
     case "loan_defaulted":
       return <AlertTriangle className="h-4 w-4 text-red-500" />;
     case "score_changed":
-      return <TrendingUp className="h-4 w-4 text-violet-500" />;
+      return <TrendingUp className="h-4 w-4 text-zinc-500 dark:text-zinc-400" />;
     default:
       return <Bell className="h-4 w-4 text-zinc-400" />;
   }
@@ -51,7 +51,7 @@ function iconBg(type: NotificationType): string {
     case "loan_defaulted":
       return "bg-red-50 dark:bg-red-950/40";
     case "score_changed":
-      return "bg-violet-50 dark:bg-violet-950/40";
+      return "bg-zinc-100 dark:bg-zinc-800";
     default:
       return "bg-zinc-100 dark:bg-zinc-800";
   }
@@ -243,7 +243,7 @@ export function NotificationDropdown() {
               exit={{ scale: 0 }}
               title={`${unreadCount} unread notification${unreadCount === 1 ? "" : "s"}`}
               className={cn(
-                "absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full border-2 border-canvas bg-danger px-1 text-[9px] font-bold text-canvas",
+                "absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full border-2 border-canvas bg-danger px-1 text-[9px] font-semibold text-canvas",
               )}
             >
               {unreadCount > 9 ? "9+" : unreadCount}

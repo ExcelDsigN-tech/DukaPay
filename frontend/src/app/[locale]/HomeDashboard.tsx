@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUpRight, ArrowDownLeft, Users, Activity, Clock, ExternalLink } from "lucide-react";
+import { ArrowUpRight, ArrowDownLeft, Users, Activity, Clock, ExternalLink, X } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import {
@@ -100,7 +100,7 @@ function RepaymentReminderBanner({
           <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
             {t("reminder.due", { hours: hoursLeft, loanId: mostUrgent.id })}
             {urgentLoans.length > 1 && (
-              <span className="ml-2 inline-flex items-center rounded-full bg-amber-200 px-2 py-0.5 text-xs font-bold text-amber-800 dark:bg-amber-500/30 dark:text-amber-300">
+              <span className="ml-2 inline-flex items-center rounded-full bg-amber-200 px-2 py-0.5 text-xs font-semibold text-amber-800 dark:bg-amber-500/30 dark:text-amber-300">
                 {t("reminder.more", { count: urgentLoans.length - 1 })}
               </span>
             )}
@@ -130,7 +130,7 @@ function RepaymentReminderBanner({
           aria-label={t("reminder.dismiss")}
           className="rounded p-1 text-amber-600 hover:bg-amber-100 dark:hover:bg-amber-500/20 transition-colors"
         >
-          ✕
+          <X className="h-4 w-4" aria-hidden="true" />
         </button>
       </div>
     </div>
@@ -248,7 +248,7 @@ export function HomeDashboard() {
       aria-labelledby="dashboard-title"
     >
       <header>
-        <h1 id="dashboard-title" className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
+        <h1 id="dashboard-title" className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
           {t("title", { address: shortAddress })}
         </h1>
         <p className="text-zinc-500 dark:text-zinc-400">{t("description")}</p>
@@ -320,7 +320,7 @@ export function HomeDashboard() {
                   <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
                     {stat.label}
                   </p>
-                  <h3 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
+                  <h3 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
                     {stat.value}
                   </h3>
                 </div>
@@ -336,7 +336,7 @@ export function HomeDashboard() {
             <div className="flex items-center justify-between">
               <h2
                 id="activity-heading"
-                className="text-lg font-bold text-zinc-900 dark:text-zinc-50 flex items-center gap-2"
+                className="text-lg font-semibold text-zinc-900 dark:text-zinc-50 flex items-center gap-2"
               >
                 <Clock className="h-5 w-5 text-zinc-400" aria-hidden="true" />
                 {t("activity.title")}
@@ -387,7 +387,7 @@ export function HomeDashboard() {
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="text-sm font-bold text-zinc-900 dark:text-zinc-50">
+                        <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
                           {item.amount}
                         </p>
                         <p className="text-xs text-zinc-500 dark:text-zinc-400">{item.time}</p>
@@ -404,7 +404,7 @@ export function HomeDashboard() {
           <aside aria-labelledby="quick-actions-heading" className="space-y-4">
             <h2
               id="quick-actions-heading"
-              className="text-lg font-bold text-zinc-900 dark:text-zinc-50"
+              className="text-lg font-semibold text-zinc-900 dark:text-zinc-50"
             >
               {t("quickActions.title")}
             </h2>
@@ -429,7 +429,7 @@ export function HomeDashboard() {
                   className={`w-full text-left p-4 rounded-xl ${action.color} text-white hover:opacity-90 transition-opacity shadow-lg shadow-indigo-500/10 focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2`}
                 >
                   <div className="flex items-center justify-between mb-1">
-                    <span className="font-bold">{action.title}</span>
+                    <span className="font-semibold">{action.title}</span>
                     <ExternalLink className="h-4 w-4 opacity-50" aria-hidden="true" />
                   </div>
                   <p className="text-xs opacity-80">{action.desc}</p>
@@ -453,7 +453,7 @@ export function HomeDashboard() {
                 previousScore={previousCreditScore ?? undefined}
               />
               {!currentCreditScore && (
-                <p className="mt-2 text-center text-[10px] text-zinc-400">
+                <p className="mt-2 text-center text-xs text-zinc-500 dark:text-zinc-400">
                   {t("creditScore.empty")}
                 </p>
               )}
@@ -463,14 +463,17 @@ export function HomeDashboard() {
               className="rounded-xl bg-indigo-50 p-6 dark:bg-indigo-950/30 space-y-4"
               aria-labelledby="outreach-heading"
             >
-              <h3 id="outreach-heading" className="font-bold text-indigo-900 dark:text-indigo-300">
+              <h3
+                id="outreach-heading"
+                className="font-semibold text-indigo-900 dark:text-indigo-300"
+              >
                 {t("outreach.title")}
               </h3>
               <p className="text-sm text-indigo-700 dark:text-indigo-400 leading-relaxed">
                 {t("outreach.description")}
               </p>
               <button
-                className="text-sm font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-1 focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-1 rounded"
+                className="text-sm font-semibold text-indigo-600 dark:text-indigo-400 flex items-center gap-1 focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-1 rounded"
                 aria-label={t("outreach.exploreLabel")}
               >
                 {t("outreach.explore")}

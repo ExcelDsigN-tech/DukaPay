@@ -297,7 +297,7 @@ export function Header({ className }: HeaderProps) {
               ) : (
                 groupedResults.map((group) => (
                   <div key={group.category} className="mb-2 last:mb-0">
-                    <p className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">
+                    <p className="px-3 py-2 text-xs font-semibold text-fg-muted">
                       {group.category}
                     </p>
                     {group.items.map((item) => {

@@ -50,20 +50,18 @@ export function StepCollateralNFT({ data, onChange, onNext, onBack }: StepCollat
         </CardHeader>
         <CardContent className="space-y-6">
           {/* NFT Card */}
-          <div className="relative overflow-hidden rounded-xl border border-indigo-200 bg-gradient-to-br from-indigo-50 to-violet-50 p-5 dark:border-indigo-900/50 dark:from-indigo-950/30 dark:to-violet-950/30">
+          <div className="relative overflow-hidden rounded-xl border border-line bg-subtle p-5">
             {/* Badge */}
-            <div className="absolute right-4 top-4 rounded-full bg-indigo-100 px-2.5 py-1 text-xs font-semibold text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300">
+            <div className="absolute right-4 top-4 font-mono text-xs text-fg-muted">
               RemittanceNFT
             </div>
 
             <div className="space-y-4">
               {/* Score display */}
               <div>
-                <p className="text-xs font-medium uppercase tracking-widest text-indigo-500 dark:text-indigo-400">
-                  Credit Score
-                </p>
+                <p className="text-xs font-medium text-fg-muted">Credit Score</p>
                 <div className="mt-1 flex items-baseline gap-2">
-                  <span className="text-5xl font-bold text-zinc-900 dark:text-zinc-50">
+                  <span className="text-5xl font-medium tabular-nums text-fg">
                     {data.creditScore}
                   </span>
                   <span className={`text-base font-semibold ${scoreBandColor}`}>
@@ -76,13 +74,13 @@ export function StepCollateralNFT({ data, onChange, onNext, onBack }: StepCollat
               <div className="space-y-1">
                 <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
                   <div
-                    className="h-full rounded-full bg-gradient-to-r from-red-500 via-yellow-400 to-green-500"
+                    className="h-full rounded-full bg-primary"
                     style={{
                       width: `${Math.min(100, ((data.creditScore - 300) / (850 - 300)) * 100)}%`,
                     }}
                   />
                 </div>
-                <div className="flex justify-between text-[10px] text-zinc-400 dark:text-zinc-500">
+                <div className="flex justify-between font-mono text-xs text-fg-muted">
                   <span>300</span>
                   <span>850</span>
                 </div>
@@ -91,7 +89,7 @@ export function StepCollateralNFT({ data, onChange, onNext, onBack }: StepCollat
               {/* Contract ref */}
               <div className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
                 <span>NFT Contract:</span>
-                <code className="rounded bg-white/60 px-1.5 py-0.5 font-mono text-[10px] dark:bg-zinc-900/60">
+                <code className="rounded bg-surface px-1.5 py-0.5 font-mono text-xs">
                   {nftContractId !== "Not configured"
                     ? `${nftContractId.slice(0, 8)}…${nftContractId.slice(-6)}`
                     : nftContractId}
@@ -159,7 +157,7 @@ export function StepCollateralNFT({ data, onChange, onNext, onBack }: StepCollat
             </span>
           </label>
 
-          <p className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-2">
+          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-2">
             <span className="text-red-600">*</span> Required field
           </p>
 

@@ -89,7 +89,7 @@ export function CreditScoreTrendChart({ data, className }: CreditScoreTrendChart
                       <p className="text-sm font-medium text-gray-900 dark:text-zinc-100">
                         {item.date}
                       </p>
-                      <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
+                      <p className="text-lg font-semibold text-blue-600 dark:text-blue-400">
                         Score: {item.score}
                       </p>
                       {item.event && (

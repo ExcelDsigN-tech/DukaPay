@@ -62,7 +62,7 @@ export function LoanDetailsPageClient() {
   if (!loan) {
     return (
       <section className="rounded-3xl border border-zinc-200 bg-white p-8 text-center dark:border-zinc-800 dark:bg-zinc-950">
-        <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
+        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
           {t("notFound.title")}
         </h1>
         <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
@@ -125,10 +125,8 @@ export function LoanDetailsPageClient() {
       <header className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm shadow-zinc-200/50 dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-none">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-indigo-600">
-              {t("eyebrow")}
-            </p>
-            <h1 className="mt-3 text-3xl font-bold text-zinc-900 dark:text-zinc-50">
+            <p className="text-sm font-semibold tracking-[0.2em] text-indigo-600">{t("eyebrow")}</p>
+            <h1 className="mt-3 text-3xl font-semibold text-zinc-900 dark:text-zinc-50">
               {t("loanNumber", { id: loanId })}
             </h1>
             <p className="mt-2 max-w-2xl text-sm text-zinc-500 dark:text-zinc-400">
@@ -228,7 +226,7 @@ export function LoanDetailsPageClient() {
           </div>
 
           <div className="mt-6">
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+            <h3 className="text-sm font-semibold text-zinc-500 dark:text-zinc-400">
               {t("timeline.title")}
             </h3>
             <div className="mt-3">
@@ -309,7 +307,7 @@ export function LoanDetailsPageClient() {
                 <h2 className="text-sm font-semibold">{t("nextPayment.title")}</h2>
               </div>
               <p
-                className={`mt-2 text-2xl font-bold ${
+                className={`mt-2 text-2xl font-semibold ${
                   daysRemaining <= 3
                     ? "text-red-600 dark:text-red-400"
                     : daysRemaining <= 7

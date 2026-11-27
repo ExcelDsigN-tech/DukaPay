@@ -65,7 +65,7 @@ test.describe("Send Remittance Flow", () => {
     await page.goto("/en/send-remittance");
 
     await expect(
-      page.locator("text=Please connect your Stellar wallet to send remittances"),
+      page.locator("text=Connect your Stellar wallet to send remittances"),
     ).toBeVisible();
   });
 
@@ -128,7 +128,9 @@ test.describe("Send Remittance Flow", () => {
     await review.getByRole("checkbox").check();
     await review.getByRole("button", { name: "Sign Transaction" }).click();
 
-    await expect(page.getByText(/^✓ Remittance sent successfully/)).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText(/^Remittance sent\. Opening your remittances/)).toBeVisible({
+      timeout: 10000,
+    });
 
     await page.waitForURL("**/remittances", { timeout: 5000 });
   });

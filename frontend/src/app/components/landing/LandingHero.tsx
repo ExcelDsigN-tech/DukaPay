@@ -71,7 +71,7 @@ export function LandingHero({ onConnect }: LandingHeroProps) {
             <div className="flex min-w-0 flex-col gap-7">
               <h1
                 id="landing-hero-title"
-                className="m-0 font-display text-[clamp(38px,5.2vw,72px)] font-bold leading-[1.04] tracking-[-0.04em] text-balance text-fg"
+                className="m-0 font-display text-[clamp(38px,5.2vw,72px)] font-semibold leading-[1.04] tracking-[-0.04em] text-balance text-fg"
               >
                 {t("hero.title")}
               </h1>
