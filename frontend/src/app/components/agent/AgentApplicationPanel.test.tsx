@@ -54,6 +54,20 @@ describe("AgentApplicationPanel", () => {
     });
   });
 
+  it("shows only the on-chain status to an agent that is already registered", async () => {
+    mockApiFetch.mockImplementation(async (path: string) => {
+      if (path === "/agents/applications/me") return { success: true, data: null };
+      if (path === "/agents/status") return { success: true, data: { status: "Active" } };
+      return { success: true, data: [] };
+    });
+
+    render(<AgentApplicationPanel />);
+
+    expect(await screen.findByText("Active")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Submit application" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("KYC reference")).not.toBeInTheDocument();
+  });
+
   it("shows the pending agents list to admins", async () => {
     mockRole = "admin";
     mockApiFetch.mockImplementation(async (path: string) => {

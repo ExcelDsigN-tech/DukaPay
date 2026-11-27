@@ -2,13 +2,15 @@
 
 import { useTranslations } from "next-intl";
 import { useLocale } from "next-intl";
+import { RefreshCw } from "lucide-react";
 import { useUserStore } from "../../../stores/useUserStore";
 import { clearAgentDashboardCache, useAgentDashboard } from "../../../hooks/useApi";
-import { formatCurrency } from "../../../utils/formatLocale";
+import { formatCurrency, formatDateTime } from "../../../utils/formatLocale";
 import { AgentVaultActions } from "../../../components/agent/AgentVaultActions";
 import { CashPickupRedeemPanel } from "../../../components/agent/CashPickupRedeemPanel";
 import { AgentApplicationPanel } from "../../../components/agent/AgentApplicationPanel";
 import { useAgentVaultStream } from "../../../hooks/useAgentVaultStream";
+import { Button } from "../../../components/ui/Button";
 
 function formatPercent(value: number): string {
   return `${value.toFixed(2)}%`;
@@ -17,6 +19,28 @@ function formatPercent(value: number): string {
 function shortAddress(value: string | null | undefined) {
   if (!value) return "—";
   return value.length > 16 ? `${value.slice(0, 8)}…${value.slice(-8)}` : value;
+}
+
+// Contract events arrive as "LoanRepaid" or "cash_out"; show them as "Loan repaid".
+function eventLabel(type: string): string {
+  const words = type
+    .replace(/_/g, " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .trim()
+    .toLowerCase();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+const panel = "rounded-2xl border border-line bg-surface";
+
+function Figure({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div>
+      <p className="text-xs text-fg-muted">{label}</p>
+      <p className="mt-1 text-xl font-medium tabular-nums text-fg">{value}</p>
+      {sub && <p className="mt-0.5 text-xs tabular-nums text-fg-muted">{sub}</p>}
+    </div>
+  );
 }
 
 export default function AgentDashboardPage() {
@@ -28,189 +52,195 @@ export default function AgentDashboardPage() {
 
   if (role && (role === "borrower" || role === "lender")) {
     return (
-      <div className="mx-auto max-w-5xl px-4 py-10">
+      <div className="mx-auto max-w-6xl px-4 py-10">
         <AgentApplicationPanel />
       </div>
     );
   }
 
+  const onChanged = async () => {
+    await clearAgentDashboardCache();
+    await refetch();
+  };
+
+  const vault = data?.vault;
+  const floatPct =
+    vault && vault.maxFloat > 0 ? Math.min(100, (vault.float / vault.maxFloat) * 100) : 0;
+
   return (
-    <div className="mx-auto max-w-5xl space-y-6 px-4 py-10">
-      <div>
-        <h1 className="text-2xl font-semibold text-zinc-950 dark:text-zinc-50">{t("title")}</h1>
-        <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">{t("description")}</p>
-      </div>
+    <div className="mx-auto max-w-6xl space-y-6 px-4 py-10">
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="font-display text-2xl font-medium text-fg">{t("title")}</h1>
+          <p className="mt-1 text-sm text-fg-muted">{t("description")}</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="flex items-center gap-2 text-xs text-fg-muted">
+            <span
+              aria-hidden="true"
+              className={`h-2 w-2 rounded-full ${
+                streamStatus === "connected"
+                  ? "bg-ok"
+                  : streamStatus === "polling"
+                    ? "bg-warning"
+                    : "bg-line-strong"
+              }`}
+            />
+            {streamStatus === "connected"
+              ? t("liveConnected")
+              : streamStatus === "polling"
+                ? t("livePolling")
+                : t("liveConnecting")}
+          </span>
+          <Button variant="outline" size="sm" onClick={() => refetch()}>
+            <RefreshCw className="mr-1.5 h-3.5 w-3.5" strokeWidth={1.5} aria-hidden="true" />
+            {t("refresh")}
+          </Button>
+        </div>
+      </header>
 
       <AgentApplicationPanel />
 
       {isLoading ? (
-        <p className="text-sm text-zinc-500">{t("loading")}</p>
+        <p className="text-sm text-fg-muted">{t("loading")}</p>
       ) : isError ? (
-        <p className="text-sm text-red-600">{t("error")}</p>
-      ) : !data ? (
-        <p className="text-sm text-zinc-500">{t("noData")}</p>
+        <p className="text-sm text-danger">{t("error")}</p>
+      ) : !data || !vault ? (
+        <p className="text-sm text-fg-muted">{t("noData")}</p>
       ) : (
         <>
-          <section className="grid gap-4 md:grid-cols-3">
-            <div className="rounded-2xl border border-zinc-200 p-5 dark:border-zinc-800">
-              <p className="text-xs text-zinc-500">{t("floatUtilization")}</p>
-              <p className="mt-2 text-3xl font-semibold text-zinc-950 dark:text-zinc-50">
-                {formatPercent(data.floatUtilization.utilizationPct)}
+          <section className="grid gap-4 lg:grid-cols-3">
+            <div className={`${panel} p-6 lg:col-span-2`}>
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h2 className="text-sm font-medium text-fg">{t("vaultFloat")}</h2>
+                <p className="text-xs tabular-nums text-fg-muted">
+                  {t("vaultMaxFloat")} {formatCurrency(vault.maxFloat, locale)}
+                </p>
+              </div>
+              <p className="mt-2 font-display text-4xl font-medium tabular-nums text-fg">
+                {formatCurrency(vault.float, locale)}
               </p>
-              <p className="mt-1 text-xs text-zinc-500">
-                {formatCurrency(data.floatUtilization.allocated, locale)} /{" "}
-                {formatCurrency(data.floatUtilization.totalFloat, locale)}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-zinc-200 p-5 dark:border-zinc-800">
-              <p className="text-xs text-zinc-500">{t("totalEarnings")}</p>
-              <p className="mt-2 text-3xl font-semibold text-zinc-950 dark:text-zinc-50">
-                {formatCurrency(data.earnings.total, locale)}
-              </p>
-              <div className="mt-2 flex gap-4 text-xs text-zinc-500">
+              <div
+                role="meter"
+                aria-label={t("vaultFloat")}
+                aria-valuemin={0}
+                aria-valuemax={vault.maxFloat}
+                aria-valuenow={vault.float}
+                className="mt-5 h-3 overflow-hidden rounded-full bg-subtle"
+              >
+                <div className="h-full rounded-full bg-primary" style={{ width: `${floatPct}%` }} />
+              </div>
+              <div className="mt-2 flex justify-between text-xs tabular-nums text-fg-muted">
+                <span>{formatPercent(floatPct)}</span>
                 <span>
-                  {t("daily")}: {formatCurrency(data.earnings.daily, locale)}
-                </span>
-                <span>
-                  {t("weekly")}: {formatCurrency(data.earnings.weekly, locale)}
-                </span>
-                <span>
-                  {t("monthly")}: {formatCurrency(data.earnings.monthly, locale)}
+                  {t("vaultHeadroom")} {formatCurrency(vault.headroom, locale)}
                 </span>
               </div>
+              <div className="mt-6 grid grid-cols-2 gap-4 border-t border-line pt-5">
+                <Figure
+                  label={t("vaultCollateral")}
+                  value={formatCurrency(vault.collateral, locale)}
+                />
+                <Figure
+                  label={t("collateralRatio")}
+                  value={formatPercent(data.collateralRatio.ratio * 100)}
+                  sub={`${formatCurrency(data.collateralRatio.totalCollateral, locale)} / ${formatCurrency(data.collateralRatio.totalDebt, locale)}`}
+                />
+              </div>
             </div>
-            <div className="rounded-2xl border border-zinc-200 p-5 dark:border-zinc-800">
-              <p className="text-xs text-zinc-500">{t("collateralRatio")}</p>
-              <p className="mt-2 text-3xl font-semibold text-zinc-950 dark:text-zinc-50">
-                {formatPercent(data.collateralRatio.ratio * 100)}
-              </p>
-              <p className="mt-1 text-xs text-zinc-500">
-                {formatCurrency(data.collateralRatio.totalCollateral, locale)} /{" "}
-                {formatCurrency(data.collateralRatio.totalDebt, locale)}
-              </p>
+
+            <div className={`${panel} space-y-5 p-6`}>
+              <Figure
+                label={t("totalEarnings")}
+                value={formatCurrency(data.earnings.total, locale)}
+              />
+              <dl className="space-y-1.5 border-t border-line pt-4 text-sm">
+                {(
+                  [
+                    ["daily", data.earnings.daily],
+                    ["weekly", data.earnings.weekly],
+                    ["monthly", data.earnings.monthly],
+                  ] as const
+                ).map(([key, amount]) => (
+                  <div key={key} className="flex justify-between">
+                    <dt className="text-fg-muted">{t(key)}</dt>
+                    <dd className="tabular-nums text-fg">{formatCurrency(amount, locale)}</dd>
+                  </div>
+                ))}
+              </dl>
+              <Figure
+                label={t("floatUtilization")}
+                value={formatPercent(data.floatUtilization.utilizationPct)}
+                sub={`${formatCurrency(data.floatUtilization.allocated, locale)} / ${formatCurrency(data.floatUtilization.totalFloat, locale)}`}
+              />
             </div>
           </section>
 
-          <section className="grid gap-4 md:grid-cols-4">
-            <div className="rounded-2xl border border-zinc-200 p-5 dark:border-zinc-800">
-              <p className="text-xs text-zinc-500">{t("vaultCollateral")}</p>
-              <p className="mt-2 text-xl font-semibold text-zinc-950 dark:text-zinc-50">
-                {formatCurrency(data.vault.collateral, locale)}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-zinc-200 p-5 dark:border-zinc-800">
-              <p className="text-xs text-zinc-500">{t("vaultFloat")}</p>
-              <p className="mt-2 text-xl font-semibold text-zinc-950 dark:text-zinc-50">
-                {formatCurrency(data.vault.float, locale)}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-zinc-200 p-5 dark:border-zinc-800">
-              <p className="text-xs text-zinc-500">{t("vaultMaxFloat")}</p>
-              <p className="mt-2 text-xl font-semibold text-zinc-950 dark:text-zinc-50">
-                {formatCurrency(data.vault.maxFloat, locale)}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-zinc-200 p-5 dark:border-zinc-800">
-              <p className="text-xs text-zinc-500">{t("vaultHeadroom")}</p>
-              <p className="mt-2 text-xl font-semibold text-zinc-950 dark:text-zinc-50">
-                {formatCurrency(data.vault.headroom, locale)}
-              </p>
-            </div>
-          </section>
-
-          <section className="grid gap-4 md:grid-cols-3">
-            <div className="rounded-2xl border border-zinc-200 p-5 dark:border-zinc-800">
-              <p className="text-xs text-zinc-500">{t("totalLoans")}</p>
-              <p className="mt-2 text-2xl font-semibold text-zinc-950 dark:text-zinc-50">
-                {data.borrowerPortfolio.totalLoans}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-zinc-200 p-5 dark:border-zinc-800">
-              <p className="text-xs text-zinc-500">{t("activeLoans")}</p>
-              <p className="mt-2 text-2xl font-semibold text-green-600">
-                {data.borrowerPortfolio.activeLoans}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-zinc-200 p-5 dark:border-zinc-800">
-              <p className="text-xs text-zinc-500">{t("defaultedLoans")}</p>
-              <p className="mt-2 text-2xl font-semibold text-red-600">
+          <section className={`${panel} grid grid-cols-2 gap-6 p-6 sm:grid-cols-4`}>
+            <Figure label={t("totalLoans")} value={String(data.borrowerPortfolio.totalLoans)} />
+            <Figure label={t("activeLoans")} value={String(data.borrowerPortfolio.activeLoans)} />
+            <div>
+              <p className="text-xs text-fg-muted">{t("defaultedLoans")}</p>
+              <p
+                className={`mt-1 text-xl font-medium tabular-nums ${
+                  data.borrowerPortfolio.defaultedLoans > 0 ? "text-danger" : "text-fg"
+                }`}
+              >
                 {data.borrowerPortfolio.defaultedLoans}
               </p>
             </div>
+            <Figure
+              label={t("pendingSettlements")}
+              value={formatCurrency(data.pendingSettlements.totalValue, locale)}
+              sub={t("settlementCount", { count: data.pendingSettlements.count })}
+            />
           </section>
 
-          <section className="rounded-2xl border border-zinc-200 p-5 dark:border-zinc-800">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-zinc-950 dark:text-zinc-50">
-                {t("pendingSettlements")}
-              </h2>
-              <span className="text-sm text-zinc-500">
-                {data.pendingSettlements.totalValue} {t("totalValue")}
-              </span>
-            </div>
-            <p className="text-sm text-zinc-500">
-              {data.pendingSettlements.count} {t("settlementCount")}
-            </p>
-          </section>
-
-          <section>
-            <h2 className="text-lg font-semibold text-zinc-950 dark:text-zinc-50 mb-3">
+          <section className={panel}>
+            <h2 className="px-6 pt-5 pb-3 text-sm font-medium text-fg">
               {t("recentTransactions")}
             </h2>
             {data.recentTransactions.length === 0 ? (
-              <p className="text-sm text-zinc-500">{t("noTransactions")}</p>
+              <p className="px-6 pb-5 text-sm text-fg-muted">{t("noTransactions")}</p>
             ) : (
-              <div className="space-y-2">
-                {data.recentTransactions.map((tx, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center justify-between rounded-lg border border-zinc-200 px-4 py-2 dark:border-zinc-800"
-                  >
-                    <div>
-                      <span className="text-xs font-medium text-zinc-500">{tx.type}</span>
-                      {tx.loanId && (
-                        <span className="ml-2 text-xs text-zinc-400">
-                          {shortAddress(tx.loanId)}
-                        </span>
-                      )}
-                    </div>
-                    <span className="text-sm font-medium text-zinc-950 dark:text-zinc-50">
-                      {formatCurrency(tx.amount, locale)}
-                    </span>
-                  </div>
-                ))}
-              </div>
+              <table className="w-full text-sm">
+                <thead className="border-y border-line text-left text-xs text-fg-muted">
+                  <tr>
+                    <th className="px-6 py-2 font-medium">{t("txType")}</th>
+                    <th className="px-6 py-2 font-medium">{t("txLoan")}</th>
+                    <th className="px-6 py-2 font-medium">{t("txTime")}</th>
+                    <th className="px-6 py-2 text-right font-medium">{t("txAmount")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.recentTransactions.map((tx, i) => (
+                    <tr key={i} className="border-b border-line last:border-0">
+                      <td className="px-6 py-3 text-fg">{eventLabel(tx.type)}</td>
+                      <td className="px-6 py-3 font-mono text-xs text-fg-muted">
+                        {shortAddress(tx.loanId)}
+                      </td>
+                      <td className="px-6 py-3 text-fg-muted">
+                        {formatDateTime(tx.timestamp, locale, {
+                          month: "short",
+                          day: "numeric",
+                          hour: "numeric",
+                          minute: "2-digit",
+                        })}
+                      </td>
+                      <td className="px-6 py-3 text-right tabular-nums text-fg">
+                        {formatCurrency(tx.amount, locale)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             )}
           </section>
 
-          <section className="flex gap-3">
-            <button
-              onClick={() => refetch()}
-              className="rounded border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300"
-            >
-              {t("refresh")}
-            </button>
-            <span className="text-xs text-zinc-400">
-              {t("autoRefresh")}:{" "}
-              {streamStatus === "connected"
-                ? t("liveConnected")
-                : streamStatus === "polling"
-                  ? t("livePolling")
-                  : t("liveConnecting")}
-            </span>
-          </section>
-          <AgentVaultActions
-            onSubmitted={async () => {
-              await clearAgentDashboardCache();
-              await refetch();
-            }}
-          />
-          <CashPickupRedeemPanel
-            onRedeemed={async () => {
-              await clearAgentDashboardCache();
-              await refetch();
-            }}
-          />
+          <div className="grid gap-4 lg:grid-cols-2">
+            <AgentVaultActions onSubmitted={onChanged} />
+            <CashPickupRedeemPanel onRedeemed={onChanged} />
+          </div>
         </>
       )}
     </div>
