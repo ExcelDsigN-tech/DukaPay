@@ -26,9 +26,19 @@ function getLoanDueDate(loan: BorrowerLoan): Date {
   return new Date(loan.nextPaymentDeadline);
 }
 
-const emptySubscribe = () => () => {};
+// useSyncExternalStore needs a snapshot that stays the same until the store
+// changes. Date.now() as getSnapshot moves between React's back-to-back reads
+// and loops into "Maximum update depth exceeded", so read the clock once per
+// subscription and return that value.
+let mountedAt = 0;
+const subscribeMountTime = () => {
+  mountedAt = Date.now();
+  return () => {};
+};
+const getMountTime = () => mountedAt;
+const getServerMountTime = () => 0;
 
-function useRepaymentReminder(loans: BorrowerLoan[] | undefined) {
+export function useRepaymentReminder(loans: BorrowerLoan[] | undefined) {
   const [dismissed, setDismissed] = useState(() => {
     if (typeof window !== "undefined") {
       return sessionStorage.getItem(SESSION_BANNER_KEY) === "true";
@@ -36,11 +46,7 @@ function useRepaymentReminder(loans: BorrowerLoan[] | undefined) {
     return false;
   });
 
-  const now = React.useSyncExternalStore(
-    emptySubscribe,
-    () => Date.now(),
-    () => 0,
-  );
+  const now = React.useSyncExternalStore(subscribeMountTime, getMountTime, getServerMountTime);
 
   const urgentLoans = useMemo(() => {
     if (!loans || !now) return [];
