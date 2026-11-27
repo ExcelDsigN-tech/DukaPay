@@ -100,7 +100,7 @@ test.describe("Lender Withdraw Flow", () => {
     await page.getByRole("textbox", { name: "Withdraw Amount" }).fill("500");
     await page.getByRole("button", { name: /^Withdraw$/ }).click();
 
-    await expect(page.getByText("Withdrawal successful!")).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText("Withdrawal confirmed")).toBeVisible({ timeout: 15000 });
     expect(buildBodies).toEqual([
       { amount: 500, depositorPublicKey: MOCK_LENDER_ADDRESS, token: POOL_TOKEN },
     ]);

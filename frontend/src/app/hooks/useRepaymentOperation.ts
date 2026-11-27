@@ -82,7 +82,7 @@ export function useDepositOperation(options?: {
 
         // Mark complete
         const txHash = submitResult.txHash;
-        transaction.complete(txHash, "Deposit successful!");
+        transaction.complete(txHash, "Deposit confirmed");
 
         queryClient.invalidateQueries({
           queryKey: queryKeys.pool.stats(),
@@ -175,7 +175,7 @@ export function useWithdrawalOperation(options?: {
 
         // Mark complete
         const txHash = submitResult.txHash;
-        transaction.complete(txHash, "Withdrawal successful!");
+        transaction.complete(txHash, "Withdrawal confirmed");
 
         queryClient.invalidateQueries({
           queryKey: queryKeys.pool.stats(),

@@ -2,17 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import {
-  Activity,
-  ArrowDownLeft,
-  ArrowUpRight,
-  CircleDollarSign,
-  HandCoins,
-  Percent,
-  PiggyBank,
-  Wifi,
-  WifiOff,
-} from "lucide-react";
+import { Activity, ChevronRight, PiggyBank } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { ErrorBoundary } from "../../components/global_ui/ErrorBoundary";
 import { Skeleton } from "../../components/ui/Skeleton";
@@ -32,8 +22,9 @@ import { selectWalletAddress, useWalletStore } from "../../stores/useWalletStore
 import { useSSE } from "../../hooks/useSSE";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { Tooltip } from "../../components/ui/Tooltip";
+import { Input } from "../../components/ui/Input";
+import { Button } from "../../components/ui/Button";
 import {
-  buildAmountHelperText,
   getPrecisionError,
   parseAmount,
   sanitizeAmountInput,
@@ -50,8 +41,8 @@ function formatPercent(value: number) {
 export function LendPageClient() {
   const locale = useLocale();
   const t = useTranslations("Lend");
-  const [depositAmount, setDepositAmount] = useState("100");
-  const [withdrawAmount, setWithdrawAmount] = useState("50");
+  const [depositAmount, setDepositAmount] = useState("");
+  const [withdrawAmount, setWithdrawAmount] = useState("");
   const [cooldownRemainingSeconds, setCooldownRemainingSeconds] = useState(0);
   const address = useWalletStore(selectWalletAddress);
 
@@ -74,8 +65,10 @@ export function LendPageClient() {
   const withdrawPrecisionError = getPrecisionError(withdrawAmount, "USDC");
   const depositDecimals = getAssetDecimals("USDC");
   const withdrawDecimals = getAssetDecimals("USDC");
-  const depositHelper = buildAmountHelperText(depositAmount, "USDC", depositDecimals);
-  const withdrawHelper = buildAmountHelperText(withdrawAmount, "USDC", withdrawDecimals);
+  const depositValue = parseAmount(depositAmount);
+  const withdrawValue = parseAmount(withdrawAmount);
+  const depositReady = !Number.isNaN(depositValue) && depositValue > 0;
+  const withdrawReady = !Number.isNaN(withdrawValue) && withdrawValue > 0;
 
   const handleDeposit = async () => {
     const amount = parseAmount(depositAmount);
@@ -154,13 +147,9 @@ export function LendPageClient() {
 
   if (!address) {
     return (
-      <section className="rounded-3xl border border-zinc-200 bg-white p-8 dark:border-zinc-800 dark:bg-zinc-950">
-        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
-          {t("disconnected.title")}
-        </h1>
-        <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
-          {t("disconnected.description")}
-        </p>
+      <section className="rounded-2xl border border-line bg-surface p-8">
+        <h1 className="font-display text-2xl font-medium text-fg">{t("disconnected.title")}</h1>
+        <p className="mt-2 text-sm text-fg-muted">{t("disconnected.description")}</p>
       </section>
     );
   }
@@ -169,189 +158,114 @@ export function LendPageClient() {
   // affects the loans section, so deposit and withdraw stay usable.
   if (poolError || depositorError || historyError) {
     return (
-      <section className="rounded-3xl border border-red-200 bg-red-50 p-6 text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">
+      <section className="rounded-2xl border border-line bg-surface p-6 text-sm text-danger">
         {t("loadError")}
       </section>
     );
   }
 
   const isLoading = poolLoading || depositorLoading || historyLoading;
+  const panel = "rounded-2xl border border-line bg-surface";
+  const activeLoans = (loans ?? []).filter((loan) => loan.status === "active");
+
+  const figure = (label: string, value: string, tooltip?: string) => (
+    <div key={label}>
+      <p className="flex items-center gap-1 text-xs text-fg-muted">
+        {label}
+        {tooltip ? <Tooltip content={tooltip} label={t("stats.info", { label })} /> : null}
+      </p>
+      {isLoading ? (
+        <Skeleton className="mt-2 h-7 w-24" />
+      ) : (
+        <p className="mt-1 text-2xl font-medium tabular-nums text-fg">{value}</p>
+      )}
+    </div>
+  );
 
   return (
     <div className="space-y-6">
-      <header className="flex items-start justify-between gap-4">
+      <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-sm font-semibold tracking-[0.2em] text-indigo-600">{t("eyebrow")}</p>
-          <h1 className="mt-2 text-3xl font-semibold text-zinc-900 dark:text-zinc-50">
-            {t("title")}
-          </h1>
-          <p className="mt-2 max-w-2xl text-sm text-zinc-500 dark:text-zinc-400">
-            {t("description")}
-          </p>
+          <h1 className="font-display text-2xl font-medium text-fg">{t("title")}</h1>
+          <p className="mt-1 max-w-2xl text-sm text-fg-muted">{t("description")}</p>
         </div>
-        {address && (
-          <div
-            className={`mt-1 flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium ${
-              sseStatus === "connected"
-                ? "bg-green-50 text-green-700 dark:bg-green-500/10 dark:text-green-400"
-                : sseStatus === "connecting"
-                  ? "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"
-                  : sseStatus === "polling"
-                    ? "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300"
-                    : "bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400"
-            }`}
-            title={
-              sseStatus === "connected"
-                ? t("live.connectedTitle")
-                : sseStatus === "connecting"
-                  ? t("live.connectingTitle")
-                  : sseStatus === "polling"
-                    ? t("live.pollingTitle")
-                    : t("live.offlineTitle")
-            }
-          >
-            {sseStatus === "connected" ? (
-              <Wifi className="h-3.5 w-3.5" />
-            ) : (
-              <WifiOff className="h-3.5 w-3.5" />
-            )}
-            {sseStatus === "connected"
-              ? t("live.connected")
+        <span
+          className="flex items-center gap-2 text-xs text-fg-muted"
+          title={
+            sseStatus === "connected"
+              ? t("live.connectedTitle")
               : sseStatus === "connecting"
-                ? t("live.connecting")
+                ? t("live.connectingTitle")
                 : sseStatus === "polling"
-                  ? t("live.polling")
-                  : t("live.offline")}
-          </div>
-        )}
+                  ? t("live.pollingTitle")
+                  : t("live.offlineTitle")
+          }
+        >
+          <span
+            aria-hidden="true"
+            className={`h-2 w-2 rounded-full ${
+              sseStatus === "connected"
+                ? "bg-ok"
+                : sseStatus === "polling"
+                  ? "bg-warning"
+                  : sseStatus === "connecting"
+                    ? "bg-line-strong"
+                    : "bg-danger"
+            }`}
+          />
+          {sseStatus === "connected"
+            ? t("live.connected")
+            : sseStatus === "connecting"
+              ? t("live.connecting")
+              : sseStatus === "polling"
+                ? t("live.polling")
+                : t("live.offline")}
+        </span>
       </header>
 
       <ErrorBoundary scope="lender overview" variant="section">
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {[
-            {
-              label: t("stats.poolSize"),
-              value: formatCurrency(poolStats?.totalDeposits ?? 0, locale),
-              icon: CircleDollarSign,
-            },
-            {
-              label: t("stats.utilization"),
-              value: formatPercent(poolStats?.utilizationRate ?? 0),
-              icon: Percent,
-              tooltip: t("stats.utilizationTooltip"),
-            },
-            {
-              label: t("stats.apy"),
-              value: formatPercent(poolStats?.apy ?? 0),
-              icon: Activity,
-              tooltip: t("stats.apyTooltip"),
-            },
-            {
-              label: t("stats.activeLoans"),
-              value: String(poolStats?.activeLoansCount ?? 0),
-              icon: HandCoins,
-            },
-          ].map((item) => (
-            <article
-              key={item.label}
-              className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm shadow-zinc-200/50 dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-none"
-            >
-              <div className="flex items-center gap-3">
-                <div className="rounded-2xl bg-indigo-50 p-3 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-300">
-                  <item.icon className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="flex items-center gap-1 text-sm text-zinc-500 dark:text-zinc-400">
-                    {item.label}
-                    {"tooltip" in item && item.tooltip ? (
-                      <Tooltip
-                        content={item.tooltip}
-                        label={t("stats.info", { label: item.label })}
-                      />
-                    ) : null}
-                  </p>
-                  {isLoading ? (
-                    <Skeleton className="mt-1 h-7 w-24" />
-                  ) : (
-                    <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">
-                      {item.value}
-                    </p>
-                  )}
-                </div>
-              </div>
-            </article>
-          ))}
+        <section className={`${panel} grid grid-cols-2 gap-6 p-6 lg:grid-cols-4`}>
+          {figure(t("stats.poolSize"), formatCurrency(poolStats?.totalDeposits ?? 0, locale))}
+          {figure(
+            t("stats.utilization"),
+            formatPercent(poolStats?.utilizationRate ?? 0),
+            t("stats.utilizationTooltip"),
+          )}
+          {figure(t("stats.apy"), formatPercent(poolStats?.apy ?? 0), t("stats.apyTooltip"))}
+          {figure(t("stats.activeLoans"), String(poolStats?.activeLoansCount ?? 0))}
         </section>
       </ErrorBoundary>
 
       <ErrorBoundary scope="depositor summary" variant="section">
-        <section className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
-          <article className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm shadow-zinc-200/50 dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-none">
-            <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-              {t("deposits.title")}
-            </h2>
-            <div className="mt-4 grid gap-4 sm:grid-cols-3">
-              <div className="rounded-2xl bg-zinc-50 p-4 dark:bg-zinc-900">
-                <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                  {t("deposits.deposited")}
-                </p>
-                {isLoading ? (
-                  <Skeleton className="mt-2 h-7 w-24" />
-                ) : (
-                  <p className="mt-2 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
-                    {formatCurrency(depositor?.depositAmount ?? 0, locale)}
-                  </p>
-                )}
-              </div>
-              <div className="rounded-2xl bg-zinc-50 p-4 dark:bg-zinc-900">
-                <p className="text-sm text-zinc-500 dark:text-zinc-400">{t("deposits.share")}</p>
-                {isLoading ? (
-                  <Skeleton className="mt-2 h-7 w-24" />
-                ) : (
-                  <p className="mt-2 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
-                    {formatPercent(depositor?.sharePercent ?? 0)}
-                  </p>
-                )}
-              </div>
-              <div className="rounded-2xl bg-zinc-50 p-4 dark:bg-zinc-900">
-                <p className="text-sm text-zinc-500 dark:text-zinc-400">{t("deposits.earnings")}</p>
-                {isLoading ? (
-                  <Skeleton className="mt-2 h-7 w-24" />
-                ) : (
-                  <p className="mt-2 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
-                    {formatCurrency(depositor?.estimatedYield ?? 0, locale)}
-                  </p>
-                )}
-              </div>
-            </div>
+        <section className="grid items-start gap-6 lg:grid-cols-3">
+          <article className={`${panel} space-y-5 p-6`}>
+            <h2 className="text-sm font-medium text-fg">{t("deposits.title")}</h2>
+            {figure(t("deposits.deposited"), formatCurrency(depositor?.depositAmount ?? 0, locale))}
+            {figure(t("deposits.share"), formatPercent(depositor?.sharePercent ?? 0))}
+            {figure(t("deposits.earnings"), formatCurrency(depositor?.estimatedYield ?? 0, locale))}
           </article>
+
           {isLoading ? (
-            <DepositWithdrawSkeleton />
+            <div className="lg:col-span-2">
+              <DepositWithdrawSkeleton />
+            </div>
           ) : (
-            <article className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm shadow-zinc-200/50 dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-none">
-              <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-                {t("form.title")}
-              </h2>
-              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <article className={`${panel} p-6 lg:col-span-2`}>
+              <h2 className="text-sm font-medium text-fg">{t("form.title")}</h2>
+              <div className="mt-5 grid gap-8 sm:grid-cols-2">
                 <form
-                  className="space-y-3 rounded-2xl border border-zinc-200 p-4 dark:border-zinc-800"
+                  className="space-y-4"
                   onSubmit={(e) => {
                     e.preventDefault();
                     handleDeposit();
                   }}
                 >
-                  <label
-                    htmlFor="deposit-amount"
-                    className="text-sm font-medium text-zinc-700 dark:text-zinc-300"
-                  >
-                    {t("form.depositAmount")}
-                  </label>
-                  <input
+                  <Input
                     id="deposit-amount"
+                    label={t("form.depositAmount")}
                     type="text"
                     inputMode="decimal"
-                    min="0"
-                    step={Math.pow(10, -depositDecimals)}
+                    placeholder="0.00"
                     value={depositAmount}
                     onChange={(event) => setDepositAmount(sanitizeAmountInput(event.target.value))}
                     onBlur={(event) => {
@@ -360,52 +274,33 @@ export function LendPageClient() {
                         setDepositAmount(formatted);
                       }
                     }}
-                    aria-invalid={depositPrecisionError ? true : undefined}
-                    className={`w-full rounded-xl border bg-zinc-50 px-3 py-2 text-sm outline-none focus:border-indigo-500 dark:border-zinc-800 dark:bg-zinc-900 ${
-                      depositPrecisionError ? "border-red-500" : "border-zinc-200"
-                    }`}
+                    error={depositPrecisionError ?? undefined}
+                    helperText={t("form.decimalsHelper", { decimals: depositDecimals })}
+                    className="tabular-nums"
                   />
-                  <p
-                    className={`text-xs ${
-                      depositPrecisionError
-                        ? "text-red-600 dark:text-red-400"
-                        : "text-zinc-500 dark:text-zinc-400"
-                    }`}
-                  >
-                    {depositPrecisionError ??
-                      depositHelper ??
-                      t("form.decimalsHelper", { decimals: depositDecimals })}
-                  </p>
-                  <button
+                  <Button
                     type="submit"
-                    disabled={depositOp.isLoading || !!depositPrecisionError}
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="w-full"
+                    disabled={depositOp.isLoading || !!depositPrecisionError || !depositReady}
                   >
-                    <ArrowUpRight className="h-4 w-4" />
                     {depositOp.isLoading ? t("form.depositing") : t("form.deposit")}
-                  </button>
+                  </Button>
                   <OperationProgress transaction={depositOp.transaction} type="deposit" />
                 </form>
 
                 <form
-                  className="space-y-3 rounded-2xl border border-zinc-200 p-4 dark:border-zinc-800"
+                  className="space-y-4"
                   onSubmit={(e) => {
                     e.preventDefault();
                     handleWithdraw();
                   }}
                 >
-                  <label
-                    htmlFor="withdraw-amount"
-                    className="text-sm font-medium text-zinc-700 dark:text-zinc-300"
-                  >
-                    {t("form.withdrawAmount")}
-                  </label>
-                  <input
+                  <Input
                     id="withdraw-amount"
+                    label={t("form.withdrawAmount")}
                     type="text"
                     inputMode="decimal"
-                    min="0"
-                    step={Math.pow(10, -withdrawDecimals)}
+                    placeholder="0.00"
                     value={withdrawAmount}
                     onChange={(event) => setWithdrawAmount(sanitizeAmountInput(event.target.value))}
                     onBlur={(event) => {
@@ -414,41 +309,32 @@ export function LendPageClient() {
                         setWithdrawAmount(formatted);
                       }
                     }}
-                    aria-invalid={withdrawPrecisionError ? true : undefined}
-                    className={`w-full rounded-xl border bg-zinc-50 px-3 py-2 text-sm outline-none focus:border-indigo-500 dark:border-zinc-800 dark:bg-zinc-900 ${
-                      withdrawPrecisionError ? "border-red-500" : "border-zinc-200"
-                    }`}
+                    error={withdrawPrecisionError ?? undefined}
+                    helperText={t("form.decimalsHelper", { decimals: withdrawDecimals })}
+                    className="tabular-nums"
                   />
-                  <p
-                    className={`text-xs ${
-                      withdrawPrecisionError
-                        ? "text-red-600 dark:text-red-400"
-                        : "text-zinc-500 dark:text-zinc-400"
-                    }`}
-                  >
-                    {withdrawPrecisionError ??
-                      withdrawHelper ??
-                      t("form.decimalsHelper", { decimals: withdrawDecimals })}
-                  </p>
-                  <button
+                  <Button
                     type="submit"
+                    variant="outline"
+                    className="w-full"
                     disabled={
-                      withdrawalOp.isLoading || !!withdrawPrecisionError || isWithdrawCooldownActive
+                      withdrawalOp.isLoading ||
+                      !!withdrawPrecisionError ||
+                      isWithdrawCooldownActive ||
+                      !withdrawReady
                     }
                     aria-describedby={
                       isWithdrawCooldownActive ? "withdraw-cooldown-help" : undefined
                     }
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-zinc-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
                   >
-                    <ArrowDownLeft className="h-4 w-4" />
                     {withdrawalOp.isLoading ? t("form.withdrawing") : t("form.withdraw")}
-                  </button>
+                  </Button>
                   {isWithdrawCooldownActive ? (
                     <p
                       id="withdraw-cooldown-help"
                       role="status"
                       aria-live="polite"
-                      className="text-xs text-amber-700 dark:text-amber-300"
+                      className="text-xs text-warning"
                     >
                       {t("cooldownActive", { minutes: cooldownMinutes })}
                     </p>
@@ -462,92 +348,85 @@ export function LendPageClient() {
       </ErrorBoundary>
 
       <ErrorBoundary scope="loan portfolio" variant="section">
-        <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm shadow-zinc-200/50 dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-none">
-          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-            {t("portfolio.title")}
-          </h2>
-          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            {t("portfolio.description")}
-          </p>
-
-          <div className="mt-4 space-y-3">
-            {(isLoading || loansLoading) && (
-              <>
-                <Skeleton className="h-[76px] w-full rounded-2xl" />
-                <Skeleton className="h-[76px] w-full rounded-2xl" />
-                <Skeleton className="h-[76px] w-full rounded-2xl" />
-              </>
-            )}
-            {!isLoading && !loansLoading && loansError && (
-              <p className="rounded-2xl border border-zinc-200 p-4 text-sm text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
-                {t("portfolio.unavailable")}
-              </p>
-            )}
-            {!isLoading &&
-              !loansLoading &&
-              !loansError &&
-              (loans ?? [])
-                .filter((loan) => loan.status === "active")
-                .slice(0, 8)
-                .map((loan) => (
-                  <article
-                    key={loan.id}
-                    className="flex flex-col gap-3 rounded-2xl border border-zinc-200 p-4 dark:border-zinc-800 md:flex-row md:items-center md:justify-between"
-                  >
-                    <div>
-                      <p className="text-base font-semibold text-zinc-900 dark:text-zinc-50">
-                        {t("portfolio.loanNumber", { id: loan.id })}
-                      </p>
-                      <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                        {t("portfolio.borrower", { id: loan.borrowerId })}
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-3 text-sm text-zinc-600 dark:text-zinc-400">
-                      <span>{formatCurrency(loan.amount, locale)}</span>
-                      <span>{t("portfolio.apr", { rate: loan.interestRate.toFixed(2) })}</span>
-                      <span>{t("portfolio.termDays", { days: loan.termDays })}</span>
-                      <LoanStatusBadge status={loan.status} />
-                    </div>
-                    <Link
-                      href={`/${locale}/loans/${loan.id}`}
-                      className="inline-flex items-center gap-2 rounded-full border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-900"
-                    >
-                      {t("portfolio.view")}
-                    </Link>
-                  </article>
-                ))}
-
-            {!isLoading &&
-              !loansLoading &&
-              !loansError &&
-              (loans ?? []).filter((loan) => loan.status === "active").length === 0 && (
-                <EmptyState
-                  icon={PiggyBank}
-                  title={t("portfolio.emptyTitle")}
-                  description={t("portfolio.emptyDescription")}
-                />
-              )}
+        <section className={panel}>
+          <div className="px-6 pt-5 pb-3">
+            <h2 className="text-sm font-medium text-fg">{t("portfolio.title")}</h2>
+            <p className="mt-1 text-sm text-fg-muted">{t("portfolio.description")}</p>
           </div>
+
+          {isLoading || loansLoading ? (
+            <div className="space-y-3 px-6 pb-5">
+              <Skeleton className="h-12 w-full rounded-lg" />
+              <Skeleton className="h-12 w-full rounded-lg" />
+              <Skeleton className="h-12 w-full rounded-lg" />
+            </div>
+          ) : loansError ? (
+            <p className="border-t border-line px-6 py-4 text-sm text-fg-muted">
+              {t("portfolio.unavailable")}
+            </p>
+          ) : activeLoans.length === 0 ? (
+            <EmptyState
+              icon={PiggyBank}
+              title={t("portfolio.emptyTitle")}
+              description={t("portfolio.emptyDescription")}
+            />
+          ) : (
+            <div className="divide-y divide-line border-t border-line">
+              {activeLoans.slice(0, 8).map((loan) => (
+                <article key={loan.id}>
+                  <Link
+                    href={`/${locale}/loans/${loan.id}`}
+                    aria-label={`${t("portfolio.view")} ${t("portfolio.loanNumber", { id: loan.id })}`}
+                    className="grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-1 px-6 py-4 transition-colors hover:bg-subtle focus-visible:bg-subtle sm:grid-cols-[minmax(0,1fr)_8rem_7rem_6rem_6rem_1rem]"
+                  >
+                    <span className="text-sm font-medium text-fg">
+                      {t("portfolio.loanNumber", { id: loan.id })}
+                      <span className="ml-2 text-xs font-normal text-fg-muted">
+                        {t("portfolio.borrower", { id: loan.borrowerId })}
+                      </span>
+                    </span>
+                    <span className="text-sm tabular-nums text-fg sm:text-right">
+                      {formatCurrency(loan.amount, locale)}
+                    </span>
+                    <span className="text-xs tabular-nums text-fg-muted sm:text-right">
+                      {t("portfolio.apr", { rate: loan.interestRate.toFixed(2) })}
+                    </span>
+                    <span className="text-xs tabular-nums text-fg-muted sm:text-right">
+                      {t("portfolio.termDays", { days: loan.termDays })}
+                    </span>
+                    <span className="sm:justify-self-end">
+                      <LoanStatusBadge status={loan.status} />
+                    </span>
+                    <ChevronRight
+                      className="hidden h-4 w-4 text-fg-muted sm:block"
+                      strokeWidth={1.5}
+                      aria-hidden="true"
+                    />
+                  </Link>
+                </article>
+              ))}
+            </div>
+          )}
         </section>
       </ErrorBoundary>
 
       <ErrorBoundary scope="yield history" variant="section">
-        <section className="rounded-3xl border border-zinc-200 bg-white p-4 shadow-sm shadow-zinc-200/50 dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-none">
-          {isLoading ? (
-            <div className="space-y-4 p-2">
-              <Skeleton className="h-5 w-40" />
-              <Skeleton className="h-[300px] w-full rounded-xl" />
-            </div>
-          ) : chartData.length === 0 ? (
+        {isLoading ? (
+          <section className={`${panel} space-y-4 p-6`}>
+            <Skeleton className="h-5 w-40" />
+            <Skeleton className="h-[300px] w-full rounded-xl" />
+          </section>
+        ) : chartData.length === 0 ? (
+          <section className={panel}>
             <EmptyState
               icon={Activity}
               title={t("yield.emptyTitle")}
               description={t("yield.emptyDescription")}
             />
-          ) : (
-            <YieldEarningsChart data={chartData} />
-          )}
-        </section>
+          </section>
+        ) : (
+          <YieldEarningsChart data={chartData} />
+        )}
       </ErrorBoundary>
     </div>
   );
