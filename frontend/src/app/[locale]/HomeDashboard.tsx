@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUpRight, ArrowDownLeft, Users, Activity, Clock, ExternalLink, X } from "lucide-react";
+import { ArrowUpRight, ArrowDownLeft, ArrowRight, Clock, X } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import {
@@ -17,7 +17,7 @@ import { ErrorBoundary } from "../components/global_ui/ErrorBoundary";
 import { Tooltip } from "../components/ui/Tooltip";
 import React, { useMemo, useState } from "react";
 import type { BorrowerLoan } from "../hooks/useApi";
-import { formatCurrency } from "../utils/formatLocale";
+import { formatCurrency, formatDate } from "../utils/formatLocale";
 
 const SEVENTY_TWO_HOURS_MS = 72 * 60 * 60 * 1000;
 const SESSION_BANNER_KEY = "repayment_banner_dismissed";
@@ -89,23 +89,24 @@ function RepaymentReminderBanner({
   return (
     <div
       role="alert"
-      className="flex items-start justify-between gap-4 rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 dark:border-amber-500/30 dark:bg-amber-950/30"
+      className="flex items-center justify-between gap-4 rounded-2xl border border-warning-border bg-warning-bg px-5 py-4"
     >
       <div className="flex items-start gap-3">
         <Clock
-          className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400"
+          className="mt-0.5 h-4 w-4 shrink-0 text-warning"
+          strokeWidth={1.5}
           aria-hidden="true"
         />
         <div>
-          <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+          <p className="text-sm font-medium text-fg">
             {t("reminder.due", { hours: hoursLeft, loanId: mostUrgent.id })}
             {urgentLoans.length > 1 && (
-              <span className="ml-2 inline-flex items-center rounded-full bg-amber-200 px-2 py-0.5 text-xs font-semibold text-amber-800 dark:bg-amber-500/30 dark:text-amber-300">
+              <span className="ml-2 text-xs font-normal text-fg-muted">
                 {t("reminder.more", { count: urgentLoans.length - 1 })}
               </span>
             )}
           </p>
-          <p className="mt-0.5 text-xs text-amber-700 dark:text-amber-400">
+          <p className="mt-0.5 text-xs tabular-nums text-fg-muted">
             {t("reminder.details", {
               amount: formatCurrency(mostUrgent.totalOwed ?? mostUrgent.principal, locale),
               date: dueDate.toLocaleDateString(locale, {
@@ -121,14 +122,14 @@ function RepaymentReminderBanner({
       <div className="flex items-center gap-2 shrink-0">
         <button
           onClick={() => router.push(`/${locale}/repay/${mostUrgent.id}`)}
-          className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700 transition-colors"
+          className="h-8 rounded-lg bg-primary px-3 text-xs font-medium text-on-primary transition-colors hover:bg-primary-hover"
         >
           {t("reminder.repayNow")}
         </button>
         <button
           onClick={onDismiss}
           aria-label={t("reminder.dismiss")}
-          className="rounded p-1 text-amber-600 hover:bg-amber-100 dark:hover:bg-amber-500/20 transition-colors"
+          className="rounded-lg p-1.5 text-fg-muted transition-colors hover:bg-subtle hover:text-fg"
         >
           <X className="h-4 w-4" aria-hidden="true" />
         </button>
@@ -209,26 +210,28 @@ export function HomeDashboard() {
             : l.status === "repaid"
               ? t("activity.loanRepaid")
               : t("activity.loanRequest"),
-        desc: t("activity.loanDesc", { id: l.id, amount: formatCurrency(l.principal, locale) }),
+        desc: t("activity.loanDesc", { id: l.id }),
         amount:
           l.status === "repaid"
             ? `+${formatCurrency(l.principal, locale)}`
             : formatCurrency(l.principal, locale),
+        incoming: l.status === "repaid",
+        pending: l.status !== "active" && l.status !== "repaid",
         timestamp: l.approvedAt ? new Date(l.approvedAt).getTime() : 0,
-        time: l.approvedAt ? new Date(l.approvedAt).toLocaleDateString(locale) : "",
-        status: l.status === "repaid" ? "completed" : l.status,
+        time: l.approvedAt ? formatDate(l.approvedAt, locale) : "",
       })) ?? [];
 
     const remittanceEvents =
       remittances?.slice(0, 3).map((r) => ({
         type: t("activity.remittance"),
         desc: t("activity.remittanceDesc", {
-          recipient: `${r.recipientAddress.slice(0, 6)}...${r.recipientAddress.slice(-4)}`,
+          recipient: `${r.recipientAddress.slice(0, 6)}…${r.recipientAddress.slice(-4)}`,
         }),
         amount: `-${formatCurrency(r.amount, locale)}`,
+        incoming: false,
+        pending: r.status === "pending" || r.status === "processing",
         timestamp: new Date(r.createdAt).getTime(),
-        time: new Date(r.createdAt).toLocaleDateString(locale),
-        status: r.status,
+        time: formatDate(r.createdAt, locale),
       })) ?? [];
 
     return [...loanEvents, ...remittanceEvents]
@@ -240,18 +243,19 @@ export function HomeDashboard() {
     return <DashboardSkeleton />;
   }
 
-  const shortAddress = address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "";
+  const shortAddress = address ? `${address.slice(0, 6)}…${address.slice(-4)}` : "";
+  const panel = "rounded-2xl border border-line bg-surface";
 
   return (
     <section
-      className="space-y-8 min-h-screen p-8 lg:p-12 max-w-7xl mx-auto"
+      className="mx-auto min-h-screen max-w-7xl space-y-8 p-8 lg:p-12"
       aria-labelledby="dashboard-title"
     >
-      <header>
-        <h1 id="dashboard-title" className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
-          {t("title", { address: shortAddress })}
+      <header className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <h1 id="dashboard-title" className="font-display text-2xl font-medium text-fg">
+          {t("title")}
         </h1>
-        <p className="text-zinc-500 dark:text-zinc-400">{t("description")}</p>
+        {shortAddress && <span className="font-mono text-xs text-fg-muted">{shortAddress}</span>}
       </header>
 
       {!dismissed && urgentLoans.length > 0 && (
@@ -261,191 +265,127 @@ export function HomeDashboard() {
       <ErrorBoundary scope="dashboard summary" variant="section">
         <section
           aria-label={t("stats.label")}
-          className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
+          className={`${panel} grid grid-cols-2 gap-6 p-6 lg:grid-cols-4`}
         >
           {[
-            {
-              label: t("stats.walletBalance"),
-              value: stats.walletBalance,
-              change: "",
-              icon: Activity,
-              trend: "up" as const,
-            },
-            {
-              label: t("stats.activeLoans"),
-              value: stats.activeLoans,
-              change: stats.activeLoansSub,
-              icon: Users,
-              trend: "neutral" as const,
-            },
+            { label: t("stats.walletBalance"), value: stats.walletBalance, sub: "" },
+            { label: t("stats.activeLoans"), value: stats.activeLoans, sub: stats.activeLoansSub },
             {
               label: t("stats.totalRemitted"),
               value: stats.totalRemitted,
-              change: t("stats.transfers", { count: remittances?.length ?? 0 }),
-              icon: ArrowUpRight,
-              trend: "up" as const,
+              sub: t("stats.transfers", { count: remittances?.length ?? 0 }),
             },
-            {
-              label: t("stats.totalOwed"),
-              value: stats.totalOwed,
-              change: "",
-              icon: ArrowDownLeft,
-              trend: "up" as const,
-            },
-          ].map((stat, i) => {
-            const Icon = stat.icon;
-            return (
-              <article
-                key={i}
-                className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-950"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="rounded-lg bg-zinc-50 p-2 dark:bg-zinc-900" aria-hidden="true">
-                    <Icon className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
-                  </div>
-                  {stat.change && (
-                    <span
-                      className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                        stat.trend === "up"
-                          ? "bg-green-50 text-green-700 dark:bg-green-500/10 dark:text-green-400"
-                          : "bg-zinc-50 text-zinc-600 dark:bg-zinc-900 dark:text-zinc-400"
-                      }`}
-                      aria-label={t("stats.change", { change: stat.change })}
-                    >
-                      {stat.change}
-                    </span>
-                  )}
-                </div>
-                <div className="mt-4">
-                  <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
-                    {stat.label}
-                  </p>
-                  <h3 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
-                    {stat.value}
-                  </h3>
-                </div>
-              </article>
-            );
-          })}
+            { label: t("stats.totalOwed"), value: stats.totalOwed, sub: "" },
+          ].map((stat) => (
+            <div key={stat.label}>
+              <p className="text-xs text-fg-muted">{stat.label}</p>
+              <p className="mt-1 text-2xl font-medium tabular-nums text-fg">{stat.value}</p>
+              {stat.sub && <p className="mt-0.5 text-xs text-fg-muted">{stat.sub}</p>}
+            </div>
+          ))}
         </section>
       </ErrorBoundary>
 
-      <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-3">
         <ErrorBoundary scope="recent activity panel" variant="section">
-          <section aria-labelledby="activity-heading" className="lg:col-span-2 space-y-4">
-            <div className="flex items-center justify-between">
-              <h2
-                id="activity-heading"
-                className="text-lg font-semibold text-zinc-900 dark:text-zinc-50 flex items-center gap-2"
-              >
-                <Clock className="h-5 w-5 text-zinc-400" aria-hidden="true" />
+          <section aria-labelledby="activity-heading" className={`${panel} lg:col-span-2`}>
+            <div className="flex items-center justify-between px-6 pt-5 pb-3">
+              <h2 id="activity-heading" className="text-sm font-medium text-fg">
                 {t("activity.title")}
               </h2>
               <button
                 onClick={() => router.push(`/${locale}/activity`)}
-                className="text-sm font-medium text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 rounded px-2 py-1"
+                className="rounded-lg px-2 py-1 text-xs font-medium text-link transition-colors hover:bg-subtle"
                 aria-label={t("activity.viewAllLabel")}
               >
                 {t("activity.viewAll")}
               </button>
             </div>
 
-            <div className="rounded-xl border border-zinc-200 bg-white overflow-hidden dark:border-zinc-800 dark:bg-zinc-950">
-              <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
-                {recentActivity.length === 0 ? (
-                  <EmptyState
-                    icon={Clock}
-                    title={t("activity.emptyTitle")}
-                    description={t("activity.empty")}
-                  />
-                ) : (
-                  recentActivity.map((item, i) => (
-                    <div
-                      key={i}
-                      className="flex items-center justify-between p-4 hover:bg-zinc-50 dark:hover:bg-zinc-900/50 transition-colors"
-                    >
-                      <div className="flex items-center gap-4">
-                        <div
-                          className={`h-10 w-10 rounded-full flex items-center justify-center ${
-                            item.status === "completed" || item.status === "repaid"
-                              ? "bg-green-50 dark:bg-green-500/10"
-                              : "bg-indigo-50 dark:bg-indigo-500/10"
-                          }`}
+            {recentActivity.length === 0 ? (
+              <EmptyState
+                icon={Clock}
+                title={t("activity.emptyTitle")}
+                description={t("activity.empty")}
+              />
+            ) : (
+              <ul className="divide-y divide-line border-t border-line">
+                {recentActivity.map((item, i) => {
+                  const Icon = item.incoming ? ArrowDownLeft : ArrowUpRight;
+                  return (
+                    <li key={i} className="flex items-center justify-between gap-4 px-6 py-3">
+                      <div className="flex items-center gap-3">
+                        <span
+                          className="flex h-8 w-8 items-center justify-center rounded-full bg-subtle"
                           aria-hidden="true"
                         >
-                          {item.amount.startsWith("+") ? (
-                            <ArrowDownLeft className="h-5 w-5 text-green-600 dark:text-green-400" />
-                          ) : (
-                            <ArrowUpRight className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
-                          )}
-                        </div>
+                          <Icon className="h-4 w-4 text-fg-muted" strokeWidth={1.5} />
+                        </span>
                         <div>
-                          <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                          <p className="text-sm font-medium text-fg">
                             {item.type}
+                            {item.pending && (
+                              <span className="ml-2 text-xs font-normal text-warning">
+                                {t("activity.pending")}
+                              </span>
+                            )}
                           </p>
-                          <p className="text-xs text-zinc-500 dark:text-zinc-400">{item.desc}</p>
+                          <p className="text-xs text-fg-muted">{item.desc}</p>
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-                          {item.amount}
-                        </p>
-                        <p className="text-xs text-zinc-500 dark:text-zinc-400">{item.time}</p>
+                        <p className="text-sm font-medium tabular-nums text-fg">{item.amount}</p>
+                        <p className="text-xs text-fg-muted">{item.time}</p>
                       </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </section>
         </ErrorBoundary>
 
         <ErrorBoundary scope="quick actions panel" variant="section">
-          <aside aria-labelledby="quick-actions-heading" className="space-y-4">
-            <h2
-              id="quick-actions-heading"
-              className="text-lg font-semibold text-zinc-900 dark:text-zinc-50"
-            >
-              {t("quickActions.title")}
-            </h2>
-            <div className="space-y-3">
-              {[
-                {
-                  title: t("quickActions.applyLoan"),
-                  desc: t("quickActions.applyLoanDesc"),
-                  color: "bg-indigo-600",
-                  href: "/request-loan",
-                },
-                {
-                  title: t("quickActions.sendRemittance"),
-                  desc: t("quickActions.sendRemittanceDesc"),
-                  color: "bg-zinc-900",
-                  href: "/send-remittance",
-                },
-              ].map((action, i) => (
-                <button
-                  key={i}
-                  onClick={() => router.push(`/${locale}${action.href}`)}
-                  className={`w-full text-left p-4 rounded-xl ${action.color} text-white hover:opacity-90 transition-opacity shadow-lg shadow-indigo-500/10 focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2`}
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-semibold">{action.title}</span>
-                    <ExternalLink className="h-4 w-4 opacity-50" aria-hidden="true" />
-                  </div>
-                  <p className="text-xs opacity-80">{action.desc}</p>
-                </button>
-              ))}
-            </div>
+          <aside aria-labelledby="quick-actions-heading" className="space-y-6">
+            <section className={panel}>
+              <h2 id="quick-actions-heading" className="px-6 pt-5 pb-3 text-sm font-medium text-fg">
+                {t("quickActions.title")}
+              </h2>
+              <div className="divide-y divide-line border-t border-line">
+                {[
+                  {
+                    title: t("quickActions.applyLoan"),
+                    desc: t("quickActions.applyLoanDesc"),
+                    href: "/request-loan",
+                  },
+                  {
+                    title: t("quickActions.sendRemittance"),
+                    desc: t("quickActions.sendRemittanceDesc"),
+                    href: "/send-remittance",
+                  },
+                ].map((action) => (
+                  <button
+                    key={action.href}
+                    onClick={() => router.push(`/${locale}${action.href}`)}
+                    className="group flex w-full items-center justify-between px-6 py-4 text-left transition-colors hover:bg-subtle focus-visible:bg-subtle"
+                  >
+                    <span>
+                      <span className="block text-sm font-medium text-fg">{action.title}</span>
+                      <span className="block text-xs text-fg-muted">{action.desc}</span>
+                    </span>
+                    <ArrowRight
+                      className="h-4 w-4 text-fg-muted transition-transform group-hover:translate-x-0.5"
+                      strokeWidth={1.5}
+                      aria-hidden="true"
+                    />
+                  </button>
+                ))}
+              </div>
+            </section>
 
-            {/* Credit Score Gauge */}
-            <section
-              className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-950"
-              aria-label={t("creditScore.label")}
-            >
+            <section className={`${panel} p-6`} aria-label={t("creditScore.label")}>
               <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-                  {t("creditScore.label")}
-                </h3>
+                <h3 className="text-sm font-medium text-fg">{t("creditScore.label")}</h3>
                 <Tooltip content={t("creditScore.tooltip")} label={t("creditScore.tooltipLabel")} />
               </div>
               <CreditScoreGauge
@@ -453,32 +393,8 @@ export function HomeDashboard() {
                 previousScore={previousCreditScore ?? undefined}
               />
               {!currentCreditScore && (
-                <p className="mt-2 text-center text-xs text-zinc-500 dark:text-zinc-400">
-                  {t("creditScore.empty")}
-                </p>
+                <p className="mt-2 text-center text-xs text-fg-muted">{t("creditScore.empty")}</p>
               )}
-            </section>
-
-            <section
-              className="rounded-xl bg-indigo-50 p-6 dark:bg-indigo-950/30 space-y-4"
-              aria-labelledby="outreach-heading"
-            >
-              <h3
-                id="outreach-heading"
-                className="font-semibold text-indigo-900 dark:text-indigo-300"
-              >
-                {t("outreach.title")}
-              </h3>
-              <p className="text-sm text-indigo-700 dark:text-indigo-400 leading-relaxed">
-                {t("outreach.description")}
-              </p>
-              <button
-                className="text-sm font-semibold text-indigo-600 dark:text-indigo-400 flex items-center gap-1 focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-1 rounded"
-                aria-label={t("outreach.exploreLabel")}
-              >
-                {t("outreach.explore")}
-                <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
-              </button>
             </section>
           </aside>
         </ErrorBoundary>
