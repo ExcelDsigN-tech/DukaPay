@@ -499,15 +499,14 @@
     }
   },
   "Lend": {
-    "cooldownActive": "Withdraw available in about {minutes} minute(s) while cooldown is active.",
+    "cooldownActive": "Withdrawals open in about {minutes} min while the cooldown runs",
     "disconnected": {
-      "title": "Lender Dashboard",
-      "description": "Connect your wallet to view your lending pool portfolio."
+      "title": "Lend",
+      "description": "Connect your wallet to see your lending position"
     },
-    "loadError": "Failed to load lender dashboard data. Please try again.",
-    "eyebrow": "Lender Portal",
+    "loadError": "Could not load the lending pool. Try again",
     "title": "Lend",
-    "description": "Track pool performance, manage deposits, and monitor yield growth.",
+    "description": "Deposit into the pool, track your share and see what it earns",
     "live": {
       "connectedTitle": "Live pool updates connected",
       "connectingTitle": "Connecting to live updates…",
@@ -519,45 +518,45 @@
       "offline": "Offline"
     },
     "stats": {
-      "poolSize": "Total Pool Size",
-      "utilization": "Utilization Rate",
-      "utilizationTooltip": "Utilization Rate: How much of the pool is currently loaned out. Higher utilization can increase yield, but may reduce instant liquidity.",
+      "poolSize": "Pool size",
+      "utilization": "Utilization",
+      "utilizationTooltip": "How much of the pool is lent out. Higher utilization can raise yield but leaves less to withdraw instantly",
       "apy": "Current APY",
-      "apyTooltip": "APY (Annual Percentage Yield): The estimated yearly return on deposits, including compounding. This may vary with pool utilization and repayments.",
-      "activeLoans": "Active Loans",
+      "apyTooltip": "Estimated yearly return on deposits, including compounding. It moves with pool utilization and repayments",
+      "activeLoans": "Active loans",
       "info": "{label} info"
     },
     "deposits": {
-      "title": "My Deposits",
-      "deposited": "Deposited Amount",
-      "share": "Share of Pool",
-      "earnings": "Estimated Earnings"
+      "title": "Your position",
+      "deposited": "Deposited",
+      "share": "Share of pool",
+      "earnings": "Estimated earnings"
     },
     "form": {
-      "title": "Deposit / Withdraw",
-      "depositAmount": "Deposit Amount",
-      "withdrawAmount": "Withdraw Amount",
-      "decimalsHelper": "Up to {decimals} decimal places supported.",
+      "title": "Deposit or withdraw",
+      "depositAmount": "Deposit amount",
+      "withdrawAmount": "Withdraw amount",
+      "decimalsHelper": "USDC, up to {decimals} decimal places",
       "deposit": "Deposit",
-      "depositing": "Depositing...",
+      "depositing": "Depositing…",
       "withdraw": "Withdraw",
-      "withdrawing": "Withdrawing..."
+      "withdrawing": "Withdrawing…"
     },
     "portfolio": {
-      "title": "Loan Portfolio",
-      "description": "Read-only view of loans currently funded through the pool.",
+      "title": "Pool loans",
+      "description": "Active loans funded by the pool",
       "loanNumber": "Loan #{id}",
       "borrower": "Borrower: {id}",
       "apr": "{rate}% APR",
       "termDays": "{days} days",
       "view": "View",
       "emptyTitle": "No active pool-funded loans yet",
-      "emptyDescription": "Active loans funded by the pool will appear here once borrowers draw against available liquidity.",
+      "emptyDescription": "Loans funded by the pool show here once borrowers draw on it",
       "unavailable": "Pool loans can't be shown right now. Deposits and withdrawals still work."
     },
     "yield": {
       "emptyTitle": "No yield history yet",
-      "emptyDescription": "Yield performance will appear here after the pool records deposits, loans, and earnings."
+      "emptyDescription": "Yield shows here once the pool records deposits, loans and earnings"
     }
   },
   "Liquidations": {
