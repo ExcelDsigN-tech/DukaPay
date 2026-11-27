@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState, type KeyboardEvent } from "react";
 import Link from "next/link";
-import { ArrowRight, CalendarRange, CircleDollarSign, HandCoins, ShieldCheck } from "lucide-react";
+import { ArrowRight, ChevronRight, HandCoins } from "lucide-react";
 import { ErrorBoundary } from "../../components/global_ui/ErrorBoundary";
 import { LoansListSkeleton } from "../../components/skeletons/LoansListSkeleton";
 import { useBorrowerLoansPage } from "../../hooks/useApi";
@@ -11,7 +11,7 @@ import { PaginationControls } from "../../components/ui/PaginationControls";
 import { useWalletStore, selectWalletAddress } from "../../stores/useWalletStore";
 import { useTranslations, useLocale } from "next-intl";
 import { EmptyState } from "../../components/ui/EmptyState";
-import { formatCurrency } from "../../utils/formatLocale";
+import { formatCurrency, formatDate } from "../../utils/formatLocale";
 
 const PAGE_SIZE = 20;
 const LOAN_TABS = ["all", "active", "repaid", "defaulted"] as const;
@@ -21,7 +21,8 @@ function getLoanDisplayStatus(status: string, nextPaymentDeadline: string, now: 
     return status;
   }
 
-  return new Date(nextPaymentDeadline).getTime() < now ? "defaulted" : "active";
+  // Past the deadline but still active on chain: overdue, not (yet) defaulted.
+  return new Date(nextPaymentDeadline).getTime() < now ? "overdue" : "active";
 }
 
 export function LoansPageClient() {
@@ -98,7 +99,9 @@ export function LoansPageClient() {
     (sum, loan) => sum + (loan.totalOwed ?? loan.principal),
     0,
   );
-  const overdueCount = displayedLoans.filter((loan) => loan.displayStatus === "defaulted").length;
+  const overdueCount = displayedLoans.filter(
+    (loan) => loan.displayStatus === "overdue" || loan.displayStatus === "defaulted",
+  ).length;
   const portfolioHealth =
     overdueCount === 0
       ? t("health.strong")
@@ -112,64 +115,43 @@ export function LoansPageClient() {
 
   if (isError) {
     return (
-      <section className="rounded-3xl border border-red-200 bg-red-50 p-6 text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">
+      <section className="rounded-2xl border border-line bg-surface p-6 text-sm text-danger">
         {t("loadError")}
       </section>
     );
   }
 
+  const panel = "rounded-2xl border border-line bg-surface";
+
   return (
     <section className="space-y-6">
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-sm font-semibold tracking-[0.2em] text-indigo-600">
-            {t("borrowerPortal")}
-          </p>
-          <h1 className="text-3xl font-semibold text-zinc-900 dark:text-zinc-50">{t("title")}</h1>
-          <p className="mt-2 max-w-2xl text-sm text-zinc-500 dark:text-zinc-400">
-            {t("description")}
-          </p>
-        </div>
+      <header>
+        <h1 className="font-display text-2xl font-medium text-fg">{t("title")}</h1>
+        <p className="mt-1 max-w-2xl text-sm text-fg-muted">{t("description")}</p>
       </header>
 
       <ErrorBoundary scope="loan summary cards" variant="section">
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className={`${panel} grid grid-cols-1 gap-6 p-6 sm:grid-cols-3`}>
           {[
-            {
-              label: t("outstanding"),
-              value: formatCurrency(totalOwed, locale),
-              icon: CircleDollarSign,
-            },
-            {
-              label: t("dueThisWeek"),
-              value: t("loanCount", { count: dueThisWeek }),
-              icon: CalendarRange,
-            },
-            { label: t("portfolioHealth"), value: portfolioHealth, icon: ShieldCheck },
+            { label: t("outstanding"), value: formatCurrency(totalOwed, locale) },
+            { label: t("dueThisWeek"), value: t("loanCount", { count: dueThisWeek }) },
+            { label: t("portfolioHealth"), value: portfolioHealth },
           ].map((item) => (
-            <article
-              key={item.label}
-              className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm shadow-zinc-200/50 dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-none"
-            >
-              <div className="flex items-center gap-3">
-                <div className="rounded-2xl bg-indigo-50 p-3 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-300">
-                  <item.icon className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-sm text-zinc-500 dark:text-zinc-400">{item.label}</p>
-                  <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">
-                    {item.value}
-                  </p>
-                </div>
-              </div>
-            </article>
+            <div key={item.label}>
+              <p className="text-xs text-fg-muted">{item.label}</p>
+              <p className="mt-1 text-2xl font-medium tabular-nums text-fg">{item.value}</p>
+            </div>
           ))}
         </div>
       </ErrorBoundary>
 
       <ErrorBoundary scope="loan list" variant="section">
-        <div className="space-y-4 rounded-3xl border border-zinc-200 bg-white p-4 shadow-sm shadow-zinc-200/50 dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-none">
-          <div role="tablist" aria-label={t("title")} className="flex flex-wrap gap-2">
+        <div className={panel}>
+          <div
+            role="tablist"
+            aria-label={t("title")}
+            className="flex gap-1 border-b border-line px-4 pt-3"
+          >
             {LOAN_TABS.map((tab, index) => (
               <button
                 key={tab}
@@ -184,10 +166,10 @@ export function LoansPageClient() {
                 tabIndex={activeTab === tab ? 0 : -1}
                 onClick={() => activateTab(tab)}
                 onKeyDown={(event) => handleTabKeyDown(event, index)}
-                className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+                className={`-mb-px border-b-2 px-3 pb-3 pt-1 text-sm font-medium transition-colors ${
                   activeTab === tab
-                    ? "bg-indigo-600 text-white"
-                    : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                    ? "border-fg text-fg"
+                    : "border-transparent text-fg-muted hover:text-fg"
                 }`}
               >
                 {t(`tabs.${tab}`)}
@@ -211,38 +193,39 @@ export function LoansPageClient() {
                 actionIcon={<ArrowRight className="h-4 w-4" />}
               />
             ) : (
-              <div className="space-y-3">
-                {displayedLoans.map((loan) => (
-                  <article
-                    key={loan.id}
-                    className="flex flex-col gap-4 rounded-2xl border border-zinc-200 p-4 dark:border-zinc-800 md:flex-row md:items-center md:justify-between"
-                  >
-                    <div>
-                      <p className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-                        {t("loanNumber", { id: loan.id })}
-                      </p>
-                      <p className="text-sm text-zinc-500 dark:text-zinc-400">{loan.borrower}</p>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-3 text-sm">
-                      <LoanStatusBadge status={loan.displayStatus} />
-                      <span className="text-zinc-600 dark:text-zinc-400">
-                        {formatCurrency(loan.totalOwed ?? loan.principal, locale)}
-                      </span>
-                      <span className="text-zinc-600 dark:text-zinc-400">
-                        {t("due", {
-                          date: new Date(loan.nextPaymentDeadline).toLocaleDateString(locale),
-                        })}
-                      </span>
-                    </div>
-                    <Link
-                      href={`/${locale}/loans/${loan.id}`}
-                      className="inline-flex items-center gap-2 rounded-full bg-zinc-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-zinc-700 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-200"
-                    >
-                      {t("viewDetails")}
-                      <ArrowRight className="h-4 w-4" />
-                    </Link>
-                  </article>
-                ))}
+              <div className="divide-y divide-line">
+                {displayedLoans.map((loan) => {
+                  return (
+                    <article key={loan.id}>
+                      <Link
+                        href={`/${locale}/loans/${loan.id}`}
+                        className="grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-1 px-6 py-4 transition-colors hover:bg-subtle focus-visible:bg-subtle sm:grid-cols-[minmax(0,1fr)_8rem_9rem_10rem_1rem]"
+                      >
+                        <span className="text-sm font-medium text-fg">
+                          {t("loanNumber", { id: loan.id })}
+                        </span>
+                        <span className="justify-self-end sm:justify-self-start">
+                          <LoanStatusBadge status={loan.displayStatus} />
+                        </span>
+                        <span className="text-sm tabular-nums text-fg sm:text-right">
+                          {formatCurrency(loan.totalOwed ?? loan.principal, locale)}
+                        </span>
+                        <span className="justify-self-end text-xs text-fg-muted sm:text-right">
+                          {loan.displayStatus === "repaid"
+                            ? t("closed")
+                            : loan.displayStatus === "pending"
+                              ? null
+                              : t("due", { date: formatDate(loan.nextPaymentDeadline, locale) })}
+                        </span>
+                        <ChevronRight
+                          className="hidden h-4 w-4 text-fg-muted sm:block"
+                          strokeWidth={1.5}
+                          aria-hidden="true"
+                        />
+                      </Link>
+                    </article>
+                  );
+                })}
               </div>
             )}
 
@@ -277,6 +260,7 @@ export function LoansPageClient() {
                   }
                 }}
                 summary={t("summary", { count: displayedLoans.length, page })}
+                className="px-6 pb-4"
               />
             )}
           </div>

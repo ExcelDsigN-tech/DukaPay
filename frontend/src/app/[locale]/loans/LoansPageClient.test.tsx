@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { LoansPageClient } from "./LoansPageClient";
 
@@ -7,9 +7,11 @@ jest.mock("next-intl", () => ({
   useLocale: () => "en",
 }));
 
+let mockItems: unknown[] = [];
+
 jest.mock("../../hooks/useApi", () => ({
   useBorrowerLoansPage: () => ({
-    data: { items: [], pageInfo: { hasNext: false, nextCursor: null } },
+    data: { items: mockItems, pageInfo: { hasNext: false, nextCursor: null } },
     isLoading: false,
     isError: false,
   }),
@@ -47,5 +49,55 @@ describe("LoansPageClient tabs", () => {
     expect(activeTab).toHaveAttribute("aria-selected", "true");
     expect(activeTab).toHaveAttribute("tabindex", "0");
     expect(document.activeElement).toBe(activeTab);
+  });
+});
+
+describe("LoansPageClient rows", () => {
+  afterEach(() => {
+    mockItems = [];
+  });
+
+  it("labels past-due active loans Overdue and marks only repaid loans Closed", () => {
+    const day = 24 * 60 * 60 * 1000;
+    mockItems = [
+      {
+        id: 41,
+        status: "active",
+        principal: 300,
+        totalOwed: 120,
+        nextPaymentDeadline: new Date(Date.now() - 3 * day).toISOString(),
+      },
+      {
+        id: 29,
+        status: "defaulted",
+        principal: 500,
+        totalOwed: 210,
+        nextPaymentDeadline: new Date(Date.now() - 40 * day).toISOString(),
+      },
+      {
+        id: 37,
+        status: "repaid",
+        principal: 400,
+        totalOwed: 0,
+        nextPaymentDeadline: new Date(Date.now() - 30 * day).toISOString(),
+      },
+    ];
+    render(<LoansPageClient />);
+
+    const [overdueRow, defaultedRow, repaidRow] = screen
+      .getAllByText("loanNumber")
+      .map((el) => el.closest("article") as HTMLElement);
+
+    expect(within(overdueRow).getByText("Overdue")).toBeInTheDocument();
+    expect(within(overdueRow).getByText("due")).toBeInTheDocument();
+    expect(within(overdueRow).queryByText("Defaulted")).not.toBeInTheDocument();
+
+    expect(within(defaultedRow).getByText("Defaulted")).toBeInTheDocument();
+    expect(within(defaultedRow).getByText("due")).toBeInTheDocument();
+    expect(within(defaultedRow).queryByText("closed")).not.toBeInTheDocument();
+
+    expect(within(repaidRow).getByText("Repaid")).toBeInTheDocument();
+    expect(within(repaidRow).getByText("closed")).toBeInTheDocument();
+    expect(within(repaidRow).queryByText("due")).not.toBeInTheDocument();
   });
 });
