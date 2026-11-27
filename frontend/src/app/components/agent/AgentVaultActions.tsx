@@ -7,6 +7,8 @@ import { apiFetch } from "../../hooks/useApi";
 import { useTranslations } from "next-intl";
 import { formatStroops, parseAmount, STROOP_DECIMALS } from "../../../../lib/money/format";
 import { mapTransactionError } from "../../utils/transactionErrors";
+import { Input } from "../ui/Input";
+import { Button } from "../ui/Button";
 
 type Action = "deposit-collateral" | "withdraw-collateral" | "burn-float" | "mint-float";
 
@@ -81,48 +83,48 @@ export function AgentVaultActions({
   }
 
   return (
-    <section className="rounded-2xl border border-zinc-200 p-5 dark:border-zinc-800">
-      <h2 className="text-lg font-semibold text-zinc-950 dark:text-zinc-50">{t(titleKey)}</h2>
-      <p className="mt-1 text-sm text-zinc-500">{t(descriptionKey)}</p>
-      <div className="mt-4 grid gap-3 sm:grid-cols-3">
-        <select
-          aria-label="Vault action"
-          value={action}
-          onChange={(event) => setAction(event.target.value as Action)}
-          className="rounded border p-2 dark:bg-zinc-900"
-        >
-          {actions.map((option) => (
-            <option key={option} value={option}>
-              {labels[option]}
-            </option>
-          ))}
-        </select>
-        <input
-          aria-label={t("vaultAgentKey")}
+    <section className="rounded-2xl border border-line bg-surface p-6">
+      <h2 className="text-sm font-medium text-fg">{t(titleKey)}</h2>
+      <p className="mt-1 text-sm text-fg-muted">{t(descriptionKey)}</p>
+      <div className="mt-5 space-y-4">
+        <div className="space-y-1.5">
+          <label htmlFor="vault-action" className="text-sm font-medium text-fg">
+            {t("vaultAction")}
+          </label>
+          <select
+            id="vault-action"
+            value={action}
+            onChange={(event) => setAction(event.target.value as Action)}
+            className="h-10 w-full rounded-lg border border-line bg-surface px-3 text-sm text-fg focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus-ring"
+          >
+            {actions.map((option) => (
+              <option key={option} value={option}>
+                {labels[option]}
+              </option>
+            ))}
+          </select>
+        </div>
+        <Input
+          label={t("vaultAgentKey")}
           value={agentPublicKey}
           onChange={(event) => setAgentPublicKey(event.target.value)}
-          placeholder={requireTarget ? t("vaultAgentKey") : (address ?? t("vaultAgentKey"))}
-          className="rounded border p-2 dark:bg-zinc-900"
+          placeholder={requireTarget ? undefined : (address ?? undefined)}
+          className="font-mono text-xs"
         />
-        <input
-          aria-label={t("vaultAmount")}
+        <Input
+          label={t("vaultAmount")}
           inputMode="decimal"
           value={amount}
           onChange={(event) => setAmount(event.target.value)}
-          placeholder={t("vaultAmount")}
-          className="rounded border p-2 dark:bg-zinc-900"
+          placeholder="0.00"
+          className="tabular-nums"
         />
       </div>
-      <button
-        type="button"
-        onClick={submit}
-        disabled={busy}
-        className="mt-3 rounded bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
-      >
+      <Button type="button" onClick={submit} disabled={busy} className="mt-5">
         {busy ? t("vaultWaiting") : t("vaultBuild")}
-      </button>
+      </Button>
       {message && (
-        <p role="status" className="mt-3 text-sm text-zinc-500">
+        <p role="status" className="mt-3 text-sm text-fg-muted">
           {message}
         </p>
       )}

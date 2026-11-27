@@ -3,8 +3,11 @@
 import { useState } from "react";
 import { useWallet } from "../providers/WalletProvider";
 import { apiFetch, useAgentCashPickupClaims } from "../../hooks/useApi";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
+import { formatCurrency } from "../../utils/formatLocale";
 import { mapTransactionError } from "../../utils/transactionErrors";
+import { Input } from "../ui/Input";
+import { Button } from "../ui/Button";
 
 interface CashPickupRedeemPanelProps {
   onRedeemed?: () => void | Promise<void>;
@@ -12,6 +15,7 @@ interface CashPickupRedeemPanelProps {
 
 export function CashPickupRedeemPanel({ onRedeemed }: CashPickupRedeemPanelProps) {
   const t = useTranslations("AgentDashboard");
+  const locale = useLocale();
   const { signTransaction } = useWallet();
   const { data: claims = [], isLoading, refetch } = useAgentCashPickupClaims();
   const [selectedClaimId, setSelectedClaimId] = useState("");
@@ -59,52 +63,51 @@ export function CashPickupRedeemPanel({ onRedeemed }: CashPickupRedeemPanelProps
   }
 
   return (
-    <section className="rounded-2xl border border-zinc-200 p-5 dark:border-zinc-800">
-      <h2 className="text-lg font-semibold text-zinc-950 dark:text-zinc-50">
-        {t("cashPickupTitle")}
-      </h2>
-      <p className="mt-1 text-sm text-zinc-500">{t("cashPickupDescription")}</p>
+    <section className="rounded-2xl border border-line bg-surface p-6">
+      <h2 className="text-sm font-medium text-fg">{t("cashPickupTitle")}</h2>
+      <p className="mt-1 text-sm text-fg-muted">{t("cashPickupDescription")}</p>
 
       {isLoading ? (
-        <p className="mt-3 text-sm text-zinc-500">{t("loading")}</p>
+        <p className="mt-5 text-sm text-fg-muted">{t("loading")}</p>
       ) : creditedClaims.length === 0 ? (
-        <p className="mt-3 text-sm text-zinc-500">{t("cashPickupEmpty")}</p>
+        <p className="mt-5 text-sm text-fg-muted">{t("cashPickupEmpty")}</p>
       ) : (
-        <div className="mt-4 space-y-3">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <select
-              aria-label={t("cashPickupSelectClaim")}
-              value={activeClaimId}
-              onChange={(e) => setSelectedClaimId(e.target.value)}
-              className="rounded border p-2 dark:bg-zinc-900"
-            >
-              {creditedClaims.map((claim) => (
-                <option key={claim.id} value={claim.id}>
-                  {claim.amount} — {claim.recipientAddress.slice(0, 8)}…
-                </option>
-              ))}
-            </select>
-            <input
-              aria-label={t("cashPickupCodeLabel")}
+        <>
+          <div className="mt-5 space-y-4">
+            <div className="space-y-1.5">
+              <label htmlFor="cash-pickup-claim" className="text-sm font-medium text-fg">
+                {t("cashPickupSelectClaim")}
+              </label>
+              <select
+                id="cash-pickup-claim"
+                value={activeClaimId}
+                onChange={(e) => setSelectedClaimId(e.target.value)}
+                className="h-10 w-full rounded-lg border border-line bg-surface px-3 text-sm text-fg focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus-ring"
+              >
+                {creditedClaims.map((claim) => (
+                  <option key={claim.id} value={claim.id}>
+                    {formatCurrency(claim.amount, locale)} · {claim.recipientAddress.slice(0, 8)}…
+                  </option>
+                ))}
+              </select>
+            </div>
+            <Input
+              label={t("cashPickupCodeLabel")}
               value={code}
               onChange={(e) => setCode(e.target.value.toUpperCase())}
               placeholder={t("cashPickupCodePlaceholder")}
-              className="rounded border p-2 uppercase dark:bg-zinc-900"
+              autoComplete="off"
+              className="font-mono tracking-[0.2em] placeholder:font-sans placeholder:tracking-normal"
             />
           </div>
-          <button
-            type="button"
-            onClick={handleRedeem}
-            disabled={busy}
-            className="rounded bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
-          >
+          <Button type="button" onClick={handleRedeem} disabled={busy} className="mt-5">
             {busy ? t("vaultWaiting") : t("cashPickupRedeemButton")}
-          </button>
-        </div>
+          </Button>
+        </>
       )}
 
       {message && (
-        <p role="status" className="mt-3 text-sm text-zinc-500">
+        <p role="status" className="mt-3 text-sm text-fg-muted">
           {message}
         </p>
       )}
